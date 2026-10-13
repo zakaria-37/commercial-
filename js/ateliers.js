@@ -342,12 +342,6 @@ function showFormProduction() {
   $a('#prod-notes').value = '';
 }
 
-// Charger les ateliers au démarrage
-document.addEventListener('mariabag:authenticated', () => {
-  loadAteliers();
-  loadProductions();
-  loadCommandes();
-}, { once: false });
 
 
 /* ============================================================
@@ -527,5 +521,10 @@ document.addEventListener('mariabag:authenticated', () => {
   loadAteliers();
   loadProductions();
   loadCommandes();
-  if (typeof loadContacts === 'function') loadContacts();
 }, { once: false });
+// Session déjà ouverte au rechargement : charger quand même les données
+if (!document.getElementById('app').classList.contains('hide')) {
+  loadAteliers();
+  loadProductions();
+  loadCommandes();
+}
