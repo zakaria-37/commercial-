@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # MARIA BAG — Suivi des contacts (version en ligne)
 
 Version en ligne de l'application de suivi des clients/fournisseurs de
@@ -115,3 +116,6 @@ data/MARIA-BAG_contacts.csv  fichier de contacts fourni, prêt à importer
 scripts/import_csv.py     import en ligne de commande (optionnel)
 render.yaml               configuration de déploiement Render
 ```
+=======
+"# commercial-" 
+>>>>>>> 038731db0482541715028460960df7fd61f56952

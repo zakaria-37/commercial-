@@ -1,331 +1,531 @@
 /* ============================================================
-   MARIA BAG — Suivi des contacts (version en ligne, Supabase)
-   Même design, mêmes fonctionnalités que la version locale,
-   mais les contacts sont stockés dans une base Supabase partagée
-   au lieu du localStorage du navigateur.
+   MARIA BAG — Gestion des ateliers et productions
+   Module séparé pour la gestion des ateliers, productions et commandes
    ============================================================ */
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const TABLE = 'contacts';
+// Variables globales pour les ateliers
+let ATELIERS = [], PRODUCTIONS = [], COMMANDES = [];
+let curAtelier = null, curProduction = null;
 
-const $ = s => document.querySelector(s);
-const ST = {'Confirmé':'g','En attente':'o','Pas intéressé':'r'};
-let D = [], cur = null, sk = 'nom', sd = 1, loaded = false;
+// ============================================================
+// FONCTIONS UTILITAIRES
+// ============================================================
 
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-const today = () => iso(new Date());
-const fd = s => s ? s.split('-').reverse().join('/') : '';
-const full = c => [c.prenom, c.nom].filter(Boolean).join(' ');
+const $a = s => document.querySelector(s);
+const $aa = s => document.querySelectorAll(s);
 
-function toast(t) {
-  const e = $('#toast');
-  e.textContent = t;
-  e.style.display = 'block';
-  clearTimeout(toast.t);
-  toast.t = setTimeout(() => e.style.display = 'none', 3500);
+function toastA(msg) {
+  const e = $a('#toastA');
+  if (e) { e.textContent = msg; e.style.display = 'block'; clearTimeout(toastA.t); toastA.t = setTimeout(() => e.style.display = 'none', 3000); }
 }
 
-function setSync(state, text) {
-  const dot = $('#syncDot'), txt = $('#syncTxt');
-  if (!dot) return;
-  dot.className = 'xd' + (state === 'ok' ? '' : state === 'warn' ? ' w' : ' e');
-  txt.textContent = text;
+function isoA(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-/* ---------- Conversion objet contact <-> ligne Supabase ---------- */
-const FIELDS = ['nom','prenom','poste','societe','type','statut','tel','email','ville','source','produits','notes'];
-function toDb(o) {
-  const row = {};
-  for (const k of FIELDS) row[k] = (o[k] ?? '').toString().trim();
-  row.derniere = o.derniere ? o.derniere : null;
-  row.relance = o.relance ? o.relance : null;
-  if (o.hist) row.hist = o.hist;
-  return row;
-}
-function fromDb(r) {
-  return {
-    id: r.id,
-    nom: r.nom || '', prenom: r.prenom || '', poste: r.poste || '', societe: r.societe || '',
-    type: r.type || 'Client', statut: r.statut || 'En attente', tel: r.tel || '', email: r.email || '',
-    ville: r.ville || '', source: r.source || '', produits: r.produits || '', notes: r.notes || '',
-    derniere: r.derniere || '', relance: r.relance || '', hist: r.hist || []
-  };
+function todayA() { return isoA(new Date()); }
+
+function fdA(s) { return s ? s.split('-').reverse().join('/') : ''; }
+
+function calcDelai(dateLancement, dateReception) {
+  if (!dateLancement || !dateReception) return null;
+  const d1 = new Date(dateLancement + 'T00:00');
+  const d2 = new Date(dateReception + 'T00:00');
+  return Math.floor((d2 - d1) / 864e5);
 }
 
-function rel(c) {
-  if (c.statut === 'Pas intéressé') return {k:'none', l:'Sans objet', c:'n', d:null};
-  if (!c.relance) return {k:'none', l:'Non planifiée', c:'n', d:null};
-  const d = Math.round((new Date(c.relance + 'T00:00') - new Date(today() + 'T00:00')) / 864e5);
-  if (d < 0) return {k:'late', l:'En retard (' + (-d) + ' j)', c:'r', d};
-  if (d <= 7) return {k:'soon', l:'À relancer bientôt' + (d === 0 ? ' (auj.)' : ' (' + d + ' j)'), c:'o', d};
-  return {k:'ok', l:'OK', c:'g', d};
+// ============================================================
+// OPÉRATIONS CRUD ATELIERS
+// ============================================================
+
+async function loadAteliers() {
+  const { data, error } = await sb.from('ateliers').select('*').order('nom', { ascending: true });
+  if (error) { toastA('Erreur : ' + error.message); return; }
+  ATELIERS = data || [];
+  refreshAtelier();
 }
 
-/* ---------- Chargement / synchronisation avec Supabase ---------- */
-async function loadContacts() {
-  setSync('warn', 'Connexion…');
-  const { data, error } = await sb.from(TABLE).select('*').order('nom', { ascending: true });
-  if (error) {
-    setSync('err', 'Hors ligne');
-    toast('Erreur de connexion à la base : ' + error.message);
-    return;
-  }
-  D = (data || []).map(fromDb);
-  loaded = true;
-  setSync('ok', 'En ligne');
-  refresh();
+async function createAtelier(o) {
+  const { data, error } = await sb.from('ateliers').insert(o).select().single();
+  if (error) { toastA('Erreur : ' + error.message); return null; }
+  return data;
 }
 
-async function createContact(o) {
-  const { data, error } = await sb.from(TABLE).insert(toDb(o)).select().single();
-  if (error) { toast('Erreur : ' + error.message); return null; }
-  return fromDb(data);
+async function updateAtelier(id, o) {
+  const { data, error } = await sb.from('ateliers').update(o).eq('id', id).select().single();
+  if (error) { toastA('Erreur : ' + error.message); return null; }
+  return data;
 }
-async function updateContact(id, o) {
-  const { data, error } = await sb.from(TABLE).update(toDb(o)).eq('id', id).select().single();
-  if (error) { toast('Erreur : ' + error.message); return null; }
-  return fromDb(data);
-}
-async function deleteContact(id) {
-  const { error } = await sb.from(TABLE).delete().eq('id', id);
-  if (error) { toast('Erreur : ' + error.message); return false; }
+
+async function deleteAtelier(id) {
+  const { error } = await sb.from('ateliers').delete().eq('id', id);
+  if (error) { toastA('Erreur : ' + error.message); return false; }
   return true;
 }
-async function updateHist(id, hist) {
-  const { data, error } = await sb.from(TABLE).update({ hist }).eq('id', id).select().single();
-  if (error) { toast('Erreur : ' + error.message); return null; }
-  return fromDb(data);
+
+// ============================================================
+// OPÉRATIONS CRUD PRODUCTIONS
+// ============================================================
+
+async function loadProductions() {
+  const { data, error } = await sb.from('productions').select('*, ateliers(nom)').order('date_lancement', { ascending: false });
+  if (error) { toastA('Erreur : ' + error.message); return; }
+  PRODUCTIONS = (data || []).map(p => ({
+    ...p,
+    atelier_nom: p.ateliers?.nom || 'N/A'
+  }));
+  refreshProduction();
 }
 
-/* ---------- Navigation ---------- */
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.v));
-function show(v) {
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
-  v === 'dash' ? dash() : list();
+async function createProduction(o) {
+  const { data, error } = await sb.from('productions').insert(o).select().single();
+  if (error) { toastA('Erreur : ' + error.message); return null; }
+  const prod = await sb.from('productions').select('*, ateliers(nom)').eq('id', data.id).single();
+  return prod.data ? { ...prod.data, atelier_nom: prod.data.ateliers?.nom || 'N/A' } : null;
 }
 
-/* ---------- Tableau de bord ---------- */
-function dash() {
-  const n = D.length, cl = D.filter(c => c.type === 'Client').length, fo = n - cl, cf = D.filter(c => c.statut === 'Confirmé').length;
-  const late = D.filter(c => rel(c).k === 'late'), soon = D.filter(c => rel(c).k === 'soon');
-  $('#kpis').innerHTML = `
-   <div class="card kpi"><span>Contacts au total</span><b>${n}</b></div>
-   <div class="card kpi"><span>Clients / Fournisseurs</span><b>${cl} / ${fo}</b></div>
-   <div class="card kpi"><span>Taux de confirmation</span><b>${n ? Math.round(cf / n * 100) : 0} %</b><i>${cf} confirmé(s) sur ${n}</i></div>
-   <div class="card kpi u"><span>Relances urgentes</span><b>${late.length + soon.length}</b><i>${late.length} en retard · ${soon.length} cette semaine</i></div>`;
-  const pc = n ? cl / n * 100 : 0;
-  $('#donut').innerHTML = `<div class="ring" style="background:conic-gradient(#000 0 ${pc}%,var(--brass) ${pc}% 100%${n ? '' : ',#eee'})"></div>
-   <div class="leg"><div><span class="dot" style="background:#000"></span>Clients : <b>${cl}</b></div><div><span class="dot" style="background:var(--brass)"></span>Fournisseurs : <b>${fo}</b></div></div>`;
-  const col = {'Confirmé':'var(--g)','En attente':'var(--o)','Pas intéressé':'var(--r)'};
-  $('#bars').innerHTML = Object.keys(ST).map(s => { const k = D.filter(c => c.statut === s).length; return `<div class="bar"><div class="t"><span>${s}</span><b>${k}</b></div><div class="tr"><i style="width:${n ? k / n * 100 : 0}%;background:${col[s]}"></i></div></div>` }).join('');
-  const u = [...late, ...soon].sort((a, b) => a.relance.localeCompare(b.relance)).slice(0, 10);
-  $('#urg').innerHTML = u.length ? `<table style="min-width:0"><tbody>${u.map(c => { const r = rel(c); return `<tr class="row" data-id="${c.id}"><td><b>${esc(full(c))}</b><small>${esc(c.societe)}</small></td><td>${esc(c.type)}</td><td>${fd(c.relance)}</td><td><span class="bd ${r.c}">${r.l}</span></td></tr>` }).join('')}</tbody></table>` : '<div class="empty">Aucune relance urgente. ' + (n ? 'Tout est à jour.' : 'Ajoutez ou importez vos premiers contacts.') + '</div>';
+async function updateProduction(id, o) {
+  const { data, error } = await sb.from('productions').update(o).eq('id', id).select().single();
+  if (error) { toastA('Erreur : ' + error.message); return null; }
+  const prod = await sb.from('productions').select('*, ateliers(nom)').eq('id', data.id).single();
+  return prod.data ? { ...prod.data, atelier_nom: prod.data.ateliers?.nom || 'N/A' } : null;
 }
-$('#urg').onclick = e => { const r = e.target.closest('tr[data-id]'); if (r) edit(r.dataset.id) };
 
-/* ---------- Liste ---------- */
-const COLS = [['nom','Contact'],['societe','Société'],['type','Type'],['statut','Statut'],['ville','Ville / Pays'],['','Coordonnées'],['relance','Prochaine relance'],['','']];
-function list() {
-  $('#thead').innerHTML = '<tr>' + COLS.map(([k, l]) => `<th data-k="${k}" class="${k === sk ? 'sorted' : ''}">${l}${k === sk ? (sd > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr>';
-  const q = norm($('#q').value), t = $('#ft').value, s = $('#fs').value, r = $('#fr').value;
-  const val = c => sk === 'relance' ? (c.relance || '9999') : norm(c[sk]);
-  const a = D.filter(c => (!t || c.type === t) && (!s || c.statut === s) && (!r || rel(c).k === r) && (!q || norm([c.nom, c.prenom, c.societe, c.ville, c.email, c.produits].join(' ')).includes(q)))
-    .sort((x, y) => val(x) < val(y) ? -sd : val(x) > val(y) ? sd : 0);
-  $('#cnt').textContent = a.length + ' contact(s) sur ' + D.length;
-  $('#tbody').innerHTML = a.length ? a.map(c => { const r = rel(c); return `<tr class="row" data-id="${c.id}">
-   <td><b>${esc(full(c))}</b><small>${esc(c.poste)}</small></td><td>${esc(c.societe)}</td>
-   <td><span class="bd ty ${c.type === 'Client' ? 'c' : 'f'}">${esc(c.type)}</span></td>
-   <td><span class="bd ${ST[c.statut] || 'n'}">${esc(c.statut)}</span></td><td>${esc(c.ville)}</td>
-   <td>${c.tel ? `<a href="tel:${esc(c.tel)}">${esc(c.tel)}</a>` : ''}${c.email ? `<small><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></small>` : ''}</td>
-   <td><span class="bd ${r.c}">${r.l}</span>${c.relance ? `<small>${fd(c.relance)}</small>` : ''}</td>
-   <td><button class="btn s" data-e="${c.id}">Ouvrir</button></td></tr>` }).join('') : `<tr><td colspan="8" class="empty">${D.length ? 'Aucun contact ne correspond à votre recherche.' : 'Aucun contact. Cliquez sur « Nouveau contact » ou importez un fichier CSV.'}</td></tr>`;
+async function deleteProduction(id) {
+  const { error } = await sb.from('productions').delete().eq('id', id);
+  if (error) { toastA('Erreur : ' + error.message); return false; }
+  return true;
 }
-$('#thead').onclick = e => { const k = e.target.closest('th')?.dataset.k; if (!k) return; sd = sk === k ? -sd : 1; sk = k; list() };
-['q', 'ft', 'fs', 'fr'].forEach(i => $('#' + i).oninput = list);
-$('#tbody').onclick = e => { if (e.target.closest('a')) return; const r = e.target.closest('tr[data-id]'); if (r) edit(r.dataset.id) };
 
-/* ---------- Fiche contact ---------- */
-const F = () => $('#cf').elements;
-function srcs() { $('#srcs').innerHTML = [...new Set(D.map(c => c.source).filter(Boolean))].map(s => `<option value="${esc(s)}">`).join('') }
-function edit(id) {
-  cur = id ? D.find(c => c.id === id) : null;
-  srcs();
-  $('#cf').reset();
-  const c = cur || {type:'Client', statut:'En attente', derniere: today()};
-  ['nom','prenom','poste','societe','type','statut','tel','email','ville','source','produits','derniere','relance','notes'].forEach(k => F()[k].value = c[k] || '');
-  $('#mt').textContent = cur ? full(cur) + (cur.societe ? ' – ' + cur.societe : '') : 'Nouveau contact';
-  $('#bDel').style.display = cur ? '' : 'none';
-  $('#hist').style.display = cur ? '' : 'none';
-  $('#hnew').style.display = cur ? 'none' : '';
-  $('#hd').value = today();
-  $('#hn').value = $('#hs').value = '';
-  if (cur) hl();
-  $('#m').classList.add('on');
-  F().nom.focus();
+// ============================================================
+// OPÉRATIONS CRUD COMMANDES
+// ============================================================
+
+async function loadCommandes() {
+  const { data, error } = await sb.from('commandes').select('*, productions(modele_nom), contacts(nom, prenom)').order('date_commande', { ascending: false });
+  if (error) { toastA('Erreur : ' + error.message); return; }
+  COMMANDES = (data || []).map(c => ({
+    ...c,
+    modele_nom: c.productions?.modele_nom || 'N/A',
+    contact_nom: c.contacts ? (c.contacts.prenom + ' ' + c.contacts.nom).trim() : 'N/A'
+  }));
 }
-const close = () => $('#m').classList.remove('on');
-$('#bCancel').onclick = close;
-$('#m').onmousedown = e => { if (e.target.id === 'm') close() };
-document.addEventListener('keydown', e => { if (e.key === 'Escape') close() });
-$('#bNew').onclick = () => edit();
-$('#cf').onsubmit = async e => {
-  e.preventDefault();
-  const o = {}; for (const el of $('#cf').elements) if (el.name) o[el.name] = el.value.trim();
-  if (cur) {
-    const updated = await updateContact(cur.id, { ...cur, ...o });
-    if (!updated) return;
-    Object.assign(cur, updated);
-  } else {
-    const created = await createContact({ hist: [], ...o });
-    if (!created) return;
-    D.push(created);
+
+async function createCommande(o) {
+  const { data, error } = await sb.from('commandes').insert(o).select().single();
+  if (error) { toastA('Erreur : ' + error.message); return null; }
+  const cmd = await sb.from('commandes').select('*, productions(modele_nom), contacts(nom, prenom)').eq('id', data.id).single();
+  return cmd.data ? { ...cmd.data, modele_nom: cmd.data.productions?.modele_nom || 'N/A', contact_nom: cmd.data.contacts ? (cmd.data.contacts.prenom + ' ' + cmd.data.contacts.nom).trim() : 'N/A' } : null;
+}
+
+async function updateCommande(id, o) {
+  const { data, error } = await sb.from('commandes').update(o).eq('id', id).select().single();
+  if (error) { toastA('Erreur : ' + error.message); return null; }
+  const cmd = await sb.from('commandes').select('*, productions(modele_nom), contacts(nom, prenom)').eq('id', data.id).single();
+  return cmd.data ? { ...cmd.data, modele_nom: cmd.data.productions?.modele_nom || 'N/A', contact_nom: cmd.data.contacts ? (cmd.data.contacts.prenom + ' ' + cmd.data.contacts.nom).trim() : 'N/A' } : null;
+}
+
+async function deleteCommande(id) {
+  const { error } = await sb.from('commandes').delete().eq('id', id);
+  if (error) { toastA('Erreur : ' + error.message); return false; }
+  return true;
+}
+
+// ============================================================
+// INTERFACE ATELIERS
+// ============================================================
+
+function refreshAtelier() {
+  const tbody = $a('#atelier-tbody');
+  if (!tbody) return;
+  
+  tbody.innerHTML = ATELIERS.map(a => {
+    const prodCount = PRODUCTIONS.filter(p => p.atelier_id === a.id).length;
+    return `<tr class="atelier-row" data-id="${a.id}">
+      <td><b>${a.nom}</b><small>${a.responsable}</small></td>
+      <td>${a.adresse || ''}</td>
+      <td>${a.tel || ''}</td>
+      <td>${a.email || ''}</td>
+      <td><span class="bd ${a.statut === 'Actif' ? 'g' : 'o'}">${a.statut}</span></td>
+      <td>${prodCount} prod.</td>
+      <td>
+        <button class="btn xs" onclick="editAtelier('${a.id}')">Modifier</button>
+        <button class="btn xs r" onclick="removeAtelier('${a.id}')">Supprimer</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function refreshProduction() {
+  const tbody = $a('#production-tbody');
+  if (!tbody) return;
+  
+  tbody.innerHTML = PRODUCTIONS.map(p => {
+    const cmdCount = COMMANDES.filter(c => c.production_id === p.id).length;
+    const jours = p.delai_jours || (p.date_reception_prevue && p.date_lancement ? calcDelai(p.date_lancement, p.date_reception_prevue) : null);
+    const couleur = p.statut === 'Terminée' ? 'g' : p.statut === 'Retardée' ? 'r' : 'o';
+    return `<tr class="production-row" data-id="${p.id}">
+      <td><b>${p.modele_nom}</b></td>
+      <td>${p.atelier_nom}</td>
+      <td>${p.quantite_lancee}</td>
+      <td>${fdA(p.date_lancement)}</td>
+      <td>${fdA(p.date_reception_prevue)}</td>
+      <td>${jours ? jours + ' j' : '-'}</td>
+      <td>${p.date_reception_reelle ? fdA(p.date_reception_reelle) : '-'}</td>
+      <td><span class="bd ${couleur}">${p.statut}</span></td>
+      <td>${cmdCount} cmd.</td>
+      <td>
+        <button class="btn xs" onclick="editProduction('${p.id}')">Modifier</button>
+        <button class="btn xs r" onclick="removeProduction('${p.id}')">Supprimer</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function editAtelier(id) {
+  curAtelier = ATELIERS.find(a => a.id === id);
+  if (!curAtelier) return;
+  
+  $a('#atelier-form').style.display = 'block';
+  $a('#atelier-nom').value = curAtelier.nom;
+  $a('#atelier-adresse').value = curAtelier.adresse || '';
+  $a('#atelier-tel').value = curAtelier.tel || '';
+  $a('#atelier-email').value = curAtelier.email || '';
+  $a('#atelier-responsable').value = curAtelier.responsable || '';
+  $a('#atelier-statut').value = curAtelier.statut;
+  $a('#atelier-notes').value = curAtelier.notes || '';
+}
+
+async function removeAtelier(id) {
+  if (!confirm('Confirmer la suppression ?')) return;
+  if (await deleteAtelier(id)) {
+    ATELIERS = ATELIERS.filter(a => a.id !== id);
+    refreshAtelier();
+    toastA('Atelier supprimé');
   }
-  close(); refresh(); toast('Contact enregistré');
-};
-$('#bDel').onclick = async () => {
-  if (cur && confirm('Supprimer définitivement ' + full(cur) + ' ?')) {
-    const ok = await deleteContact(cur.id);
-    if (!ok) return;
-    D = D.filter(c => c.id !== cur.id);
-    close(); refresh(); toast('Contact supprimé');
-  }
-};
-document.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { const d = new Date(); d.setDate(d.getDate() + +b.dataset.add); F().relance.value = iso(d) });
+}
 
-function hl() {
-  const h = (cur.hist || []).slice().sort((a, b) => b.d.localeCompare(a.d));
-  $('#hl').innerHTML = h.length ? h.map(x => `<div class="hi"><button class="x" title="Supprimer" data-x="${x.id}">×</button><b>${esc(x.t)}</b> <small>${fd(x.d)}</small><div>${esc(x.n)}</div>${x.s ? `<small>Étape suivante : ${esc(x.s)}</small>` : ''}</div>`).join('') : '<p style="color:var(--mut)">Aucun échange enregistré.</p>';
+async function editProduction(id) {
+  curProduction = PRODUCTIONS.find(p => p.id === id);
+  if (!curProduction) return;
+  
+  $a('#prod-form').style.display = 'block';
+  $a('#prod-atelier').value = curProduction.atelier_id;
+  $a('#prod-modele').value = curProduction.modele_nom;
+  $a('#prod-quantite').value = curProduction.quantite_lancee;
+  $a('#prod-date-lancement').value = curProduction.date_lancement;
+  $a('#prod-date-reception').value = curProduction.date_reception_prevue;
+  $a('#prod-date-reelle').value = curProduction.date_reception_reelle || '';
+  $a('#prod-statut').value = curProduction.statut;
+  $a('#prod-notes').value = curProduction.notes || '';
 }
-$('#hb').onclick = async () => {
-  const n = $('#hn').value.trim(), s = $('#hs').value.trim();
-  if (!n && !s) { toast('Saisissez un résumé ou une étape suivante'); return }
-  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  const hist = [...(cur.hist || []), { id: uid(), t: $('#ht').value, d: $('#hd').value || today(), n, s }];
-  let newDerniere = cur.derniere;
-  if (!cur.derniere || $('#hd').value > cur.derniere) { newDerniere = $('#hd').value || today(); F().derniere.value = newDerniere; }
-  const updated = await updateHist(cur.id, hist);
-  if (!updated) return;
-  if (newDerniere !== cur.derniere) await updateContact(cur.id, { ...cur, derniere: newDerniere });
-  Object.assign(cur, updated, { derniere: newDerniere });
-  hl(); $('#hn').value = $('#hs').value = ''; refresh(); toast('Échange ajouté');
-};
-$('#hl').onclick = async e => {
-  const x = e.target.dataset.x;
-  if (x && confirm('Supprimer cet échange ?')) {
-    const hist = cur.hist.filter(h => h.id !== x);
-    const updated = await updateHist(cur.id, hist);
-    if (!updated) return;
-    Object.assign(cur, updated);
-    hl();
-  }
-};
-function refresh() { $('#v-dash').classList.contains('on') ? dash() : list() }
 
-/* ---------- Excel (.xlsx) + CSV ---------- */
-const HEAD = ['Nom','Prénom','Poste','Société','Type','Statut','Téléphone','Email','Ville/Pays','Source',"Produits d'intérêt",'Dernière action','Prochaine relance','Notes','Historique'];
-const KEYS = ['nom','prenom','poste','societe','type','statut','tel','email','ville','source','produits','derniere','relance','notes'];
-const q2 = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-const clean = s => String(s || '').replace(/[|¶\r\n]+/g, ' ');
-const histStr = c => (c.hist || []).map(h => [h.d, h.t, clean(h.n), clean(h.s)].join('|')).join('¶');
-function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove() }
+async function removeProduction(id) {
+  if (!confirm('Confirmer la suppression ?')) return;
+  if (await deleteProduction(id)) {
+    PRODUCTIONS = PRODUCTIONS.filter(p => p.id !== id);
+    refreshProduction();
+    toastA('Production supprimée');
+  }
+}
 
-function buildWB() {
-  const aoa = [HEAD, ...D.map(c => [...KEYS.map(k => (k === 'derniere' || k === 'relance') ? fd(c[k]) : String(c[k] ?? '')), histStr(c)])];
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [16, 14, 16, 24, 12, 14, 16, 26, 18, 18, 26, 15, 16, 36, 20].map(w => ({ wch: w }));
-  ws['!autofilter'] = { ref: 'A1:O' + Math.max(aoa.length, 2) };
-  const j = [['Contact', 'Société', 'Date', 'Type', 'Résumé', 'Étape suivante']];
-  D.forEach(c => (c.hist || []).forEach(h => j.push([(c.prenom + ' ' + c.nom).trim(), c.societe || '', fd(h.d), h.t, h.n || '', h.s || ''])));
-  const wj = XLSX.utils.aoa_to_sheet(j); wj['!cols'] = [22, 24, 12, 12, 50, 34].map(w => ({ wch: w }));
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Contacts'); XLSX.utils.book_append_sheet(wb, wj, 'Journal');
-  return wb;
-}
-const wbBlob = () => new Blob([XLSX.write(buildWB(), { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-$('#bExp').onclick = () => {
-  if (!D.length) { toast('Aucun contact à exporter'); return }
-  download(wbBlob(), 'MARIA-BAG_contacts_' + today() + '.xlsx'); toast('Export Excel terminé : ' + D.length + ' contact(s)');
-};
-$('#bCsv').onclick = () => {
-  if (!D.length) { toast('Aucun contact à exporter'); return }
-  const rows = D.map(c => [...KEYS.map(k => c[k]), histStr(c)].map(q2).join(';'));
-  download(new Blob(['﻿' + HEAD.map(q2).join(';') + '\r\n' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' }), 'MARIA-BAG_contacts_' + today() + '.csv');
-  toast('Export CSV terminé : ' + D.length + ' contact(s)');
-};
-function parseCSV(t) {
-  const first = t.split('\n')[0], del = [';', ',', '\t'].map(d => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
-  const rows = []; let r = [], f = '', inq = false;
-  for (let i = 0; i < t.length; i++) {
-    const c = t[i];
-    if (inq) { if (c === '"') { if (t[i + 1] === '"') { f += '"'; i++ } else inq = false } else f += c }
-    else if (c === '"') inq = true; else if (c === del) { r.push(f); f = '' }
-    else if (c === '\n') { r.push(f); rows.push(r); r = []; f = '' } else if (c !== '\r') f += c
-  }
-  if (f !== '' || r.length) { r.push(f); rows.push(r) }
-  return rows.filter(r => r.some(x => String(x).trim()));
-}
-const ALIAS = { nom: ['nom', 'name', 'last name', 'lastname'], prenom: ['prenom', 'first name', 'firstname'], poste: ['poste', 'fonction', 'title'], societe: ['societe', 'entreprise', 'company', 'raison sociale'], type: ['type'], statut: ['statut', 'status'], tel: ['telephone', 'tel', 'phone', 'mobile'], email: ['email', 'e mail', 'mail', 'courriel'], ville: ['ville pays', 'ville', 'pays', 'city', 'country'], source: ['source', 'origine'], produits: ['produits d interet', 'produits', 'interet'], derniere: ['derniere action'], relance: ['prochaine relance', 'relance'], notes: ['notes', 'note', 'commentaires'], hist: ['historique'] };
-const hn = s => norm(s).replace(/[^a-z0-9]+/g, ' ').trim();
-const dt = s => { s = (s || '').trim(); let m; if (m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/)) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0'); return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : '' };
-const isDup = (c, L) => L.some(o => (c.email && norm(o.email) === norm(c.email)) || (!c.email && norm(o.nom + o.prenom + o.societe) === norm(c.nom + c.prenom + c.societe)));
-const uid2 = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-function rowsToContacts(rows) {
-  if (rows.length < 1) return [];
-  const hd = rows[0].map(hn), idx = {};
-  for (const k in ALIAS) { const i = hd.findIndex(h => ALIAS[k].includes(h)); if (i >= 0) idx[k] = i }
-  if (idx.nom === undefined && idx.societe === undefined) return null;
-  const out = [];
-  for (const r of rows.slice(1)) {
-    const g = k => {
-      if (idx[k] === undefined) return '';
-      let v = r[idx[k]];
-      if (typeof v === 'number' && (k === 'derniere' || k === 'relance')) { const p = XLSX.SSF.parse_date_code(v); return p ? p.y + '-' + String(p.m).padStart(2, '0') + '-' + String(p.d).padStart(2, '0') : '' }
-      return String(v ?? '').trim()
-    };
-    const c = { nom: g('nom'), prenom: g('prenom'), poste: g('poste'), societe: g('societe'), tel: g('tel'), email: g('email'), ville: g('ville'), source: g('source'), produits: g('produits'), notes: g('notes'), derniere: dt(g('derniere')), relance: dt(g('relance')), hist: [] };
-    const ty = norm(g('type')), sta = norm(g('statut'));
-    c.type = /four|suppl|vend/.test(ty) ? 'Fournisseur' : 'Client';
-    c.statut = /confirm/.test(sta) ? 'Confirmé' : /pas|non|refus/.test(sta) ? 'Pas intéressé' : 'En attente';
-    c.hist = g('hist').split('¶').filter(Boolean).map(x => { const p = x.split('|'); return { id: uid2(), d: dt(p[0]) || today(), t: p[1] || 'Autre', n: p[2] || '', s: p[3] || '' } });
-    if (!c.nom && !c.societe) continue;
-    out.push(c);
-  }
-  return out;
-}
-function wbToContacts(buf) {
-  const wb = XLSX.read(buf, { type: 'array' });
-  const name = wb.SheetNames.find(n => hn(n) === 'contacts') || wb.SheetNames[0];
-  return rowsToContacts(XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: '' }).filter(r => r.some(x => String(x).trim())));
-}
-async function mergeIn(list) {
-  let add = 0, skip = 0;
-  for (const c of list) {
-    if (isDup(c, D)) { skip++; continue }
-    const created = await createContact(c);
-    if (created) { D.push(created); add++ } else skip++;
-  }
-  return { add, skip };
-}
-const BADCOLS = "Colonnes non reconnues. La première ligne doit contenir des en-têtes comme : Nom, Prénom, Société, Type, Statut, Téléphone, Email…";
-$('#bImp').onclick = () => $('#fImp').click();
-$('#fImp').onchange = async e => {
-  const file = e.target.files[0]; e.target.value = ''; if (!file) return;
-  const buf = await file.arrayBuffer(); let list;
-  try {
-    if (/\.xlsx?$/i.test(file.name)) list = wbToContacts(buf);
-    else {
-      let txt; try { txt = new TextDecoder('utf-8', { fatal: true }).decode(buf) } catch (_) { txt = new TextDecoder('windows-1252').decode(buf) }
-      const rows = parseCSV(txt.replace(/^﻿/, '')); if (rows.length < 2) { toast('Fichier vide ou illisible'); return }
-      list = rowsToContacts(rows);
+// ============================================================
+// HANDLERS FORMULAIRES
+// ============================================================
+
+async function saveAtelier() {
+  const nom = $a('#atelier-nom').value.trim();
+  const adresse = $a('#atelier-adresse').value.trim();
+  const tel = $a('#atelier-tel').value.trim();
+  const email = $a('#atelier-email').value.trim();
+  const responsable = $a('#atelier-responsable').value.trim();
+  const statut = $a('#atelier-statut').value;
+  const notes = $a('#atelier-notes').value.trim();
+  
+  if (!nom) { toastA('Le nom est requis'); return; }
+  
+  const obj = { nom, adresse, tel, email, responsable, statut, notes };
+  let result;
+  
+  if (curAtelier) {
+    result = await updateAtelier(curAtelier.id, obj);
+    if (result) {
+      Object.assign(curAtelier, result);
+      const idx = ATELIERS.findIndex(a => a.id === curAtelier.id);
+      if (idx >= 0) ATELIERS[idx] = curAtelier;
     }
-  } catch (err) { alert('Fichier illisible : ' + err.message); return }
-  if (!list) { alert(BADCOLS); return }
-  toast('Import en cours…');
-  const r = await mergeIn(list);
-  refresh(); toast(r.add + ' contact(s) importé(s)' + (r.skip ? ', ' + r.skip + ' ignoré(s) (doublons ou lignes vides)' : ''));
+  } else {
+    result = await createAtelier(obj);
+    if (result) ATELIERS.push(result);
+  }
+  
+  if (result) {
+    const wasEditing = !!curAtelier;
+    curAtelier = null;
+    $a('#atelier-form').style.display = 'none';
+    refreshAtelier();
+    toastA(wasEditing ? 'Atelier mis à jour' : 'Atelier créé');
+  }
+}
+
+async function saveProduction() {
+  const atelier_id = $a('#prod-atelier').value;
+  const modele_nom = $a('#prod-modele').value.trim();
+  const quantite_lancee = parseInt($a('#prod-quantite').value) || 0;
+  const date_lancement = $a('#prod-date-lancement').value;
+  const date_reception_prevue = $a('#prod-date-reception').value;
+  const date_reception_reelle = $a('#prod-date-reelle').value || null;
+  const statut = $a('#prod-statut').value;
+  const notes = $a('#prod-notes').value.trim();
+  
+  if (!atelier_id || !modele_nom || !date_lancement || !date_reception_prevue) {
+    toastA('Remplissez tous les champs obligatoires');
+    return;
+  }
+  
+  const delai_jours = calcDelai(date_lancement, date_reception_prevue);
+  const obj = { atelier_id, modele_nom, quantite_lancee, date_lancement, date_reception_prevue, date_reception_reelle, statut, delai_jours, notes };
+  let result;
+  
+  if (curProduction) {
+    result = await updateProduction(curProduction.id, obj);
+    if (result) {
+      Object.assign(curProduction, result);
+      const idx = PRODUCTIONS.findIndex(p => p.id === curProduction.id);
+      if (idx >= 0) PRODUCTIONS[idx] = curProduction;
+    }
+  } else {
+    result = await createProduction(obj);
+    if (result) PRODUCTIONS.push(result);
+  }
+  
+  if (result) {
+    curProduction = null;
+    $a('#prod-form').style.display = 'none';
+    refreshProduction();
+    toastA('Production enregistrée');
+  }
+}
+
+function cancelFormAtelier() {
+  curAtelier = null;
+  $a('#atelier-form').style.display = 'none';
+}
+
+function cancelFormProduction() {
+  curProduction = null;
+  $a('#prod-form').style.display = 'none';
+}
+
+function showFormAtelier() {
+  curAtelier = null;
+  $a('#atelier-form').style.display = 'block';
+  $a('#atelier-nom').value = '';
+  $a('#atelier-adresse').value = '';
+  $a('#atelier-tel').value = '';
+  $a('#atelier-email').value = '';
+  $a('#atelier-responsable').value = '';
+  $a('#atelier-statut').value = 'Actif';
+  $a('#atelier-notes').value = '';
+}
+
+function showFormProduction() {
+  curProduction = null;
+  $a('#prod-form').style.display = 'block';
+  $a('#prod-atelier').value = '';
+  $a('#prod-modele').value = '';
+  $a('#prod-quantite').value = '';
+  $a('#prod-date-lancement').value = todayA();
+  $a('#prod-date-reception').value = '';
+  $a('#prod-date-reelle').value = '';
+  $a('#prod-statut').value = 'En cours';
+  $a('#prod-notes').value = '';
+}
+
+// Charger les ateliers au démarrage
+document.addEventListener('mariabag:authenticated', () => {
+  loadAteliers();
+  loadProductions();
+  loadCommandes();
+}, { once: false });
+
+
+/* ============================================================
+   INTÉGRATION INTERFACE — filtres, statistiques et commandes
+   ============================================================ */
+const escA = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let curCommande = null;
+
+function updateAtelierSelects() {
+  const a = $a('#prod-atelier');
+  if (a) {
+    const old = a.value;
+    a.innerHTML = '<option value="">Choisir un atelier</option>' + ATELIERS.map(x => `<option value="${escA(x.id)}">${escA(x.nom)}</option>`).join('');
+    if (old) a.value = old;
+  }
+  const p = $a('#cmd-production');
+  if (p) {
+    const old = p.value;
+    p.innerHTML = '<option value="">Choisir une production</option>' + PRODUCTIONS.map(x => `<option value="${escA(x.id)}">${escA(x.modele_nom)} — ${escA(x.atelier_nom || '')}</option>`).join('');
+    if (old) p.value = old;
+  }
+  const c = $a('#cmd-contact');
+  if (c && typeof D !== 'undefined') {
+    const old = c.value;
+    c.innerHTML = '<option value="">Aucun contact</option>' + D.map(x => `<option value="${escA(x.id)}">${escA([x.prenom,x.nom].filter(Boolean).join(' '))}${x.societe ? ' — '+escA(x.societe) : ''}</option>`).join('');
+    if (old) c.value = old;
+  }
+}
+function renderAtelierStats() {
+  const el = $a('#at-stats');
+  if (!el) return;
+  const today = todayA();
+  const active = PRODUCTIONS.filter(p => !['Terminée','Annulée'].includes(p.statut)).length;
+  const done = PRODUCTIONS.filter(p => p.statut === 'Terminée' && (p.date_reception_reelle || p.updated_at || p.date_lancement || '').slice(0,7) === today.slice(0,7)).length;
+  const late = PRODUCTIONS.filter(p => p.statut !== 'Terminée' && p.statut !== 'Annulée' && p.date_reception_prevue && p.date_reception_prevue < today).length;
+  const total = PRODUCTIONS.reduce((n,p) => n + (Number(p.quantite_lancee)||0),0);
+  el.innerHTML = [
+    ['Productions en cours',active],['Terminées ce mois',done],['Productions en retard',late],['Quantité totale lancée',total]
+  ].map(([label,value]) => `<div class="at-stat"><span>${label}</span><b>${value}</b></div>`).join('');
+}
+function renderCommandes() {
+  const tbody = $a('#commande-tbody');
+  if (!tbody) return;
+  const q = ($a('#cmd-q')?.value || '').trim().toLocaleLowerCase();
+  const statut = $a('#cmd-statut')?.value || '';
+  const rows = COMMANDES.filter(c => (!statut || c.statut === statut) &&
+    (!q || [c.commande_numero,c.modele_nom,c.contact_nom].join(' ').toLocaleLowerCase().includes(q)));
+  tbody.innerHTML = rows.length ? rows.map(c => `<tr>
+    <td><b>${escA(c.commande_numero || '—')}</b></td><td>${escA(c.modele_nom || 'N/A')}</td>
+    <td>${escA(c.contact_nom || 'N/A')}</td><td>${Number(c.quantite_commandee)||0}</td><td>${Number(c.quantite_recue)||0}</td>
+    <td>${fdA(c.date_commande)}</td><td>${fdA(c.date_reception_prevue)}</td><td>${escA(c.statut || 'En attente')}</td>
+    <td><button class="btn xs" type="button" onclick="editCommande('${escA(c.id)}')">Modifier</button>
+    <button class="btn xs r" type="button" onclick="removeCommande('${escA(c.id)}')">Supprimer</button></td></tr>`).join('') :
+    '<tr><td colspan="9" class="at-empty">Aucune commande correspondante.</td></tr>';
+}
+function refreshAtelierViews() {
+  updateAtelierSelects();
+  renderAtelierStats();
+  renderCommandes();
+}
+const _refreshAtelierOriginal = refreshAtelier;
+refreshAtelier = function() {
+  const tbody = $a('#atelier-tbody');
+  if (tbody && !ATELIERS.length) tbody.innerHTML = '<tr><td colspan="7" class="at-empty">Aucun atelier. Cliquez sur « Nouvel atelier » pour commencer.</td></tr>';
+  else _refreshAtelierOriginal();
+  refreshAtelierViews();
+};
+const _refreshProductionOriginal = refreshProduction;
+refreshProduction = function() {
+  const tbody = $a('#production-tbody');
+  if (tbody && !PRODUCTIONS.length) tbody.innerHTML = '<tr><td colspan="10" class="at-empty">Aucune production enregistrée.</td></tr>';
+  else _refreshProductionOriginal();
+  refreshAtelierViews();
 };
 
-/* ---------- Démarrage ---------- */
-document.addEventListener('mariabag:authenticated', () => { if (!loaded) loadContacts() }, { once: false });
+async function loadCommandes() {
+  const { data, error } = await sb.from('commandes')
+    .select('*, productions(modele_nom), contacts(nom, prenom)')
+    .order('date_commande', { ascending: false });
+  if (error) { toastA('Erreur commandes : ' + error.message); return; }
+  COMMANDES = (data || []).map(c => ({
+    ...c,
+    modele_nom: c.productions?.modele_nom || 'N/A',
+    contact_nom: c.contacts ? [c.contacts.prenom,c.contacts.nom].filter(Boolean).join(' ') : 'N/A'
+  }));
+  renderCommandes();
+  refreshAtelierViews();
+}
+async function createCommande(o) {
+  const { data, error } = await sb.from('commandes').insert(o).select().single();
+  if (error) { toastA('Erreur : ' + error.message); return null; }
+  const { data: row, error: readError } = await sb.from('commandes')
+    .select('*, productions(modele_nom), contacts(nom, prenom)').eq('id', data.id).single();
+  if (readError) { toastA('Commande créée, mais actualisation impossible.'); return data; }
+  return {...row, modele_nom: row.productions?.modele_nom || 'N/A',
+    contact_nom: row.contacts ? [row.contacts.prenom,row.contacts.nom].filter(Boolean).join(' ') : 'N/A'};
+}
+async function updateCommande(id, o) {
+  const { data, error } = await sb.from('commandes').update(o).eq('id',id).select().single();
+  if (error) { toastA('Erreur : ' + error.message); return null; }
+  const { data: row, error: readError } = await sb.from('commandes')
+    .select('*, productions(modele_nom), contacts(nom, prenom)').eq('id', data.id).single();
+  if (readError) return data;
+  return {...row, modele_nom: row.productions?.modele_nom || 'N/A',
+    contact_nom: row.contacts ? [row.contacts.prenom,row.contacts.nom].filter(Boolean).join(' ') : 'N/A'};
+}
+async function deleteCommande(id) {
+  const { error } = await sb.from('commandes').delete().eq('id',id);
+  if (error) { toastA('Erreur : ' + error.message); return false; }
+  return true;
+}
+function showFormCommande() {
+  curCommande = null;
+  updateAtelierSelects();
+  const f = $a('#cmd-form'); if (!f) return;
+  f.reset(); $a('#cmd-date').value = todayA(); $a('#cmd-qte').value = 1;
+  $a('#cmd-recue').value = 0; $a('#cmd-status').value = 'En attente';
+  f.style.display = 'block';
+}
+function editCommande(id) {
+  curCommande = COMMANDES.find(c => String(c.id) === String(id));
+  if (!curCommande) return;
+  updateAtelierSelects();
+  const c = curCommande;
+  $a('#cmd-form').style.display = 'block';
+  $a('#cmd-production').value = c.production_id || '';
+  $a('#cmd-contact').value = c.contact_id || '';
+  $a('#cmd-numero').value = c.commande_numero || '';
+  $a('#cmd-qte').value = c.quantite_commandee || 1;
+  $a('#cmd-recue').value = c.quantite_recue || 0;
+  $a('#cmd-date').value = c.date_commande || todayA();
+  $a('#cmd-reception').value = c.date_reception_prevue || '';
+  $a('#cmd-status').value = c.statut || 'En attente';
+  $a('#cmd-notes').value = c.notes || '';
+}
+async function saveCommande() {
+  const production_id = $a('#cmd-production').value;
+  const contact_id = $a('#cmd-contact').value || null;
+  const commande_numero = $a('#cmd-numero').value.trim();
+  const quantite_commandee = Number($a('#cmd-qte').value) || 0;
+  const quantite_recue = Number($a('#cmd-recue').value) || 0;
+  const date_commande = $a('#cmd-date').value;
+  const date_reception_prevue = $a('#cmd-reception').value || null;
+  const statut = $a('#cmd-status').value;
+  const notes = $a('#cmd-notes').value.trim();
+  if (!production_id || !commande_numero || !date_commande || quantite_commandee < 1) {
+    toastA('Remplissez les champs obligatoires.'); return;
+  }
+  if (quantite_recue > quantite_commandee) { toastA('La quantité reçue ne peut pas dépasser la quantité commandée.'); return; }
+  const obj = {production_id,contact_id,commande_numero,quantite_commandee,quantite_recue,date_commande,date_reception_prevue,statut,notes};
+  const result = curCommande ? await updateCommande(curCommande.id,obj) : await createCommande(obj);
+  if (!result) return;
+  if (curCommande) COMMANDES = COMMANDES.map(c => c.id === result.id ? result : c);
+  else COMMANDES.unshift(result);
+  curCommande = null; $a('#cmd-form').style.display = 'none';
+  renderCommandes(); refreshProduction(); toastA('Commande enregistrée.');
+}
+async function removeCommande(id) {
+  const c = COMMANDES.find(x => String(x.id) === String(id));
+  if (!c || !confirm('Supprimer la commande ' + (c.commande_numero || '') + ' ?')) return;
+  if (!(await deleteCommande(id))) return;
+  COMMANDES = COMMANDES.filter(x => String(x.id) !== String(id));
+  renderCommandes(); refreshProduction(); toastA('Commande supprimée.');
+}
+function cancelFormCommande() { curCommande = null; $a('#cmd-form').style.display = 'none'; }
+
+document.querySelectorAll('[data-at-tab]').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('[data-at-tab]').forEach(b => b.classList.toggle('on', b === btn));
+  document.querySelectorAll('.at-pane').forEach(p => p.classList.toggle('on', p.id === btn.dataset.atTab));
+  if (btn.dataset.atTab === 'productions-pane') { renderAtelierStats(); updateAtelierSelects(); }
+  if (btn.dataset.atTab === 'suivi-pane') { updateAtelierSelects(); renderCommandes(); }
+}));
+$a('#cmd-q')?.addEventListener('input', renderCommandes);
+$a('#cmd-statut')?.addEventListener('change', renderCommandes);
+
+document.addEventListener('mariabag:authenticated', () => {
+  loadAteliers();
+  loadProductions();
+  loadCommandes();
+  if (typeof loadContacts === 'function') loadContacts();
+}, { once: false });
