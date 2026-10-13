@@ -16,7 +16,19 @@ const $aa = s => document.querySelectorAll(s);
 
 function toastA(msg) {
   const e = $a('#toastA');
-  if (e) { e.textContent = msg; e.style.display = 'block'; clearTimeout(toastA.t); toastA.t = setTimeout(() => e.style.display = 'none', 3000); }
+  if (e) { e.textContent = msg; e.style.display = 'block'; clearTimeout(toastA.t); toastA.t = setTimeout(() => e.style.display = 'none', 8000); }
+}
+
+// Message d'erreur lisible (tables absentes, droits, etc.)
+function errMsgA(error) {
+  const m = (error && error.message) || String(error);
+  if (/schema cache|does not exist|relation .* not exist|Could not find the table/i.test(m))
+    return 'Tables ateliers introuvables dans Supabase. Exécutez supabase/schema.sql dans SQL Editor, puis relancez la page. (' + m + ')';
+  if (/row-level security|permission denied|policy/i.test(m))
+    return 'Accès refusé par Supabase (RLS). Réexécutez supabase/schema.sql pour recréer les règles d\'accès. (' + m + ')';
+  if (/duplicate key|unique/i.test(m))
+    return 'Ce nom existe déjà. Choisissez un nom différent. (' + m + ')';
+  return m;
 }
 
 function isoA(d) {
@@ -40,26 +52,31 @@ function calcDelai(dateLancement, dateReception) {
 
 async function loadAteliers() {
   const { data, error } = await sb.from('ateliers').select('*').order('nom', { ascending: true });
-  if (error) { toastA('Erreur : ' + error.message); return; }
+  if (error) {
+    toastA('Erreur : ' + errMsgA(error));
+    const tb = $a('#atelier-tbody');
+    if (tb) tb.innerHTML = '<tr><td colspan="7" class="at-empty" style="color:#b00020">⚠ ' + errMsgA(error).replace(/</g, '&lt;') + '</td></tr>';
+    return;
+  }
   ATELIERS = data || [];
   refreshAtelier();
 }
 
 async function createAtelier(o) {
   const { data, error } = await sb.from('ateliers').insert(o).select().single();
-  if (error) { toastA('Erreur : ' + error.message); return null; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return null; }
   return data;
 }
 
 async function updateAtelier(id, o) {
   const { data, error } = await sb.from('ateliers').update(o).eq('id', id).select().single();
-  if (error) { toastA('Erreur : ' + error.message); return null; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return null; }
   return data;
 }
 
 async function deleteAtelier(id) {
   const { error } = await sb.from('ateliers').delete().eq('id', id);
-  if (error) { toastA('Erreur : ' + error.message); return false; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return false; }
   return true;
 }
 
@@ -69,7 +86,12 @@ async function deleteAtelier(id) {
 
 async function loadProductions() {
   const { data, error } = await sb.from('productions').select('*, ateliers(nom)').order('date_lancement', { ascending: false });
-  if (error) { toastA('Erreur : ' + error.message); return; }
+  if (error) {
+    toastA('Erreur : ' + errMsgA(error));
+    const tb = $a('#production-tbody');
+    if (tb) tb.innerHTML = '<tr><td colspan="10" class="at-empty" style="color:#b00020">⚠ ' + errMsgA(error).replace(/</g, '&lt;') + '</td></tr>';
+    return;
+  }
   PRODUCTIONS = (data || []).map(p => ({
     ...p,
     atelier_nom: p.ateliers?.nom || 'N/A'
@@ -79,21 +101,21 @@ async function loadProductions() {
 
 async function createProduction(o) {
   const { data, error } = await sb.from('productions').insert(o).select().single();
-  if (error) { toastA('Erreur : ' + error.message); return null; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return null; }
   const prod = await sb.from('productions').select('*, ateliers(nom)').eq('id', data.id).single();
   return prod.data ? { ...prod.data, atelier_nom: prod.data.ateliers?.nom || 'N/A' } : null;
 }
 
 async function updateProduction(id, o) {
   const { data, error } = await sb.from('productions').update(o).eq('id', id).select().single();
-  if (error) { toastA('Erreur : ' + error.message); return null; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return null; }
   const prod = await sb.from('productions').select('*, ateliers(nom)').eq('id', data.id).single();
   return prod.data ? { ...prod.data, atelier_nom: prod.data.ateliers?.nom || 'N/A' } : null;
 }
 
 async function deleteProduction(id) {
   const { error } = await sb.from('productions').delete().eq('id', id);
-  if (error) { toastA('Erreur : ' + error.message); return false; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return false; }
   return true;
 }
 
@@ -103,7 +125,7 @@ async function deleteProduction(id) {
 
 async function loadCommandes() {
   const { data, error } = await sb.from('commandes').select('*, productions(modele_nom), contacts(nom, prenom)').order('date_commande', { ascending: false });
-  if (error) { toastA('Erreur : ' + error.message); return; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return; }
   COMMANDES = (data || []).map(c => ({
     ...c,
     modele_nom: c.productions?.modele_nom || 'N/A',
@@ -113,21 +135,21 @@ async function loadCommandes() {
 
 async function createCommande(o) {
   const { data, error } = await sb.from('commandes').insert(o).select().single();
-  if (error) { toastA('Erreur : ' + error.message); return null; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return null; }
   const cmd = await sb.from('commandes').select('*, productions(modele_nom), contacts(nom, prenom)').eq('id', data.id).single();
   return cmd.data ? { ...cmd.data, modele_nom: cmd.data.productions?.modele_nom || 'N/A', contact_nom: cmd.data.contacts ? (cmd.data.contacts.prenom + ' ' + cmd.data.contacts.nom).trim() : 'N/A' } : null;
 }
 
 async function updateCommande(id, o) {
   const { data, error } = await sb.from('commandes').update(o).eq('id', id).select().single();
-  if (error) { toastA('Erreur : ' + error.message); return null; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return null; }
   const cmd = await sb.from('commandes').select('*, productions(modele_nom), contacts(nom, prenom)').eq('id', data.id).single();
   return cmd.data ? { ...cmd.data, modele_nom: cmd.data.productions?.modele_nom || 'N/A', contact_nom: cmd.data.contacts ? (cmd.data.contacts.prenom + ' ' + cmd.data.contacts.nom).trim() : 'N/A' } : null;
 }
 
 async function deleteCommande(id) {
   const { error } = await sb.from('commandes').delete().eq('id', id);
-  if (error) { toastA('Erreur : ' + error.message); return false; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return false; }
   return true;
 }
 
@@ -421,7 +443,7 @@ async function loadCommandes() {
   const { data, error } = await sb.from('commandes')
     .select('*, productions(modele_nom), contacts(nom, prenom)')
     .order('date_commande', { ascending: false });
-  if (error) { toastA('Erreur commandes : ' + error.message); return; }
+  if (error) { toastA('Erreur commandes : ' + errMsgA(error)); return; }
   COMMANDES = (data || []).map(c => ({
     ...c,
     modele_nom: c.productions?.modele_nom || 'N/A',
@@ -432,7 +454,7 @@ async function loadCommandes() {
 }
 async function createCommande(o) {
   const { data, error } = await sb.from('commandes').insert(o).select().single();
-  if (error) { toastA('Erreur : ' + error.message); return null; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return null; }
   const { data: row, error: readError } = await sb.from('commandes')
     .select('*, productions(modele_nom), contacts(nom, prenom)').eq('id', data.id).single();
   if (readError) { toastA('Commande créée, mais actualisation impossible.'); return data; }
@@ -441,7 +463,7 @@ async function createCommande(o) {
 }
 async function updateCommande(id, o) {
   const { data, error } = await sb.from('commandes').update(o).eq('id',id).select().single();
-  if (error) { toastA('Erreur : ' + error.message); return null; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return null; }
   const { data: row, error: readError } = await sb.from('commandes')
     .select('*, productions(modele_nom), contacts(nom, prenom)').eq('id', data.id).single();
   if (readError) return data;
@@ -450,7 +472,7 @@ async function updateCommande(id, o) {
 }
 async function deleteCommande(id) {
   const { error } = await sb.from('commandes').delete().eq('id',id);
-  if (error) { toastA('Erreur : ' + error.message); return false; }
+  if (error) { toastA('Erreur : ' + errMsgA(error)); return false; }
   return true;
 }
 function showFormCommande() {

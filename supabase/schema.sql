@@ -168,3 +168,6 @@ drop policy if exists "commandes_update_all" on public.commandes;
 create policy "commandes_update_all" on public.commandes for update using (true) with check (true);
 drop policy if exists "commandes_delete_all" on public.commandes;
 create policy "commandes_delete_all" on public.commandes for delete using (true);
+
+-- Recharge le cache de l'API Supabase pour voir les nouvelles tables immédiatement
+notify pgrst, 'reload schema';
