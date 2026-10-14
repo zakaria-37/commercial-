@@ -13,7 +13,7 @@ let curAcompte = null;      // acompte en cours de modification
 const $e = s => document.querySelector(s);
 
 /* ---------- Utilitaires ---------- */
-function esc(v) {
+function escE(v) {
   return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function money(n) {
@@ -77,7 +77,7 @@ async function loadEmployes() {
     const msg = errMsgE(e.error || a.error);
     toastE('Erreur : ' + msg);
     const tb = $e('#emp-tbody');
-    if (tb) tb.innerHTML = '<tr><td colspan="7" class="at-empty" style="color:#b00020">⚠ ' + esc(msg) + '</td></tr>';
+    if (tb) tb.innerHTML = '<tr><td colspan="7" class="at-empty" style="color:#b00020">⚠ ' + escE(msg) + '</td></tr>';
     return;
   }
   EMPLOYES = e.data || [];
@@ -202,8 +202,8 @@ function renderEmployes() {
     tb.innerHTML = list.map(e => {
       const ac = totalAcomptes(e.id, mois), reste = Number(e.salaire_mensuel || 0) - ac;
       return '<tr' + (String(e.id) === String(selEmploye) ? ' style="background:var(--nb)"' : '') + '>' +
-        '<td><b>' + esc(e.nom) + '</b> ' + esc(e.prenom) + '</td>' +
-        '<td>' + esc(e.poste) + '</td>' +
+        '<td><b>' + escE(e.nom) + '</b> ' + escE(e.prenom) + '</td>' +
+        '<td>' + escE(e.poste) + '</td>' +
         '<td>' + money(e.salaire_mensuel) + '</td>' +
         '<td>' + money(ac) + '</td>' +
         '<td><b style="color:' + (reste < 0 ? 'var(--r)' : 'var(--g)') + '">' + money(reste) + '</b></td>' +
@@ -266,7 +266,7 @@ function renderAcomptes() {
 
   // Liste détaillée
   $e('#ac-liste').innerHTML = items.length ? items.map(a =>
-    '<tr><td>' + fdE(a.date_acompte) + '</td><td>' + labelSemaine(semaineDuMois(a.date_acompte), mois).split(' (')[0] + '</td><td>' + money(a.montant) + '</td><td>' + esc(a.note) + '</td>' +
+    '<tr><td>' + fdE(a.date_acompte) + '</td><td>' + labelSemaine(semaineDuMois(a.date_acompte), mois).split(' (')[0] + '</td><td>' + money(a.montant) + '</td><td>' + escE(a.note) + '</td>' +
     '<td><button class="btn s" type="button" onclick="editAcompte(\'' + a.id + '\')">Modifier</button> ' +
     '<button class="btn s d" type="button" onclick="removeAcompte(\'' + a.id + '\')">Supprimer</button></td></tr>'
   ).join('') : '<tr><td colspan="5" class="at-empty">Aucun acompte ce mois-ci.</td></tr>';
