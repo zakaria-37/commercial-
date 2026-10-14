@@ -185,7 +185,7 @@ function refreshProduction() {
   tbody.innerHTML = PRODUCTIONS.map(p => {
     const cmdCount = COMMANDES.filter(c => c.production_id === p.id).length;
     const jours = p.delai_jours || (p.date_reception_prevue && p.date_lancement ? calcDelai(p.date_lancement, p.date_reception_prevue) : null);
-    const couleur = p.statut === 'Terminée' ? 'g' : p.statut === 'Retardée' ? 'r' : 'o';
+    const couleur = (p.statut === 'Terminée' || p.date_reception_reelle) ? 'g' : p.statut === 'Retardée' ? 'r' : 'o';
     return `<tr class="production-row" data-id="${p.id}">
       <td><b>${p.modele_nom}</b></td>
       <td>${p.atelier_nom}</td>
@@ -194,7 +194,7 @@ function refreshProduction() {
       <td>${fdA(p.date_reception_prevue)}</td>
       <td>${jours ? jours + ' j' : '-'}</td>
       <td>${p.date_reception_reelle ? fdA(p.date_reception_reelle) : '-'}</td>
-      <td><span class="bd ${couleur}">${p.statut}</span></td>
+      <td><span class="bd ${couleur}">${p.date_reception_reelle ? 'Terminée' : p.statut}</span></td>
       <td>${cmdCount} cmd.</td>
       <td>
         <button class="btn xs" onclick="editProduction('${p.id}')">Modifier</button>
@@ -296,9 +296,12 @@ async function saveProduction() {
   const quantite_lancee = parseInt($a('#prod-quantite').value) || 0;
   const date_lancement = $a('#prod-date-lancement').value;
   const date_reception_prevue = $a('#prod-date-reception').value;
-  const date_reception_reelle = $a('#prod-date-reelle').value || null;
-  const statut = $a('#prod-statut').value;
+  let date_reception_reelle = $a('#prod-date-reelle').value || null;
+  let statut = $a('#prod-statut').value;
   const notes = $a('#prod-notes').value.trim();
+  // Une date de réception réelle = production terminée ; statut « Terminée » sans date = date du jour
+  if (date_reception_reelle && statut !== 'Terminée') statut = 'Terminée';
+  if (statut === 'Terminée' && !date_reception_reelle) date_reception_reelle = todayA();
   
   if (!atelier_id || !modele_nom || !date_lancement || !date_reception_prevue) {
     toastA('Remplissez tous les champs obligatoires');
@@ -396,9 +399,11 @@ function renderAtelierStats() {
   const el = $a('#at-stats');
   if (!el) return;
   const today = todayA();
-  const active = PRODUCTIONS.filter(p => !['Terminée','Annulée'].includes(p.statut)).length;
-  const done = PRODUCTIONS.filter(p => p.statut === 'Terminée' && (p.date_reception_reelle || p.updated_at || p.date_lancement || '').slice(0,7) === today.slice(0,7)).length;
-  const late = PRODUCTIONS.filter(p => p.statut !== 'Terminée' && p.statut !== 'Annulée' && p.date_reception_prevue && p.date_reception_prevue < today).length;
+  const fini = p => p.statut === 'Terminée' || !!p.date_reception_reelle;
+  const actif = p => !fini(p) && p.statut !== 'Annulée';
+  const active = PRODUCTIONS.filter(actif).length;
+  const done = PRODUCTIONS.filter(p => fini(p) && (p.date_reception_reelle || p.updated_at || p.date_lancement || '').slice(0,7) === today.slice(0,7)).length;
+  const late = PRODUCTIONS.filter(p => actif(p) && p.date_reception_prevue && p.date_reception_prevue < today).length;
   const total = PRODUCTIONS.reduce((n,p) => n + (Number(p.quantite_lancee)||0),0);
   el.innerHTML = [
     ['Productions en cours',active],['Terminées ce mois',done],['Productions en retard',late],['Quantité totale lancée',total]
