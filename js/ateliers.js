@@ -424,10 +424,76 @@ function renderCommandes() {
     <button class="btn xs r" type="button" onclick="removeCommande('${escA(c.id)}')">Supprimer</button></td></tr>`).join('') :
     '<tr><td colspan="9" class="at-empty">Aucune commande correspondante.</td></tr>';
 }
+/* ---------- Tableau de bord : ateliers, productions, commandes ---------- */
+const prodFini = p => p.statut === 'Terminée' || !!p.date_reception_reelle;
+const prodActive = p => !prodFini(p) && p.statut !== 'Annulée';
+const cmdOuverte = c => c.statut !== 'Reçue' && c.statut !== 'Annulée';
+const CMD_CLASS = {'Reçue':'g','Partiellement reçue':'o','En production':'o','En attente':'n','Annulée':'r'};
+function joursAvant(d) { return Math.round((new Date(d + 'T00:00') - new Date(todayA() + 'T00:00')) / 864e5); }
+function echeanceBadge(d) {
+  if (!d) return {l:'Non planifiée', c:'n'};
+  const j = joursAvant(d);
+  if (j < 0) return {l:'En retard (' + (-j) + ' j)', c:'r'};
+  if (j === 0) return {l:"Aujourd'hui", c:'o'};
+  return {l:'Dans ' + j + ' j', c: j <= 7 ? 'o' : 'g'};
+}
+function renderDashAteliers() {
+  const kp = $a('#kpis-at');
+  if (!kp) return;
+  const today = todayA();
+  const nb = v => Number(v) || 0;
+  const actives = PRODUCTIONS.filter(prodActive);
+  const late = actives.filter(p => p.date_reception_prevue && p.date_reception_prevue < today).length;
+  const piecesEnCours = actives.reduce((n, p) => n + nb(p.quantite_lancee), 0);
+  const doneM = PRODUCTIONS.filter(p => prodFini(p) && (p.date_reception_reelle || p.updated_at || p.date_lancement || '').slice(0, 7) === today.slice(0, 7));
+  const piecesM = doneM.reduce((n, p) => n + nb(p.quantite_lancee), 0);
+  const atActifs = ATELIERS.filter(a => a.statut === 'Actif').length;
+  const ouvertes = COMMANDES.filter(cmdOuverte);
+  const cmdLate = ouvertes.filter(c => c.date_reception_prevue && c.date_reception_prevue < today).length;
+  const reste = ouvertes.reduce((n, c) => n + Math.max(0, nb(c.quantite_commandee) - nb(c.quantite_recue)), 0);
+
+  kp.innerHTML = `
+   <div class="card kpi"><span>Ateliers actifs</span><b>${atActifs} / ${ATELIERS.length}</b><i>${ATELIERS.length - atActifs} inactif(s) ou en maintenance</i></div>
+   <div class="card kpi"><span>Productions en cours</span><b>${actives.length}</b><i>${late} en retard · ${piecesEnCours} pièces en production</i></div>
+   <div class="card kpi"><span>Terminées ce mois</span><b>${doneM.length}</b><i>${piecesM} pièces produites</i></div>
+   <div class="card kpi ${cmdLate ? 'u' : ''}"><span>Commandes à livrer</span><b>${ouvertes.length}</b><i>${cmdLate} en retard · ${reste} pièces restantes</i></div>`;
+
+  // Productions en cours (les plus proches de la réception d'abord)
+  const pr = [...actives].sort((a, b) => (a.date_reception_prevue || '9999').localeCompare(b.date_reception_prevue || '9999')).slice(0, 8);
+  $a('#dash-prod').innerHTML = pr.length ? `<table style="min-width:0"><tbody>${pr.map(p => { const b = echeanceBadge(p.date_reception_prevue);
+    return `<tr class="row" data-go="productions-pane"><td><b>${escA(p.modele_nom)}</b><small>${escA(p.atelier_nom)}</small></td><td>${nb(p.quantite_lancee)} pcs</td>
+    <td><span class="bd ${b.c}">${b.l}</span>${p.date_reception_prevue ? `<small>${fdA(p.date_reception_prevue)}</small>` : ''}</td></tr>`; }).join('')}</tbody></table>`
+    : '<div class="empty">Aucune production en cours.</div>';
+
+  // Charge par atelier
+  const charge = ATELIERS.map(a => { const ps = actives.filter(p => p.atelier_id === a.id); return {a, n: ps.length, q: ps.reduce((t, p) => t + nb(p.quantite_lancee), 0)}; })
+    .sort((x, y) => y.q - x.q || x.a.nom.localeCompare(y.a.nom));
+  const maxQ = Math.max(1, ...charge.map(c => c.q));
+  $a('#dash-charge').innerHTML = charge.length ? charge.map(c => `<div class="bar"><div class="t"><span>${escA(c.a.nom)}${c.a.statut !== 'Actif' ? ' <small>(' + escA(c.a.statut) + ')</small>' : ''}</span><b>${c.n ? c.n + ' prod. · ' + c.q + ' pcs' : (c.a.statut === 'Actif' ? 'Libre' : '—')}</b></div><div class="tr"><i style="width:${c.q / maxQ * 100}%;background:var(--brass)"></i></div></div>`).join('')
+    : '<div class="empty">Aucun atelier enregistré.</div>';
+
+  // Commandes à suivre
+  const cm = [...ouvertes].sort((a, b) => (a.date_reception_prevue || '9999').localeCompare(b.date_reception_prevue || '9999')).slice(0, 8);
+  $a('#dash-cmd').innerHTML = cm.length ? `<table style="min-width:0"><tbody>${cm.map(c => { const late = c.date_reception_prevue && c.date_reception_prevue < today;
+    return `<tr class="row" data-go="suivi-pane"><td><b>${escA(c.commande_numero || '—')}</b><small>${escA(c.modele_nom)}</small></td>
+    <td>${escA(c.contact_nom && c.contact_nom !== 'N/A' ? c.contact_nom : '—')}</td><td>${nb(c.quantite_recue)} / ${nb(c.quantite_commandee)} pcs</td>
+    <td><span class="bd ${late ? 'r' : (CMD_CLASS[c.statut] || 'n')}">${late ? 'En retard' : escA(c.statut || 'En attente')}</span>${c.date_reception_prevue ? `<small>Prévue le ${fdA(c.date_reception_prevue)}</small>` : ''}</td></tr>`; }).join('')}</tbody></table>`
+    : '<div class="empty">Aucune commande en attente de livraison.</div>';
+}
+// Un clic sur une ligne ouvre l'onglet correspondant de la page Ateliers
+$a('#v-dash').addEventListener('click', e => {
+  const r = e.target.closest('[data-go]');
+  if (!r) return;
+  $a('nav button[data-v="ateliers"]').click();
+  const t = $a(`[data-at-tab="${r.dataset.go}"]`);
+  if (t) t.click();
+});
+
 function refreshAtelierViews() {
   updateAtelierSelects();
   renderAtelierStats();
   renderCommandes();
+  renderDashAteliers();
 }
 const _refreshAtelierOriginal = refreshAtelier;
 refreshAtelier = function() {
