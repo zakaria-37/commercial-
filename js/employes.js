@@ -266,10 +266,10 @@ function renderAcomptes() {
 
   // Liste détaillée
   $e('#ac-liste').innerHTML = items.length ? items.map(a =>
-    '<tr><td>' + fdE(a.date_acompte) + '</td><td>' + labelSemaine(semaineDuMois(a.date_acompte), mois).split(' (')[0] + '</td><td>' + money(a.montant) + '</td><td>' + escE(a.note) + '</td>' +
+    '<tr><td><b>' + escE(emp.nom) + '</b></td><td>' + escE(emp.prenom) + '</td><td>' + fdE(a.date_acompte) + '</td><td>' + labelSemaine(semaineDuMois(a.date_acompte), mois).split(' (')[0] + '</td><td>' + money(a.montant) + '</td><td>' + escE(a.note) + '</td>' +
     '<td><button class="btn s" type="button" onclick="editAcompte(\'' + a.id + '\')">Modifier</button> ' +
     '<button class="btn s d" type="button" onclick="removeAcompte(\'' + a.id + '\')">Supprimer</button></td></tr>'
-  ).join('') : '<tr><td colspan="5" class="at-empty">Aucun acompte ce mois-ci.</td></tr>';
+  ).join('') : '<tr><td colspan="7" class="at-empty">Aucun acompte ce mois-ci.</td></tr>';
 }
 
 /* ---------- Export Excel (modifiable) ---------- */
