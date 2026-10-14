@@ -18,7 +18,7 @@ header .btn:not(.p){background:transparent;color:#fff;border-color:#555}header .
 :focus-visible{outline:2px solid #000;outline-offset:2px}
 main{max-width:1280px;margin:0 auto;padding:22px 24px 60px}
 section{display:none}section.on{display:block}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));gap:14px;margin-bottom:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
 .kpi b{display:block;font:700 34px Georgia,serif;line-height:1.1}.kpi span{color:var(--mut)}.kpi i{display:block;font-style:normal;font-size:12px;margin-top:4px}
 .kpi.u b{color:var(--r)}
@@ -99,3 +99,71 @@ footer b{font:italic 400 16px "Brush Script MT","Segoe Script",cursive;color:#00
 .xn{color:#bdb6b8;font-size:12px}
 
 #app.hide{display:none}
+
+/* ===========================================================
+   Adaptation mobile / smartphone
+   =========================================================== */
+
+/* Cibles tactiles plus grandes sur écran tactile, quelle que soit la taille */
+@media (pointer:coarse){
+  .btn,nav button,.at-tabs button{min-height:40px}
+  th,td{padding:12px 10px}
+  .tools input,.tools select,.fld input,.fld select,.fld textarea,.hadd input,.hadd select,.hadd textarea,.at-fields input,.at-fields select,.at-fields textarea{min-height:40px}
+  .lcard input,.lcard button{min-height:44px}
+}
+
+@media (max-width:900px){
+  main{padding:16px 14px 50px}
+  .modal{padding:18px}
+}
+
+@media (max-width:700px){
+  header{padding:10px 14px;gap:10px}
+  .logo{height:36px}
+  .brand small{max-width:160px;font-size:11px}
+  nav{margin-left:0;gap:2px;width:100%;order:3}
+  nav button{padding:8px 10px;font-size:12.5px;flex:1 1 auto;text-align:center}
+  .act{width:100%;order:4;margin-left:0}
+  .act .btn{flex:1 1 auto;font-size:12.5px;padding:8px 10px}
+  .who{margin-left:0}
+  .who b{font-size:17px}
+  header .btn#bLogout{margin-left:0}
+  .xn{display:none}
+
+  main{padding:14px 12px 44px}
+  .hello{padding:12px 14px;gap:10px}
+  .hello h2{font-size:24px}
+
+  .grid2{grid-template-columns:1fr}
+  .donut{flex-direction:column;align-items:flex-start;gap:12px}
+
+  .tools{gap:8px}
+  .tools input{width:100%}
+  .tools select{flex:1 1 auto}
+
+  .fg{grid-template-columns:1fr 1fr;gap:10px}
+  .sp2,.sp3{grid-column:1/-1}
+
+  .hadd{grid-template-columns:1fr}
+
+  .at-tabs{gap:6px}
+  .at-tabs button{flex:1 1 auto;padding:9px 8px;font-size:13px}
+  .at-fields{grid-template-columns:1fr}
+  .at-actions{flex-direction:column;align-items:stretch}
+  .at-actions .btn{width:100%}
+  .at-stats{grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))}
+
+  .mb{flex-wrap:wrap}
+  .mb .d{margin-right:0;width:100%;order:3}
+  .mb button{flex:1 1 auto}
+
+  .lcard{padding:26px 20px;width:100%}
+}
+
+@media (max-width:480px){
+  .fg{grid-template-columns:1fr}
+  .kpi b{font-size:26px}
+  .modal{border-radius:10px}
+  nav button{font-size:12px;padding:7px 6px}
+  .act .btn{font-size:12px}
+}
