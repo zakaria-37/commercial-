@@ -106,6 +106,7 @@ function show(v) {
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
   if (v === 'dash') dash();
   else if (v === 'ateliers') { if (typeof refreshAtelierViews === 'function') refreshAtelierViews(); }
+  else if (v === 'employes') { if (typeof renderEmployes === 'function') renderEmployes(); }
   else list();
 }
 
