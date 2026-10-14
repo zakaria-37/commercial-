@@ -100,8 +100,11 @@ async function updateHist(id, hist) {
 }
 
 /* ---------- Navigation ---------- */
+document.getElementById('bNew').style.display = 'none';
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.v));
 function show(v) {
+  // Le bouton « + Nouveau contact » n'apparaît que dans l'onglet Contacts
+  document.getElementById('bNew').style.display = (v === 'list') ? '' : 'none';
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
   if (v === 'dash') dash();
