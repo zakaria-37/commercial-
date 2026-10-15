@@ -127,7 +127,7 @@
   <div id="toastA"></div>
 </section>
 <section id="v-employes">
-  <div class="hello"><span class="fl"></span><div><h2>Gestion des employés</h2><p>Salaires mensuels, acomptes versés chaque semaine et reste du salaire à payer.</p></div></div>
+  <div class="hello"><span class="fl"></span><div><h2>Gestion des employés</h2><p>Pointage par jour, salaire à l’heure, acomptes déduits et reste à payer en fin de mois.</p></div></div>
   <div class="tools">
     <label style="display:flex;gap:8px;align-items:center;font-weight:600">Mois <input id="emp-mois" type="month"></label>
     <input id="emp-q" type="search" placeholder="Rechercher : nom, prénom, poste…">
@@ -141,17 +141,28 @@
       <label>Nom *<input id="emp-nom" required maxlength="100"></label>
       <label>Prénom<input id="emp-prenom" maxlength="100"></label>
       <label>Poste<input id="emp-poste" maxlength="100" placeholder="Ex : couturière, coupeur…"></label>
-      <label>Salaire par mois (DA) *<input id="emp-salaire" type="number" min="0" step="0.01" required></label>
+      <label>Taux horaire (DA par heure) *<input id="emp-taux" type="number" min="0" step="0.01" required></label>
       <label style="grid-column:1/-1">Notes<textarea id="emp-notes"></textarea></label>
     </div>
     <div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="cancelFormEmploye()">Annuler</button></div>
   </form>
-  <div class="card"><h2>Employés et salaires du mois</h2>
-    <div class="at-scroll"><table><thead><tr><th>Employé</th><th>Poste</th><th>Salaire mensuel</th><th>Acomptes du mois</th><th>Reste du salaire</th><th>Actions</th></tr></thead><tbody id="emp-tbody"><tr><td colspan="6" class="at-empty">Chargement…</td></tr></tbody></table></div>
+  <div class="card"><h2>Salaires du mois (pointage × taux horaire − acomptes)</h2>
+    <div class="at-scroll"><table><thead><tr><th>Employé</th><th>Poste</th><th>Taux horaire</th><th>Jours</th><th>Heures</th><th>Salaire du mois</th><th>Acomptes</th><th>Reste à payer</th><th>Actions</th></tr></thead><tbody id="emp-tbody"><tr><td colspan="9" class="at-empty">Chargement…</td></tr></tbody></table></div>
   </div>
   <div class="card" id="ac-panel" style="display:none;margin-top:16px">
     <div class="at-actions" style="margin-top:0"><h2 id="ac-title" style="margin-right:auto"></h2><button class="btn" type="button" onclick="closeAcomptes()">Fermer</button></div>
     <div id="ac-resume" class="at-stats"></div>
+
+    <h2>Pointage du mois (heures travaillées par jour)</h2>
+    <div class="at-actions" style="margin:0 0 10px;align-items:center">
+      <label style="display:flex;gap:6px;align-items:center;font-weight:600">Heures par jour <input id="pt-defaut" type="number" min="0" max="24" step="0.25" value="8" style="width:80px"></label>
+      <label style="display:flex;gap:6px;align-items:center;font-weight:600">Jour de repos
+        <select id="pt-repos"><option value="5">Vendredi</option><option value="6">Samedi</option><option value="-1">Aucun</option></select></label>
+      <button class="btn" type="button" onclick="fillMois()">Remplir les jours vides jusqu’à aujourd’hui</button>
+    </div>
+    <div class="at-scroll"><table style="min-width:0"><thead><tr><th>Date</th><th>Jour</th><th>Semaine</th><th>Heures travaillées</th><th>Gain du jour</th><th>Actions</th></tr></thead><tbody id="pt-grid"></tbody></table></div>
+
+    <h2 style="margin-top:18px">Ajouter un acompte</h2>
     <form id="ac-form" class="at-form" style="display:block">
       <div class="at-fields">
         <label>Date de l’acompte *<input id="ac-date" type="date" required></label>
@@ -160,8 +171,10 @@
       </div>
       <div class="at-actions"><button id="ac-submit" class="btn p" type="submit">Ajouter l’acompte</button></div>
     </form>
-    <h2>Récapitulatif par semaine</h2>
-    <div class="at-scroll"><table style="min-width:0"><thead><tr><th>Semaine</th><th>Acompte versé</th><th>Reste du salaire (cumulé)</th></tr></thead><tbody id="ac-semaines"></tbody></table></div>
+
+    <h2 style="margin-top:18px">Récapitulatif par semaine</h2>
+    <div class="at-scroll"><table style="min-width:0"><thead><tr><th>Semaine</th><th>Heures</th><th>Salaire gagné</th><th>Acompte versé</th><th>Solde cumulé</th></tr></thead><tbody id="ac-semaines"></tbody></table></div>
+
     <h2 style="margin-top:18px">Détail des acomptes</h2>
     <div class="at-scroll"><table style="min-width:0"><thead><tr><th>Nom</th><th>Prénom</th><th>Date</th><th>Semaine</th><th>Montant</th><th>Note</th><th>Actions</th></tr></thead><tbody id="ac-liste"></tbody></table></div>
   </div>
