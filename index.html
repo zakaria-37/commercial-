@@ -121,7 +121,7 @@
           <label style="grid-column:1/-1">Notes<textarea id="cmd-notes"></textarea></label>
         </div><div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="cancelFormCommande()">Annuler</button></div>
       </form>
-      <div class="at-scroll"><table><thead><tr><th>Commande</th><th>Modèle</th><th>Contact</th><th>Qté commandée</th><th>Qté reçue</th><th>Date</th><th>Réception prévue</th><th>Statut</th><th>Actions</th></tr></thead><tbody id="commande-tbody"><tr><td colspan="9" class="at-empty">Chargement…</td></tr></tbody></table></div>
+      <div class="at-scroll"><table><thead><tr><th>Commande</th><th>Modèle</th><th>Contact</th><th>Qté commandée</th><th>Qté reçue</th><th>Date</th><th>Réception prévue</th><th>Statut</th><th>Actions</th></tr></thead><tbody id="commande-tbody"><tr><td colspan="10" class="at-empty">Chargement…</td></tr></tbody></table></div>
     </div>
   </div>
   <div id="toastA"></div>
@@ -141,13 +141,15 @@
       <label>Nom *<input id="emp-nom" required maxlength="100"></label>
       <label>Prénom<input id="emp-prenom" maxlength="100"></label>
       <label>Poste<input id="emp-poste" maxlength="100" placeholder="Ex : couturière, coupeur…"></label>
-      <label>Taux horaire (DA par heure) *<input id="emp-taux" type="number" min="0" step="0.01" required></label>
+      <label>Taux horaire normal (DA/h) *<input id="emp-taux" type="number" min="0" step="0.01" required></label>
+      <label>Taux heure supplémentaire (DA/h)<input id="emp-taux-sup" type="number" min="0" step="0.01" placeholder="Si vide : taux normal"></label>
+      <label>Fin de journée normale (après = heures sup)<input id="emp-fin-normale" type="time" value="19:00" required></label>
       <label style="grid-column:1/-1">Notes<textarea id="emp-notes"></textarea></label>
     </div>
     <div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="cancelFormEmploye()">Annuler</button></div>
   </form>
   <div class="card"><h2>Salaires du mois (pointage × taux horaire − acomptes)</h2>
-    <div class="at-scroll"><table><thead><tr><th>Employé</th><th>Poste</th><th>Taux horaire</th><th>Jours</th><th>Heures</th><th>Salaire du mois</th><th>Acomptes</th><th>Reste à payer</th><th>Actions</th></tr></thead><tbody id="emp-tbody"><tr><td colspan="9" class="at-empty">Chargement…</td></tr></tbody></table></div>
+    <div class="at-scroll"><table><thead><tr><th>Employé</th><th>Poste</th><th>Taux horaire</th><th>Jours</th><th>H. normales</th><th>H. sup</th><th>Salaire du mois</th><th>Acomptes</th><th>Reste à payer</th><th>Actions</th></tr></thead><tbody id="emp-tbody"><tr><td colspan="10" class="at-empty">Chargement…</td></tr></tbody></table></div>
   </div>
   <div class="card" id="ac-panel" style="display:none;margin-top:16px">
     <div class="at-actions" style="margin-top:0"><h2 id="ac-title" style="margin-right:auto"></h2><button class="btn" type="button" onclick="closeAcomptes()">Fermer</button></div>
@@ -156,12 +158,12 @@
     <h2>Pointage du mois (heure de début et heure de fin)</h2>
     <div class="at-actions" style="margin:0 0 10px;align-items:center">
       <label style="display:flex;gap:6px;align-items:center;font-weight:600">Début habituel <input id="pt-debut" type="time" value="08:00"></label>
-      <label style="display:flex;gap:6px;align-items:center;font-weight:600">Fin habituelle <input id="pt-fin" type="time" value="17:00"></label>
+      <label style="display:flex;gap:6px;align-items:center;font-weight:600">Fin habituelle <input id="pt-fin" type="time" value="19:00"></label>
       <label style="display:flex;gap:6px;align-items:center;font-weight:600">Jour de repos
         <select id="pt-repos"><option value="5">Vendredi</option><option value="6">Samedi</option><option value="-1">Aucun</option></select></label>
       <button class="btn" type="button" onclick="fillMois()">Remplir les jours vides jusqu’à aujourd’hui</button>
     </div>
-    <div class="at-scroll"><table style="min-width:0"><thead><tr><th>Date</th><th>Jour</th><th>Semaine</th><th>Début</th><th>Fin</th><th>Durée</th><th>Gain du jour</th><th>Actions</th></tr></thead><tbody id="pt-grid"></tbody></table></div>
+    <div class="at-scroll"><table style="min-width:0"><thead><tr><th>Date</th><th>Jour</th><th>Semaine</th><th>Début</th><th>Fin</th><th>H. normales</th><th>H. sup</th><th>Gain du jour</th><th>Actions</th></tr></thead><tbody id="pt-grid"></tbody></table></div>
 
     <h2 style="margin-top:18px">Ajouter un acompte</h2>
     <form id="ac-form" class="at-form" style="display:block">
@@ -174,7 +176,7 @@
     </form>
 
     <h2 style="margin-top:18px">Récapitulatif par semaine</h2>
-    <div class="at-scroll"><table style="min-width:0"><thead><tr><th>Semaine</th><th>Heures</th><th>Salaire gagné</th><th>Acompte versé</th><th>Solde cumulé</th></tr></thead><tbody id="ac-semaines"></tbody></table></div>
+    <div class="at-scroll"><table style="min-width:0"><thead><tr><th>Semaine</th><th>H. normales</th><th>H. sup</th><th>Salaire gagné</th><th>Acompte versé</th><th>Solde cumulé</th></tr></thead><tbody id="ac-semaines"></tbody></table></div>
 
     <h2 style="margin-top:18px">Détail des acomptes</h2>
     <div class="at-scroll"><table style="min-width:0"><thead><tr><th>Nom</th><th>Prénom</th><th>Date</th><th>Semaine</th><th>Montant</th><th>Note</th><th>Actions</th></tr></thead><tbody id="ac-liste"></tbody></table></div>

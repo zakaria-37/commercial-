@@ -10,6 +10,12 @@ create extension if not exists pgcrypto;
 alter table public.employes
   add column if not exists taux_horaire numeric(12,2) not null default 0;
 
+-- 1b) Heures supplémentaires : taux (DA / heure) et heure de fin de la journée normale
+alter table public.employes
+  add column if not exists taux_heure_sup numeric(12,2) not null default 0;
+alter table public.employes
+  add column if not exists heure_fin_normale time not null default '19:00';
+
 -- 2) Table des pointages : heures travaillées chaque jour
 create table if not exists public.pointages (
   id uuid primary key default gen_random_uuid(),

@@ -177,6 +177,8 @@ create table if not exists public.employes (
   poste text default '',
   salaire_mensuel numeric(12,2) not null default 0,
   taux_horaire numeric(12,2) not null default 0,
+  taux_heure_sup numeric(12,2) not null default 0,
+  heure_fin_normale time not null default '19:00',
   notes text default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
