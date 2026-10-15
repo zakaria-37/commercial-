@@ -231,6 +231,8 @@ create table if not exists public.pointages (
   id uuid primary key default gen_random_uuid(),
   employe_id uuid not null references public.employes(id) on delete cascade,
   date_pointage date not null,
+  heure_debut time,
+  heure_fin time,
   heures numeric(5,2) not null default 0 check (heures >= 0 and heures <= 24),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

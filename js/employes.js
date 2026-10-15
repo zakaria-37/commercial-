@@ -1,7 +1,7 @@
 /* ============================================================
    MARIA BAG — Employés : salaire par POINTAGE (heures par jour)
    - Employé : nom, prénom, poste, taux horaire (DA / heure)
-   - Pointage : heures travaillées chaque jour
+   - Pointage : heure de début et heure de fin chaque jour (durée calculée)
    - Acomptes : avances versées pendant le mois
    - Fin de mois : salaire = heures × taux horaire
                    reste   = salaire − acomptes
@@ -25,8 +25,9 @@ function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 function money(n) {
   return (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' DA';
 }
-function fmtH(n) {
-  return (Number(n) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' h';
+function fmtH(n) {                       // 10.883 -> « 10 h 53 min »
+  const t = Math.round((Number(n) || 0) * 60), h = Math.floor(t / 60), m = t % 60;
+  return h + ' h' + (m ? ' ' + String(m).padStart(2, '0') + ' min' : '');
 }
 function isoE(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -68,8 +69,20 @@ function pointagesDuMois(empId, mois) {
   return POINTAGES.filter(p => String(p.employe_id) === String(empId) && (p.date_pointage || '').startsWith(mois));
 }
 function totalAcomptes(empId, mois) { return round2(acomptesDuMois(empId, mois).reduce((s, a) => s + Number(a.montant || 0), 0)); }
-function heuresDuMois(empId, mois) { return round2(pointagesDuMois(empId, mois).reduce((s, p) => s + Number(p.heures || 0), 0)); }
-function joursTravailles(empId, mois) { return pointagesDuMois(empId, mois).filter(p => Number(p.heures) > 0).length; }
+function minutesEntre(deb, fin) {
+  const [h1, m1] = deb.split(':').map(Number), [h2, m2] = fin.split(':').map(Number);
+  return (h2 * 60 + m2) - (h1 * 60 + m1);
+}
+// Durée (en heures, non arrondie) d'un pointage : fin − début, sinon ancien champ « heures »
+function hrs(p) {
+  if (p.heure_debut && p.heure_fin) {
+    const m = minutesEntre(String(p.heure_debut).slice(0, 5), String(p.heure_fin).slice(0, 5));
+    return m > 0 ? m / 60 : 0;
+  }
+  return Number(p.heures || 0);
+}
+function heuresDuMois(empId, mois) { return pointagesDuMois(empId, mois).reduce((s, p) => s + hrs(p), 0); }
+function joursTravailles(empId, mois) { return pointagesDuMois(empId, mois).filter(p => hrs(p) > 0).length; }
 function salaireDuMois(emp, mois) { return round2(heuresDuMois(emp.id, mois) * Number(emp.taux_horaire || 0)); }
 function resteSalaire(emp, mois) { return round2(salaireDuMois(emp, mois) - totalAcomptes(emp.id, mois)); }
 function statut(reste) {
@@ -164,41 +177,53 @@ function setPointageLocal(row) {
   POINTAGES.push(row);
 }
 
-async function savePointage(date, val) {
+function majCellulesJour(date, emp, h) {
+  const d = document.getElementById('dur-' + date), g = document.getElementById('gain-' + date);
+  if (d) d.textContent = h > 0 ? fmtH(h) : '—';
+  if (g) g.textContent = money(round2(h * Number(emp.taux_horaire || 0)));
+}
+
+// Enregistre le pointage d'un jour à partir des champs « début » et « fin »
+async function savePointage(date) {
   const emp = EMPLOYES.find(x => String(x.id) === String(selEmploye));
   if (!emp) return;
-  const raw = String(val ?? '').trim().replace(',', '.');
-  if (raw === '') {                                    // champ vidé → on supprime le pointage
+  const deb = document.getElementById('pd-' + date).value;
+  const fin = document.getElementById('pf-' + date).value;
+
+  if (!deb && !fin) {                                   // les deux vides → on supprime le pointage
     const { error } = await sb.from('pointages').delete().eq('employe_id', emp.id).eq('date_pointage', date);
     if (error) { toastE('Erreur : ' + errMsgE(error)); return; }
     POINTAGES = POINTAGES.filter(p => !(String(p.employe_id) === String(emp.id) && p.date_pointage === date));
-  } else {
-    const h = Number(raw);
-    if (isNaN(h) || h < 0 || h > 24) { toastE('Heures invalides : entrez un nombre entre 0 et 24.'); renderPanel(); return; }
-    const { data, error } = await sb.from('pointages')
-      .upsert({ employe_id: emp.id, date_pointage: date, heures: h }, { onConflict: 'employe_id,date_pointage' })
-      .select().single();
-    if (error) { toastE('Erreur : ' + errMsgE(error)); return; }
-    setPointageLocal(data);
+    majCellulesJour(date, emp, 0);
+    renderEmployes(true);
+    return;
   }
-  const cell = document.getElementById('gain-' + date);
-  if (cell) cell.textContent = money(round2((Number(raw.replace(',', '.')) || 0) * Number(emp.taux_horaire || 0)));
+  if (!deb || !fin) return;                             // on attend que l'autre heure soit saisie
+  const min = minutesEntre(deb, fin);
+  if (min <= 0) { toastE('L’heure de fin doit être après l’heure de début.'); return; }
+  const { data, error } = await sb.from('pointages')
+    .upsert({ employe_id: emp.id, date_pointage: date, heure_debut: deb, heure_fin: fin, heures: round2(min / 60) },
+            { onConflict: 'employe_id,date_pointage' })
+    .select().single();
+  if (error) { toastE('Erreur : ' + errMsgE(error)); return; }
+  setPointageLocal(data);
+  majCellulesJour(date, emp, min / 60);
   renderEmployes(true);        // met à jour totaux et résumé sans reconstruire la grille (garde le curseur)
 }
 
 function quickPointage(date, present) {
-  const input = document.getElementById('pt-' + date);
-  const h = present ? (Number($e('#pt-defaut').value) || 0) : '';
-  if (input) input.value = h;
-  savePointage(date, h);
+  document.getElementById('pd-' + date).value = present ? $e('#pt-debut').value : '';
+  document.getElementById('pf-' + date).value = present ? $e('#pt-fin').value : '';
+  savePointage(date);
 }
 
 // Remplit tous les jours vides du mois (jusqu'à aujourd'hui), sauf le jour de repos choisi
 async function fillMois() {
   const emp = EMPLOYES.find(x => String(x.id) === String(selEmploye));
   if (!emp) return;
-  const h = Number($e('#pt-defaut').value) || 0;
-  if (h <= 0 || h > 24) { toastE('Indiquez des heures par jour entre 0 et 24.'); return; }
+  const deb = $e('#pt-debut').value, fin = $e('#pt-fin').value;
+  if (!deb || !fin || minutesEntre(deb, fin) <= 0) { toastE('Indiquez une heure de début et une heure de fin valides.'); return; }
+  const h = round2(minutesEntre(deb, fin) / 60);
   const repos = Number($e('#pt-repos').value);
   const mois = curMonth(), today = isoE(new Date());
   const deja = new Set(pointagesDuMois(emp.id, mois).map(p => p.date_pointage));
@@ -206,10 +231,10 @@ async function fillMois() {
   for (let d = 1; d <= joursDansMois(mois); d++) {
     const date = mois + '-' + String(d).padStart(2, '0');
     if (date > today || deja.has(date) || jourSemaine(date) === repos) continue;
-    rows.push({ employe_id: emp.id, date_pointage: date, heures: h });
+    rows.push({ employe_id: emp.id, date_pointage: date, heure_debut: deb, heure_fin: fin, heures: h });
   }
   if (!rows.length) { toastE('Aucun jour vide à remplir.'); return; }
-  if (!confirm('Pointer ' + rows.length + ' jour(s) à ' + h + ' h pour ' + emp.nom + ' ' + (emp.prenom || '') + ' ?')) return;
+  if (!confirm('Pointer ' + rows.length + ' jour(s) de ' + deb + ' à ' + fin + ' pour ' + emp.nom + ' ' + (emp.prenom || '') + ' ?')) return;
   const { data, error } = await sb.from('pointages').upsert(rows, { onConflict: 'employe_id,date_pointage' }).select();
   if (error) { toastE('Erreur : ' + errMsgE(error)); return; }
   (data || []).forEach(setPointageLocal);
@@ -350,7 +375,7 @@ function renderPanel(skipGrid) {
   // Récapitulatif par semaine
   let cumul = 0, rows = '', totH = 0, totG = 0, totA = 0;
   for (let s = 1; s <= nbSem; s++) {
-    const h = round2(pointagesDuMois(emp.id, mois).filter(p => semaineDuMois(p.date_pointage) === s).reduce((t, p) => t + Number(p.heures || 0), 0));
+    const h = pointagesDuMois(emp.id, mois).filter(p => semaineDuMois(p.date_pointage) === s).reduce((t, p) => t + hrs(p), 0);
     const gain = round2(h * taux);
     const a = round2(items.filter(x => semaineDuMois(x.date_acompte) === s).reduce((t, x) => t + Number(x.montant || 0), 0));
     cumul = round2(cumul + gain - a); totH += h; totG += gain; totA += a;
@@ -374,10 +399,14 @@ function renderGrid(emp, mois) {
   let html = '';
   for (let d = 1; d <= joursDansMois(mois); d++) {
     const date = mois + '-' + String(d).padStart(2, '0');
-    const p = map[date], h = p ? Number(p.heures) : '';
+    const p = map[date], h = p ? hrs(p) : 0;
+    const deb = p && p.heure_debut ? String(p.heure_debut).slice(0, 5) : '';
+    const fin = p && p.heure_fin ? String(p.heure_fin).slice(0, 5) : '';
     html += '<tr><td>' + fdE(date) + '</td><td>' + JOURS[jourSemaine(date)] + '</td><td>S' + semaineDuMois(date) + '</td>' +
-      '<td><input id="pt-' + date + '" type="number" min="0" max="24" step="0.25" value="' + h + '" style="width:90px" onchange="savePointage(\'' + date + '\', this.value)"></td>' +
-      '<td id="gain-' + date + '">' + money(round2((h || 0) * taux)) + '</td>' +
+      '<td><input id="pd-' + date + '" type="time" value="' + deb + '" onchange="savePointage(\'' + date + '\')"></td>' +
+      '<td><input id="pf-' + date + '" type="time" value="' + fin + '" onchange="savePointage(\'' + date + '\')"></td>' +
+      '<td id="dur-' + date + '">' + (h > 0 ? fmtH(h) : '—') + '</td>' +
+      '<td id="gain-' + date + '">' + money(round2(h * taux)) + '</td>' +
       '<td><button class="btn s" type="button" onclick="quickPointage(\'' + date + '\', true)">Présent</button> ' +
       '<button class="btn s" type="button" onclick="quickPointage(\'' + date + '\', false)">Effacer</button></td></tr>';
   }
@@ -391,7 +420,7 @@ function exportEmployes() {
   const rows = EMPLOYES.map(e => {
     const its = acomptesDuMois(e.id, mois);
     const r = { Nom: e.nom, Prénom: e.prenom || '', Poste: e.poste || '', 'Taux horaire': Number(e.taux_horaire || 0),
-                'Jours travaillés': joursTravailles(e.id, mois), 'Heures': heuresDuMois(e.id, mois), 'Salaire du mois': salaireDuMois(e, mois) };
+                'Jours travaillés': joursTravailles(e.id, mois), 'Heures': round2(heuresDuMois(e.id, mois)), 'Salaire du mois': salaireDuMois(e, mois) };
     for (let s = 1; s <= nbSem; s++)
       r['Acompte S' + s] = round2(its.filter(a => semaineDuMois(a.date_acompte) === s).reduce((t, a) => t + Number(a.montant || 0), 0));
     r['Total acomptes'] = totalAcomptes(e.id, mois);
@@ -401,9 +430,9 @@ function exportEmployes() {
   });
   const pts = EMPLOYES.map(e => {
     const r = { Nom: e.nom, Prénom: e.prenom || '' };
-    const m = {}; pointagesDuMois(e.id, mois).forEach(p => { m[Number(p.date_pointage.slice(8, 10))] = Number(p.heures); });
+    const m = {}; pointagesDuMois(e.id, mois).forEach(p => { m[Number(p.date_pointage.slice(8, 10))] = round2(hrs(p)); });
     for (let d = 1; d <= nj; d++) r[String(d)] = m[d] ?? '';
-    r['Total heures'] = heuresDuMois(e.id, mois);
+    r['Total heures'] = round2(heuresDuMois(e.id, mois));
     return r;
   });
   const wb = XLSX.utils.book_new();

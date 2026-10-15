@@ -21,6 +21,10 @@ create table if not exists public.pointages (
   unique (employe_id, date_pointage)
 );
 
+-- Heure de début et heure de fin de travail (ex : 08:12 -> 19:05)
+alter table public.pointages add column if not exists heure_debut time;
+alter table public.pointages add column if not exists heure_fin time;
+
 create index if not exists pointages_employe_idx on public.pointages (employe_id);
 create index if not exists pointages_date_idx on public.pointages (date_pointage);
 

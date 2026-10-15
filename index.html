@@ -153,14 +153,15 @@
     <div class="at-actions" style="margin-top:0"><h2 id="ac-title" style="margin-right:auto"></h2><button class="btn" type="button" onclick="closeAcomptes()">Fermer</button></div>
     <div id="ac-resume" class="at-stats"></div>
 
-    <h2>Pointage du mois (heures travaillées par jour)</h2>
+    <h2>Pointage du mois (heure de début et heure de fin)</h2>
     <div class="at-actions" style="margin:0 0 10px;align-items:center">
-      <label style="display:flex;gap:6px;align-items:center;font-weight:600">Heures par jour <input id="pt-defaut" type="number" min="0" max="24" step="0.25" value="8" style="width:80px"></label>
+      <label style="display:flex;gap:6px;align-items:center;font-weight:600">Début habituel <input id="pt-debut" type="time" value="08:00"></label>
+      <label style="display:flex;gap:6px;align-items:center;font-weight:600">Fin habituelle <input id="pt-fin" type="time" value="17:00"></label>
       <label style="display:flex;gap:6px;align-items:center;font-weight:600">Jour de repos
         <select id="pt-repos"><option value="5">Vendredi</option><option value="6">Samedi</option><option value="-1">Aucun</option></select></label>
       <button class="btn" type="button" onclick="fillMois()">Remplir les jours vides jusqu’à aujourd’hui</button>
     </div>
-    <div class="at-scroll"><table style="min-width:0"><thead><tr><th>Date</th><th>Jour</th><th>Semaine</th><th>Heures travaillées</th><th>Gain du jour</th><th>Actions</th></tr></thead><tbody id="pt-grid"></tbody></table></div>
+    <div class="at-scroll"><table style="min-width:0"><thead><tr><th>Date</th><th>Jour</th><th>Semaine</th><th>Début</th><th>Fin</th><th>Durée</th><th>Gain du jour</th><th>Actions</th></tr></thead><tbody id="pt-grid"></tbody></table></div>
 
     <h2 style="margin-top:18px">Ajouter un acompte</h2>
     <form id="ac-form" class="at-form" style="display:block">
