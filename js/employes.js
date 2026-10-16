@@ -405,6 +405,35 @@ async function quickPointage(date, present) {
   await savePointage(date);
 }
 
+/* ---------- Remplir les jours vides jusqu'à aujourd'hui ---------- */
+async function fillMois() {
+  if (!selEmploye) { toastE('Ouvrez d\u2019abord le pointage d\u2019un employ\u00e9.'); return; }
+  const mois = curMonth(), today = isoE(new Date());
+  const deb = ($e('#pt-debut') && $e('#pt-debut').value) || '08:00';
+  const fin = ($e('#pt-fin') && $e('#pt-fin').value) || '19:00';
+  const repos = $e('#pt-repos') ? Number($e('#pt-repos').value) : 5;
+  if (minutesEntre(deb, fin) <= 0) { toastE('Heures habituelles invalides.'); return; }
+
+  // dernier jour à remplir : fin du mois si passé, aujourd'hui si mois courant, rien si futur
+  const mAuj = today.slice(0, 7);
+  const dernier = mois < mAuj ? joursDansMois(mois) : (mois === mAuj ? Number(today.slice(8, 10)) : 0);
+  const deja = new Set(pointagesDuMois(selEmploye, mois).map(p => p.date_pointage));
+
+  const rows = [];
+  for (let d = 1; d <= dernier; d++) {
+    const date = mois + '-' + String(d).padStart(2, '0');
+    if (deja.has(date) || jourSemaine(date) === repos) continue;
+    const h = hrs({ date_pointage: date, heure_debut: deb, heure_fin: fin });
+    rows.push({ employe_id: selEmploye, date_pointage: date, heure_debut: deb, heure_fin: fin, heures: Math.min(24, round2(h)) });
+  }
+  if (!rows.length) { toastE('Aucun jour vide \u00e0 remplir.'); return; }
+
+  const res = await sb.from('pointages').upsert(rows, { onConflict: 'employe_id,date_pointage' });
+  if (res.error) { toastE('Erreur : ' + errMsgE(res.error)); return; }
+  toastE(rows.length + ' jour(s) remplis.');
+  await loadMois();
+}
+
 /* ---------- Acomptes ---------- */
 async function saveAcompte() {
   if (!selEmploye) return;
