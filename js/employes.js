@@ -66,9 +66,17 @@ function minutesEntre(deb, fin) {
   return (h2 * 60 + m2) - (h1 * 60 + m1);
 }
 function toMin(t) { const [h, m] = String(t).slice(0, 5).split(':').map(Number); return h * 60 + m; }
+/* Pause 12:00-13:00 : NON comptée dans les heures de travail (sauf le jour de repos) */
+const PAUSE_DEB = 12 * 60, PAUSE_FIN = 13 * 60;
+function pauseMin(deb, fin, dateStr) {
+  const repos = $e('#pt-repos') ? Number($e('#pt-repos').value) : 5;
+  if (dateStr && jourSemaine(String(dateStr).slice(0, 10)) === repos) return 0;
+  return Math.max(0, Math.min(fin, PAUSE_FIN) - Math.max(deb, PAUSE_DEB));
+}
 function hrs(p) {
   if (p.heure_debut && p.heure_fin) {
-    const m = minutesEntre(String(p.heure_debut).slice(0, 5), String(p.heure_fin).slice(0, 5));
+    const deb = toMin(p.heure_debut), fin = toMin(p.heure_fin);
+    const m = fin - deb - pauseMin(deb, fin, p.date_pointage);
     return m > 0 ? m / 60 : 0;
   }
   return Number(p.heures || 0);
@@ -79,7 +87,9 @@ function detail(p, emp) {
   if (p.heure_debut && p.heure_fin) {
     const deb = toMin(p.heure_debut), fin = toMin(p.heure_fin), lim = toMin(finNormale(emp));
     if (fin <= deb) return { norm: 0, sup: 0 };
-    return { norm: Math.max(0, Math.min(fin, lim) - deb) / 60, sup: Math.max(0, fin - Math.max(deb, lim)) / 60 };
+    const finN = Math.min(fin, lim);
+    const normMin = Math.max(0, finN - deb - pauseMin(deb, finN, p.date_pointage));
+    return { norm: normMin / 60, sup: Math.max(0, fin - Math.max(deb, lim)) / 60 };
   }
   return { norm: Number(p.heures || 0), sup: 0 };
 }
