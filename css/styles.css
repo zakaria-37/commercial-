@@ -264,3 +264,12 @@ footer b{font:italic 400 16px "Brush Script MT","Segoe Script",cursive;color:#00
   nav button{font-size:10.5px}
   .kpi b{font-size:24px}
 }
+/* ---------- Correctif iPhone : empêche la page de dépasser l'écran à droite ----------
+   Cause : la règle globale « table{min-width:900px} » restait active sur les petits
+   tableaux du tableau de bord (non transformés en fiches), ce qui élargissait toute la page. */
+@media (max-width:700px){
+  html,body{max-width:100%;overflow-x:hidden}
+  table:not(.m-cards){min-width:0!important}
+  .tw{max-width:100%}
+  header{max-width:100%}
+}
