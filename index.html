@@ -198,7 +198,6 @@
     <div class="at-fields">
       <label>Date *<input id="ch-date" type="date" required></label>
       <label>Catégorie *<select id="ch-cat" required></select></label>
-      <label id="ch-emp-wrap" style="display:none">Employé payé<select id="ch-emp"></select></label>
       <label>Montant (DA) *<input id="ch-montant" type="number" min="0" step="0.01" required></label>
       <label style="grid-column:1/-1">Note / description<input id="ch-note" maxlength="200" placeholder="Ex : facture d’électricité, repas du vendredi, réparation…"></label>
     </div>
@@ -206,10 +205,10 @@
     <div class="at-actions"><button id="ch-submit" class="btn p" type="submit">Ajouter la charge</button><button class="btn" type="button" onclick="cancelFormCharge()">Fermer</button></div>
   </form>
   <div class="card"><h2>Récapitulatif par jour</h2>
-    <div class="at-scroll"><table style="min-width:720px"><thead><tr><th>Date</th><th>Jour</th><th>Paie employés</th><th>Électricité</th><th>Loyer</th><th>Dîner employés</th><th>Autres</th><th>Total du jour</th></tr></thead><tbody id="ch-jours"><tr><td colspan="8" class="at-empty">Chargement…</td></tr></tbody></table></div>
+    <div class="at-scroll"><table style="min-width:720px"><thead><tr><th>Date</th><th>Jour</th><th>Paie employés (total du jour)</th><th>Électricité</th><th>Loyer</th><th>Dîner employés</th><th>Autres</th><th>Total du jour</th></tr></thead><tbody id="ch-jours"><tr><td colspan="8" class="at-empty">Chargement…</td></tr></tbody></table></div>
   </div>
   <div class="card" style="margin-top:16px"><h2>Détail des charges</h2>
-    <div class="at-scroll"><table style="min-width:720px"><thead><tr><th>Date</th><th>Catégorie</th><th>Employé</th><th>Note</th><th>Montant</th><th>Actions</th></tr></thead><tbody id="ch-tbody"><tr><td colspan="6" class="at-empty">Chargement…</td></tr></tbody></table></div>
+    <div class="at-scroll"><table style="min-width:720px"><thead><tr><th>Date</th><th>Catégorie</th><th>Note</th><th>Montant</th><th>Actions</th></tr></thead><tbody id="ch-tbody"><tr><td colspan="5" class="at-empty">Chargement…</td></tr></tbody></table></div>
   </div>
   <div id="toastC"></div>
 </section>

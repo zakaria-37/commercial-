@@ -1,13 +1,15 @@
 /* ============================================================
    MARIA BAG — Charges de l'atelier (dépenses de chaque jour)
-   - Catégories : paie des employés (jour de paiement), électricité,
-     loyer, dîner des employés, autre charge
+   - Catégories : paie des employés (total de la journée, calculé
+     automatiquement d'après le pointage), électricité, loyer,
+     dîner des employés, autre charge
    - Une ligne = une dépense (date, catégorie, montant, note)
    - Récapitulatif par jour + total par catégorie + export Excel
    ============================================================ */
 
 let CHARGES = [];          // charges du mois affiché
 let curCharge = null;      // charge en cours de modification
+let lastAutoC = null;      // dernier montant rempli automatiquement (paie du jour)
 
 const $c = s => document.querySelector(s);
 const CAT_PAIE = 'Paie des employés';
@@ -36,6 +38,7 @@ function joursDansMoisC(mois) { const [y, m] = mois.split('-').map(Number); retu
 function jourC(dateStr) { const [y, m, d] = dateStr.split('-').map(Number); return JOURS_C[new Date(y, m - 1, d).getDay()]; }
 function moisC() { return $c('#ch-mois').value || isoC(new Date()).slice(0, 7); }
 function sumC(list) { return round2C(list.reduce((s, c) => s + Number(c.montant || 0), 0)); }
+function noteC(c) { return [c.note, c.employe_nom ? '(' + c.employe_nom + ')' : ''].filter(Boolean).join(' '); }
 function catClass(k) { const c = CATS.find(x => x.k === k); return c ? c.cls : 'n'; }
 function toastC(msg) {
   const e = $c('#toastC');
@@ -99,7 +102,7 @@ function renderCharges(errText) {
   const body = $c('#ch-tbody'), recap = $c('#ch-jours');
 
   if (errText) {
-    body.innerHTML = '<tr><td colspan="6" class="at-empty" style="color:#b00020">⚠ ' + escC(errText) + '</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" class="at-empty" style="color:#b00020">⚠ ' + escC(errText) + '</td></tr>';
     recap.innerHTML = '<tr><td colspan="7" class="at-empty">—</td></tr>';
     return;
   }
@@ -123,64 +126,63 @@ function renderCharges(errText) {
   body.innerHTML = list.length ? list.map(c =>
     '<tr><td>' + fdC(c.date_charge) + '<br><small>' + jourC(c.date_charge) + '</small></td>' +
     '<td><span class="bd ' + catClass(c.categorie) + '">' + escC(c.categorie) + '</span></td>' +
-    '<td>' + escC(c.employe_nom || '') + '</td>' +
-    '<td>' + escC(c.note || '') + '</td>' +
+    '<td>' + escC(noteC(c)) + '</td>' +
     '<td><b>' + moneyC(c.montant) + '</b></td>' +
     '<td class="emp-act"><button class="btn s" type="button" onclick="showFormCharge(\'' + escC(c.id) + '\')">Modifier</button> ' +
     '<button class="btn s d" type="button" onclick="removeCharge(\'' + escC(c.id) + '\')">Supprimer</button></td></tr>'
-  ).join('') : '<tr><td colspan="6" class="at-empty">Aucune charge' + (CHARGES.length ? ' ne correspond au filtre' : ' ce mois-ci. Cliquez sur « + Nouvelle charge »') + '.</td></tr>';
+  ).join('') : '<tr><td colspan="5" class="at-empty">Aucune charge' + (CHARGES.length ? ' ne correspond au filtre' : ' ce mois-ci. Cliquez sur « + Nouvelle charge »') + '.</td></tr>';
 }
 
 /* ---------- Formulaire ---------- */
-function fillEmpSelect() {
-  const s = $c('#ch-emp'), old = s.value;
-  const emps = (typeof EMPLOYES !== 'undefined' ? EMPLOYES : []);
-  s.innerHTML = '<option value="">— Choisir un employé (facultatif) —</option>' +
-    emps.map(e => '<option value="' + escC(e.id) + '">' + escC([e.nom, e.prenom].filter(Boolean).join(' ')) + '</option>').join('');
-  if (old) s.value = old;
+/* Paie du jour = somme du gain de TOUS les employés pointés ce jour-là
+   (heures normales × taux + heures sup × taux sup, comme dans l'onglet Employés). */
+async function paieDuJour(date) {
+  if (typeof EMPLOYES === 'undefined' || !EMPLOYES.length || typeof gainPointage !== 'function') return null;
+  const { data, error } = await sb.from('pointages').select('*').eq('date_pointage', date);
+  if (error) return null;
+  let total = 0, n = 0;
+  (data || []).forEach(p => {
+    const e = EMPLOYES.find(x => String(x.id) === String(p.employe_id));
+    if (!e || hrs(p) <= 0) return;
+    n++; total += gainPointage(p, e);
+  });
+  return { total: round2C(total), n };
 }
 
-function toggleEmpField() {
-  const isPaie = $c('#ch-cat').value === CAT_PAIE;
-  $c('#ch-emp-wrap').style.display = isPaie ? '' : 'none';
-  if (!isPaie) { $c('#ch-emp').value = ''; $c('#ch-hint').textContent = ''; }
-  else updateHint(false);
-}
-
-/* Aide : reste à payer de l'employé (données de l'onglet Employés, si le même mois est affiché) */
-function updateHint(prefill) {
-  const hint = $c('#ch-hint'), id = $c('#ch-emp').value;
-  hint.textContent = '';
-  if (!id || $c('#ch-cat').value !== CAT_PAIE) return;
-  if (typeof EMPLOYES === 'undefined' || typeof resteSalaire !== 'function' || typeof curMonth !== 'function') return;
-  const mois = ($c('#ch-date').value || '').slice(0, 7);
-  const emp = EMPLOYES.find(e => String(e.id) === String(id));
-  if (!emp || mois !== curMonth()) {
-    hint.textContent = 'Pour voir le reste à payer, affichez ce même mois dans l’onglet Employés.';
-    return;
-  }
-  const reste = resteSalaire(emp, mois);
-  hint.textContent = 'Salaire du mois : ' + moneyC(salaireDuMois(emp, mois)) + ' · acomptes versés : ' + moneyC(totalAcomptes(emp.id, mois)) +
-    ' · reste à payer : ' + moneyC(reste);
-  if (prefill && reste > 0 && !Number($c('#ch-montant').value)) $c('#ch-montant').value = reste;
+/* Calcule la paie du jour pour la date choisie ; prefill = remplir le montant */
+async function updateHint(prefill) {
+  const hint = $c('#ch-hint');
+  if ($c('#ch-cat').value !== CAT_PAIE) { hint.textContent = ''; return; }
+  const date = $c('#ch-date').value, cat = $c('#ch-cat').value;
+  if (!date) { hint.textContent = ''; return; }
+  hint.textContent = 'Calcul de la paie du jour…';
+  const r = await paieDuJour(date);
+  // la saisie a changé pendant le calcul : on abandonne
+  if ($c('#ch-date').value !== date || $c('#ch-cat').value !== cat) return;
+  if (!r) { hint.textContent = 'Paie automatique indisponible (employés non chargés) : saisissez le montant à la main.'; return; }
+  const deja = CHARGES.filter(c => c.categorie === CAT_PAIE && c.date_charge === date && String(c.id) !== String(curCharge));
+  let txt = r.n
+    ? 'Paie du jour calculée automatiquement : ' + r.n + ' employé' + (r.n > 1 ? 's' : '') + ' pointé' + (r.n > 1 ? 's' : '') + ' → ' + moneyC(r.total) + '. Vous pouvez modifier le montant.'
+    : 'Aucun pointage enregistré ce jour-là : saisissez le montant à la main.';
+  if (deja.length) txt += ' ⚠ Une paie de ' + moneyC(sumC(deja)) + ' est déjà enregistrée à cette date.';
+  hint.textContent = txt;
+  if (prefill && r.total > 0) { $c('#ch-montant').value = r.total; lastAutoC = String(r.total); }
 }
 
 function showFormCharge(id) {
   curCharge = id || null;
   const c = id ? CHARGES.find(x => String(x.id) === String(id)) : null;
-  fillEmpSelect();
   const mois = moisC(), today = isoC(new Date());
   $c('#ch-form-title').textContent = c ? 'Modifier la charge' : 'Nouvelle charge';
   $c('#ch-date').value = c ? c.date_charge : (today.startsWith(mois) ? today : mois + '-01');
   $c('#ch-cat').value = c ? c.categorie : CATS[0].k;
-  $c('#ch-emp').value = c ? (c.employe_id || '') : '';
   $c('#ch-montant').value = c ? c.montant : '';
   $c('#ch-note').value = c ? (c.note || '') : '';
   $c('#ch-submit').textContent = c ? 'Enregistrer les modifications' : 'Ajouter la charge';
-  toggleEmpField();
   $c('#ch-form').style.display = 'block';
   $c('#ch-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
   $c('#ch-montant').focus();
+  updateHint(!c);   // nouvelle charge « Paie » : montant pré-rempli avec la paie du jour
 }
 
 function cancelFormCharge() {
@@ -194,18 +196,12 @@ async function saveCharge() {
   const categorie = $c('#ch-cat').value;
   const montant = parseFloat($c('#ch-montant').value) || 0;
   const note = $c('#ch-note').value.trim();
-  const empId = categorie === CAT_PAIE ? ($c('#ch-emp').value || null) : null;
 
   if (!date) { toastC('La date est obligatoire.'); return; }
   if (!categorie) { toastC('Choisissez une catégorie.'); return; }
   if (montant <= 0) { toastC('Le montant doit être supérieur à 0.'); return; }
 
-  let empNom = '';
-  if (empId && typeof EMPLOYES !== 'undefined') {
-    const e = EMPLOYES.find(x => String(x.id) === String(empId));
-    if (e) empNom = [e.nom, e.prenom].filter(Boolean).join(' ');
-  }
-  const payload = { date_charge: date, categorie, montant, employe_id: empId, employe_nom: empNom, note };
+  const payload = { date_charge: date, categorie, montant, note };
 
   const res = curCharge
     ? await sb.from('charges').update(payload).eq('id', curCharge).select()
@@ -217,7 +213,7 @@ async function saveCharge() {
   // Afficher le mois de la charge enregistrée
   if (date.slice(0, 7) !== moisC()) $c('#ch-mois').value = date.slice(0, 7);
   if (wasEdit) cancelFormCharge();
-  else { $c('#ch-montant').value = ''; $c('#ch-note').value = ''; $c('#ch-emp').value = ''; $c('#ch-hint').textContent = ''; $c('#ch-montant').focus(); }
+  else { $c('#ch-montant').value = ''; $c('#ch-note').value = ''; $c('#ch-hint').textContent = ''; $c('#ch-montant').focus(); }
   await loadCharges();
 }
 
@@ -238,7 +234,7 @@ function exportCharges() {
   const list = [...CHARGES].sort((a, b) => a.date_charge.localeCompare(b.date_charge));
   const detail = list.map(c => ({
     Date: fdC(c.date_charge), Jour: jourC(c.date_charge), 'Catégorie': c.categorie,
-    'Employé': c.employe_nom || '', Note: c.note || '', 'Montant (DA)': Number(c.montant || 0)
+    Note: noteC(c), 'Montant (DA)': Number(c.montant || 0)
   }));
   const days = [...new Set(list.map(c => c.date_charge))];
   const parJour = days.map(d => {
@@ -267,9 +263,10 @@ $c('#ch-fcat').innerHTML = '<option value="">Toutes les catégories</option>' + 
 $c('#ch-mois').addEventListener('change', loadCharges);
 $c('#ch-fcat').addEventListener('change', () => renderCharges());
 $c('#ch-q').addEventListener('input', () => renderCharges());
-$c('#ch-cat').addEventListener('change', toggleEmpField);
-$c('#ch-emp').addEventListener('change', () => updateHint(true));
-$c('#ch-date').addEventListener('change', () => updateHint(false));
+// Efface l'ancien montant automatique (jamais un montant saisi à la main)
+function clearAutoMontant() { if (!curCharge && lastAutoC !== null && String($c('#ch-montant').value) === lastAutoC) { $c('#ch-montant').value = ''; lastAutoC = null; } }
+$c('#ch-cat').addEventListener('change', () => { $c('#ch-hint').textContent = ''; clearAutoMontant(); updateHint(!curCharge); });
+$c('#ch-date').addEventListener('change', () => { clearAutoMontant(); updateHint(!curCharge); });
 $c('#ch-form').addEventListener('submit', ev => { ev.preventDefault(); saveCharge(); });
 // Recharge les charges à chaque ouverture de l'onglet
 document.querySelector('nav button[data-v="charges"]').addEventListener('click', loadCharges);
