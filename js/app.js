@@ -250,16 +250,6 @@ function buildWB() {
   return wb;
 }
 const wbBlob = () => new Blob([XLSX.write(buildWB(), { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-$('#bExp').onclick = () => {
-  if (!D.length) { toast('Aucun contact à exporter'); return }
-  download(wbBlob(), 'MARIA-BAG_contacts_' + today() + '.xlsx'); toast('Export Excel terminé : ' + D.length + ' contact(s)');
-};
-$('#bCsv').onclick = () => {
-  if (!D.length) { toast('Aucun contact à exporter'); return }
-  const rows = D.map(c => [...KEYS.map(k => c[k]), histStr(c)].map(q2).join(';'));
-  download(new Blob(['﻿' + HEAD.map(q2).join(';') + '\r\n' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' }), 'MARIA-BAG_contacts_' + today() + '.csv');
-  toast('Export CSV terminé : ' + D.length + ' contact(s)');
-};
 function parseCSV(t) {
   const first = t.split('\n')[0], del = [';', ',', '\t'].map(d => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
   const rows = []; let r = [], f = '', inq = false;
@@ -315,24 +305,6 @@ async function mergeIn(list) {
   return { add, skip };
 }
 const BADCOLS = "Colonnes non reconnues. La première ligne doit contenir des en-têtes comme : Nom, Prénom, Société, Type, Statut, Téléphone, Email…";
-$('#bImp').onclick = () => $('#fImp').click();
-$('#fImp').onchange = async e => {
-  const file = e.target.files[0]; e.target.value = ''; if (!file) return;
-  const buf = await file.arrayBuffer(); let list;
-  try {
-    if (/\.xlsx?$/i.test(file.name)) list = wbToContacts(buf);
-    else {
-      let txt; try { txt = new TextDecoder('utf-8', { fatal: true }).decode(buf) } catch (_) { txt = new TextDecoder('windows-1252').decode(buf) }
-      const rows = parseCSV(txt.replace(/^﻿/, '')); if (rows.length < 2) { toast('Fichier vide ou illisible'); return }
-      list = rowsToContacts(rows);
-    }
-  } catch (err) { alert('Fichier illisible : ' + err.message); return }
-  if (!list) { alert(BADCOLS); return }
-  toast('Import en cours…');
-  const r = await mergeIn(list);
-  refresh(); toast(r.add + ' contact(s) importé(s)' + (r.skip ? ', ' + r.skip + ' ignoré(s) (doublons ou lignes vides)' : ''));
-};
-
 /* ---------- Démarrage ---------- */
 document.addEventListener('mariabag:authenticated', () => { if (!loaded) loadContacts() }, { once: false });
 // Si la session est déjà ouverte au rechargement de la page, l'évènement a pu partir avant ce script

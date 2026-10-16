@@ -5,7 +5,7 @@
    - Les appels à la base Supabase ne sont JAMAIS mis en cache
    Changez CACHE_VERSION pour forcer la mise à jour chez tous les utilisateurs.
    ============================================================ */
-const CACHE_VERSION = 'mariabag-v2';
+const CACHE_VERSION = 'mariabag-v3';
 const SHELL = [
   './',
   './index.html',
