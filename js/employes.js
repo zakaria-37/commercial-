@@ -203,7 +203,7 @@ async function saveEmploye() {
   const prenom = $e('#emp-prenom').value.trim();
   const poste = $e('#emp-poste').value.trim();
   const taux = parseFloat($e('#emp-taux').value) || 0;
-  const tauxS = parseFloat($e('#emp-taux-sup').value) || null;
+  const tauxS = parseFloat($e('#emp-taux-sup').value) || 0;   // 0 = utiliser le taux normal (colonne NOT NULL)
   const finNorm = $e('#emp-fin-normale').value || '19:00';
   const notes = $e('#emp-notes').value.trim();
 
