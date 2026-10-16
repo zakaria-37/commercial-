@@ -4,7 +4,8 @@
      nécessaire pour UNE pièce (0,5 m de tissu, 3 sangles, 2 curseurs…)
    - On saisit la quantité à fabriquer (ex : 1000) : l'application calcule
      exactement ce qu'il faut sortir du dépôt pour l'atelier
-   - Bon de sortie imprimable (PDF / papier) + export Excel
+   - Bon de sortie : PDF à télécharger ou à envoyer directement depuis le
+     téléphone (WhatsApp, e-mail…), impression papier, export Excel
    - Unités comptées en pièces (pcs, paire, bobine, rouleau) : arrondies
      à l'entier supérieur. Mètres, kg… : arrondis au centième supérieur.
    ============================================================ */
@@ -298,6 +299,124 @@ function imprimerBon() {
   const fin = () => { document.body.classList.remove('printing-bon'); document.title = oldTitle; window.removeEventListener('afterprint', fin); };
   window.addEventListener('afterprint', fin);
   setTimeout(() => window.print(), 60);
+}
+
+/* ---------- Bon de sortie : PDF (téléchargement / partage) ---------- */
+/* jsPDF n'affiche que les caractères latins : on nettoie le texte (espaces insécables des nombres, apostrophes, flèches…) */
+function pdfTxt(v) {
+  return String(v ?? '')
+    .replace(/[\u202f\u00a0]/g, ' ')
+    .replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
+    .replace(/\u2026/g, '...').replace(/[\u2013\u2014]/g, '-').replace(/\u2192/g, '->')
+    .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u00FF]/g, '?');
+}
+const pdfNum = (n, dec) => pdfTxt(fmtN(n, dec));
+
+/* Logo chargé à l'avance (le partage doit se faire tout de suite après le clic) */
+let LOGO_PDF = null;
+(function chargerLogo() {
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      LOGO_PDF = c.toDataURL('image/png');
+    } catch (e) { LOGO_PDF = null; }
+  };
+  img.src = 'icons/icon-192.png';
+})();
+
+function creerPdf(b) {
+  if (!(window.jspdf && window.jspdf.jsPDF)) throw new Error('Bibliothèque PDF non chargée : vérifiez la connexion internet puis rechargez la page.');
+  const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+  if (typeof doc.autoTable !== 'function') throw new Error('Module de tableaux PDF non chargé : vérifiez la connexion internet puis rechargez la page.');
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 14;
+  const N = b.N;
+
+  /* En-tête */
+  if (LOGO_PDF) doc.addImage(LOGO_PDF, 'PNG', M, 9, 22, 22);
+  doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(17);
+  doc.text(pdfTxt('BON DE SORTIE DE MATIÈRES'), M + 26, 18);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+  doc.text(pdfTxt('Dépôt -> Atelier  |  MARIA BAG'), M + 26, 25);
+  doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+  doc.text(pdfTxt('N° ' + (b.num || '-')), W - M, 17, { align: 'right' });
+  doc.text(pdfTxt(fdP(b.date)), W - M, 24, { align: 'right' });
+  doc.setDrawColor(0); doc.setLineWidth(0.8); doc.line(M, 34, W - M, 34);
+
+  /* Informations */
+  const infos = [
+    ['Produit', b.m.nom], ['Quantité à fabriquer', fmtN(N, 0) + ' pièces'],
+    ['Atelier destinataire', b.atelier || '....................'], ['Chef d\'atelier', b.chef || '....................']
+  ];
+  infos.forEach((it, i) => {
+    const x = i % 2 === 0 ? M : W / 2 + 4, y = 43 + Math.floor(i / 2) * 12;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90); doc.text(pdfTxt(it[0]), x, y);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.setTextColor(0); doc.text(pdfTxt(it[1]), x, y + 5.5);
+  });
+
+  /* Tableau des quantités */
+  doc.autoTable({
+    startY: 70, margin: { left: M, right: M, bottom: 18 },
+    head: [['N°', 'Désignation', 'Unité', 'Qté par pièce', 'Quantité à sortir', 'Sorti du dépôt', 'Reçu à l\'atelier'].map(pdfTxt)],
+    body: b.list.map((c, i) => [i + 1, c.nom + (c.note ? '\n' + c.note : ''), c.unite, pdfNum(c.quantite, 4),
+                                pdfTxt(fmtBesoin(c, N)) + ' ' + pdfTxt(c.unite), '', '']).map(r => r.map(pdfTxt)),
+    theme: 'grid', rowPageBreak: 'avoid',
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 3, textColor: 0, lineColor: 0, lineWidth: 0.2, valign: 'middle', minCellHeight: 11 },
+    headStyles: { fillColor: [235, 235, 235], textColor: 0, fontStyle: 'bold', halign: 'center', fontSize: 8.5 },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 10 }, 2: { halign: 'center', cellWidth: 16 }, 3: { halign: 'center', cellWidth: 22 },
+      4: { halign: 'right', fontStyle: 'bold', fontSize: 12, cellWidth: 38 }, 5: { cellWidth: 21 }, 6: { cellWidth: 21 }
+    }
+  });
+
+  /* Mention + signatures (nouvelle page si pas assez de place) */
+  let y = doc.lastAutoTable.finalY + 9;
+  if (y > H - 62) { doc.addPage(); y = 20; }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0);
+  doc.text(pdfTxt('Quantités calculées pour ' + fmtN(N, 0) + ' pièces : remettre exactement ces quantités, ni plus, ni moins.'), M, y);
+  y += 30;
+  const colW = (W - 2 * M - 2 * 10) / 3;
+  ['Magasinier (dépôt)', 'Chef d\'atelier', 'Responsable'].forEach((t, i) => {
+    const x = M + i * (colW + 10);
+    doc.setLineWidth(0.3); doc.line(x, y, x + colW, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.text(pdfTxt(t), x + colW / 2, y + 5, { align: 'center' });
+  });
+
+  /* Pied de page */
+  const n = doc.getNumberOfPages();
+  for (let p = 1; p <= n; p++) {
+    doc.setPage(p); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120);
+    doc.text(pdfTxt('MARIA BAG - Bon de sortie ' + (b.num || '') + ' - Page ' + p + '/' + n), W / 2, H - 8, { align: 'center' });
+  }
+  const name = ('Bon_de_sortie_' + b.m.nom + '_' + N + 'pcs_' + b.date).replace(/[^\w\-]+/g, '_') + '.pdf';
+  return { doc, name };
+}
+
+function telechargerPdf() {
+  const b = verifierBon(); if (!b) return;
+  try { const r = creerPdf(b); r.doc.save(r.name); toastP('PDF enregistré : ' + r.name); }
+  catch (e) { toastP('Erreur PDF : ' + e.message); }
+}
+
+/* Envoi direct (WhatsApp, e-mail, Drive…) via le menu de partage du téléphone */
+async function partagerPdf() {
+  const b = verifierBon(); if (!b) return;
+  let r;
+  try { r = creerPdf(b); } catch (e) { toastP('Erreur PDF : ' + e.message); return; }
+  const file = new File([r.doc.output('blob')], r.name, { type: 'application/pdf' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'Bon de sortie - ' + b.m.nom,
+        text: 'Bon de sortie de matières : ' + b.m.nom + ', ' + fmtN(b.N, 0) + ' pièces (bon ' + (b.num || '') + ')' });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;          // l'utilisateur a fermé le menu de partage
+    }
+  }
+  r.doc.save(r.name);
+  toastP('Partage direct indisponible sur cet appareil : le PDF a été téléchargé. Envoyez-le depuis vos fichiers (WhatsApp, e-mail…).');
 }
 
 /* ---------- Export Excel ---------- */

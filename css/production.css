@@ -40,9 +40,34 @@
 
 /* ---------- Téléphone : 6 onglets dans la barre du bas ---------- */
 @media (max-width:700px){
-  nav button{font-size:10.8px;padding:10px 1px}
+  nav{overflow:hidden}                                   /* la barre ne doit jamais élargir la page */
+  nav button{font-size:clamp(9px,2.7vw,11px);padding:10px 0;overflow:hidden}
   table.m-cards td:empty{display:none}          /* cellules vides (notes) masquées dans les fiches */
-}
-@media (max-width:360px){
-  nav button{font-size:9.8px}
+
+  /* Petits tableaux du tableau de bord (relances, productions, commandes) : lignes empilées, jamais plus larges que l'écran */
+  .card table:not(.m-cards),.card table:not(.m-cards) tbody{display:block;width:100%;min-width:0}
+  .card table:not(.m-cards) tr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:9px 0;border-bottom:1px solid #eef0f4}
+  .card table:not(.m-cards) tr:last-child{border-bottom:0}
+  .card table:not(.m-cards) td{display:block;padding:0;border:0}
+  .card table:not(.m-cards) td:first-child{flex:1 1 100%}
+
+  /* Champs côte à côte : formulaires plus courts */
+  .pr-calc{grid-template-columns:1fr 1fr!important}
+  .pr-calc label:nth-child(-n+3){grid-column:1/-1}
+  #pr-cform .at-fields{grid-template-columns:1fr 1fr!important;align-items:end}
+  #pr-cform .at-fields label:nth-child(1),#pr-cform .at-fields label:nth-child(4),#pr-cform .at-fields label:nth-child(5){grid-column:1/-1}
+  #prod-form .at-fields,#cmd-form .at-fields{grid-template-columns:1fr 1fr!important}
+  #prod-form .at-fields label:nth-child(1),#prod-form .at-fields label:nth-child(2),#prod-form .at-fields label:nth-child(8),
+  #cmd-form .at-fields label:nth-child(1),#cmd-form .at-fields label:nth-child(2),#cmd-form .at-fields label:nth-child(9){grid-column:1/-1}
+
+  /* Ateliers > Productions et Commandes : fiches compactes sur 2 colonnes */
+  #production-tbody tr,#commande-tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;padding:10px 12px}
+  #production-tbody td,#commande-tbody td{display:block;padding:0;border:0;text-align:left}
+  #production-tbody td::before,#commande-tbody td::before{display:block;max-width:none;margin-bottom:1px}
+  #production-tbody td:first-child,#commande-tbody td:first-child{grid-column:1/-1;font-size:15.5px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+  #production-tbody td:first-child::before,#commande-tbody td:first-child::before{display:none}
+  #production-tbody td:last-child,#commande-tbody td:last-child{grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end;padding-top:6px}
+  #production-tbody td:last-child::before,#commande-tbody td:last-child::before{display:none}
+  #production-tbody td:last-child .btn,#commande-tbody td:last-child .btn{flex:1 1 0}
+  #production-tbody td[data-span],#commande-tbody td[data-span]{grid-column:1/-1;text-align:center}
 }

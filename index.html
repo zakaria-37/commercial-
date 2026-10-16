@@ -256,7 +256,7 @@
 
     <div class="card" style="margin-top:16px">
       <h2>Besoins pour la fabrication et bon de sortie</h2>
-      <div class="at-fields" style="margin-bottom:12px">
+      <div class="at-fields pr-calc" style="margin-bottom:12px">
         <label>Quantité à fabriquer (pièces) *<input id="pr-qte" type="number" min="1" step="1" inputmode="numeric" value="1000"></label>
         <label>Atelier destinataire<input id="pr-atelier" list="pr-ateliers" placeholder="Nom de l’atelier"><datalist id="pr-ateliers"></datalist></label>
         <label>Chef d’atelier<input id="pr-chef" placeholder="Nom du chef d’atelier"></label>
@@ -265,7 +265,7 @@
       </div>
       <div id="pr-stats" class="at-stats"></div>
       <div class="at-scroll"><table style="min-width:600px"><thead><tr><th>Composant</th><th>Qté pour 1 pièce</th><th>Marge</th><th>À sortir du dépôt</th></tr></thead><tbody id="pr-need-body"></tbody></table></div>
-      <div class="at-actions"><button class="btn p" type="button" onclick="imprimerBon()">Imprimer le bon de sortie</button><button class="btn" type="button" onclick="exportBon()">Exporter Excel</button></div>
+      <div class="at-actions"><button class="btn p" type="button" onclick="telechargerPdf()">Télécharger le bon en PDF</button><button class="btn p" type="button" onclick="partagerPdf()">Envoyer le PDF (WhatsApp, e-mail…)</button><button class="btn" type="button" onclick="imprimerBon()">Imprimer</button><button class="btn" type="button" onclick="exportBon()">Exporter Excel</button></div>
     </div>
   </div>
   <div id="toastP"></div>
@@ -312,6 +312,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/app.js"></script>
