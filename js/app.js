@@ -122,11 +122,9 @@ function dash() {
    <div class="card kpi"><span>Clients / Fournisseurs</span><b>${cl} / ${fo}</b></div>
    <div class="card kpi"><span>Taux de confirmation</span><b>${n ? Math.round(cf / n * 100) : 0} %</b><i>${cf} confirmé(s) sur ${n}</i></div>
    <div class="card kpi u"><span>Relances urgentes</span><b>${late.length + soon.length}</b><i>${late.length} en retard · ${soon.length} cette semaine</i></div>`;
-  const pc = n ? cl / n * 100 : 0;
-  $('#donut').innerHTML = `<div class="ring" style="background:conic-gradient(#000 0 ${pc}%,var(--brass) ${pc}% 100%${n ? '' : ',#eee'})"></div>
-   <div class="leg"><div><span class="dot" style="background:#000"></span>Clients : <b>${cl}</b></div><div><span class="dot" style="background:var(--brass)"></span>Fournisseurs : <b>${fo}</b></div></div>`;
   const col = {'Confirmé':'var(--g)','En attente':'var(--o)','Pas intéressé':'var(--r)'};
   $('#bars').innerHTML = Object.keys(ST).map(s => { const k = D.filter(c => c.statut === s).length; return `<div class="bar"><div class="t"><span>${s}</span><b>${k}</b></div><div class="tr"><i style="width:${n ? k / n * 100 : 0}%;background:${col[s]}"></i></div></div>` }).join('');
+  if (typeof renderNotifications === 'function') renderNotifications();
   const u = [...late, ...soon].sort((a, b) => a.relance.localeCompare(b.relance)).slice(0, 10);
   $('#urg').innerHTML = u.length ? `<table style="min-width:0"><tbody>${u.map(c => { const r = rel(c); return `<tr class="row" data-id="${c.id}"><td><b>${esc(full(c))}</b><small>${esc(c.societe)}</small></td><td>${esc(c.type)}</td><td>${fd(c.relance)}</td><td><span class="bd ${r.c}">${r.l}</span></td></tr>` }).join('')}</tbody></table>` : '<div class="empty">Aucune relance urgente. ' + (n ? 'Tout est à jour.' : 'Ajoutez ou importez vos premiers contacts.') + '</div>';
 }

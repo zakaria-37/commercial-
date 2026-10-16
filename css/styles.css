@@ -273,3 +273,17 @@ footer b{font:italic 400 16px "Brush Script MT","Segoe Script",cursive;color:#00
   .tw{max-width:100%}
   header{max-width:100%}
 }
+/* ---------- Notifications (tableau de bord) ---------- */
+.ncount{background:#000;color:#fff;border-radius:20px;padding:1px 9px;font:600 12px system-ui,sans-serif;margin-left:8px;vertical-align:middle}
+.nlist{max-height:320px;overflow-y:auto}
+.nday{color:var(--mut);font-size:12px;text-transform:capitalize;margin:-4px 0 6px}
+.nf{display:flex;align-items:center;gap:10px;padding:9px 10px;margin:6px 0;border-left:4px solid var(--n);background:#faf8f8;border-radius:6px;cursor:pointer}
+.nf:hover{filter:brightness(.97)}
+.nf-r{border-left-color:var(--r);background:var(--rb)}
+.nf-o{border-left-color:var(--o);background:var(--ob)}
+.nf-g{border-left-color:var(--g);background:var(--gb)}
+.nf .nic{font-size:16px;width:20px;text-align:center;flex:none}
+.nf .ntx{flex:1;min-width:0}
+.nf .ntx b{display:block}
+.nf .ntx small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nf .bd{flex:none;background:#fff}

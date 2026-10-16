@@ -489,11 +489,72 @@ $a('#v-dash').addEventListener('click', e => {
   if (t) t.click();
 });
 
+/* ---------- Tableau de bord : notifications du jour ---------- */
+function renderNotifications() {
+  const box = $a('#notif');
+  if (!box) return;
+  const nb = v => Number(v) || 0;
+  const pl = (n, s, p) => n + ' ' + (n > 1 ? (p || s + 's') : s);
+  const items = [];   // p = priorité (1 = le plus urgent), c = couleur r/o/g
+
+  // Productions
+  PRODUCTIONS.filter(prodActive).forEach(p => {
+    const j = p.date_reception_prevue ? joursAvant(p.date_reception_prevue) : null;
+    const d = escA(p.modele_nom) + ' · ' + escA(p.atelier_nom) + ' · ' + nb(p.quantite_lancee) + ' pcs';
+    if (p.statut === 'Retardée' || (j !== null && j < 0)) {
+      items.push({p: 1, c: 'r', ic: '⚠', t: 'Production en retard', d, w: j !== null && j < 0 ? (-j) + ' j de retard' : 'Retardée', go: 'productions-pane'});
+    } else if (j !== null && j <= 3) {
+      items.push({p: 4, c: 'o', ic: '⏳', t: j === 0 ? "Production à réceptionner aujourd'hui" : 'Production à réceptionner dans ' + j + ' j', d, w: fdA(p.date_reception_prevue), go: 'productions-pane'});
+    }
+  });
+  PRODUCTIONS.filter(prodFini).forEach(p => {
+    if (!p.date_reception_reelle) return;
+    const j = joursAvant(p.date_reception_reelle);
+    if (j === 0 || j === -1) items.push({p: 5, c: 'g', ic: '✔', t: 'Production terminée', d: escA(p.modele_nom) + ' · ' + escA(p.atelier_nom) + ' · ' + nb(p.quantite_lancee) + ' pcs', w: j === 0 ? "Aujourd'hui" : 'Hier', go: 'productions-pane'});
+  });
+
+  // Commandes à livrer
+  COMMANDES.filter(cmdOuverte).forEach(c => {
+    if (!c.date_reception_prevue) return;
+    const j = joursAvant(c.date_reception_prevue);
+    const reste = Math.max(0, nb(c.quantite_commandee) - nb(c.quantite_recue));
+    const who = c.contact_nom && c.contact_nom !== 'N/A' ? ' · ' + escA(c.contact_nom) : '';
+    const d = escA(c.commande_numero || '—') + ' · ' + escA(c.modele_nom) + who + ' · reste ' + reste + ' pcs';
+    if (j < 0) items.push({p: 2, c: 'r', ic: '⚠', t: 'Commande en retard', d, w: (-j) + ' j de retard', go: 'suivi-pane'});
+    else if (j <= 3) items.push({p: 4, c: 'o', ic: '📦', t: j === 0 ? "Commande à livrer aujourd'hui" : 'Commande à livrer dans ' + j + ' j', d, w: fdA(c.date_reception_prevue), go: 'suivi-pane'});
+  });
+
+  // Relances clients / fournisseurs
+  if (typeof D !== 'undefined' && typeof rel === 'function') {
+    const noms = l => l.slice(0, 3).map(c => escA(full(c))).join(', ') + (l.length > 3 ? '…' : '');
+    const late = D.filter(c => rel(c).k === 'late');
+    const auj = D.filter(c => rel(c).k === 'soon' && rel(c).d === 0);
+    if (late.length) items.push({p: 2, c: 'r', ic: '☎', t: pl(late.length, 'relance') + ' en retard', d: noms(late), w: '', nav: 'list'});
+    if (auj.length) items.push({p: 3, c: 'o', ic: '☎', t: pl(auj.length, 'relance') + " à faire aujourd'hui", d: noms(auj), w: '', nav: 'list'});
+  }
+
+  items.sort((x, y) => x.p - y.p);
+  const cnt = $a('#notif-count');
+  if (cnt) { cnt.textContent = items.length; cnt.style.display = items.length ? '' : 'none'; }
+  const dateTxt = new Date().toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long'});
+  box.innerHTML = '<div class="nday">' + escA(dateTxt) + '</div>' + (items.length
+    ? items.map(i => `<div class="nf nf-${i.c}" ${i.go ? `data-go="${i.go}"` : `data-nav="${i.nav}"`}><span class="nic">${i.ic}</span><div class="ntx"><b>${i.t}</b><small>${i.d}</small></div>${i.w ? `<span class="bd ${i.c}">${i.w}</span>` : ''}</div>`).join('')
+    : '<div class="empty" style="padding:24px">Aucune notification aujourd\'hui. Tout est à jour.</div>');
+}
+// Clic sur une relance : ouvre l'onglet Contacts
+$a('#v-dash').addEventListener('click', e => {
+  const r = e.target.closest('[data-nav]');
+  if (!r) return;
+  const b = $a(`nav button[data-v="${r.dataset.nav}"]`);
+  if (b) b.click();
+});
+
 function refreshAtelierViews() {
   updateAtelierSelects();
   renderAtelierStats();
   renderCommandes();
   renderDashAteliers();
+  renderNotifications();
 }
 const _refreshAtelierOriginal = refreshAtelier;
 refreshAtelier = function() {
