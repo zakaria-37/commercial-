@@ -1,0 +1,334 @@
+/* ============================================================
+   MARIA BAG — Production : fiche matières et bon de sortie
+   - Un MODÈLE (ex : Sac à dos) contient des COMPOSANTS avec la quantité
+     nécessaire pour UNE pièce (0,5 m de tissu, 3 sangles, 2 curseurs…)
+   - On saisit la quantité à fabriquer (ex : 1000) : l'application calcule
+     exactement ce qu'il faut sortir du dépôt pour l'atelier
+   - Bon de sortie imprimable (PDF / papier) + export Excel
+   - Unités comptées en pièces (pcs, paire, bobine, rouleau) : arrondies
+     à l'entier supérieur. Mètres, kg… : arrondis au centième supérieur.
+   ============================================================ */
+
+let MODELES = [], COMPOSANTS = [];
+let selModele = null;       // id du modèle affiché
+let editModele = false;     // le formulaire modèle sert à renommer
+let curComposant = null;    // composant en cours de modification
+
+const $p = s => document.querySelector(s);
+const UNITES = ['m', 'cm', 'pcs', 'paire', 'kg', 'g', 'L', 'bobine', 'rouleau'];
+const UNITES_ENTIERES = ['pcs', 'paire', 'bobine', 'rouleau'];   // jamais de fraction : on arrondit au-dessus
+
+/* ---------- Utilitaires ---------- */
+function escP(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function isoP(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function fdP(s) { return s ? s.split('-').reverse().join('/') : ''; }
+function fmtN(n, maxDec) {
+  return (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: maxDec });
+}
+function round6(n) { return Math.round(n * 1e6) / 1e6; }
+function toastP(msg) {
+  const e = $p('#toastP');
+  if (!e) return;
+  e.textContent = msg; e.style.display = 'block';
+  clearTimeout(toastP.t); toastP.t = setTimeout(() => e.style.display = 'none', 6000);
+}
+function errMsgP(error) {
+  const m = (error && error.message) || String(error);
+  if (/schema cache|does not exist|Could not find|column/i.test(m))
+    return 'Tables de production introuvables dans Supabase. Exécutez supabase/production.sql dans SQL Editor, puis rechargez la page. (' + m + ')';
+  if (/row-level security|permission denied|policy/i.test(m))
+    return 'Accès refusé par Supabase (RLS). Réexécutez supabase/production.sql. (' + m + ')';
+  if (/duplicate key|unique/i.test(m))
+    return 'Un modèle porte déjà ce nom. Choisissez un autre nom. (' + m + ')';
+  return m;
+}
+
+/* ---------- Calculs ---------- */
+function qteFabriquer() { return Math.max(0, Math.floor(Number($p('#pr-qte').value) || 0)); }
+
+/* Quantité à sortir du dépôt pour N pièces (marge de chute incluse) */
+function besoin(c, N) {
+  const brut = round6(Number(c.quantite || 0) * N * (1 + Number(c.perte_pct || 0) / 100));
+  if (UNITES_ENTIERES.includes(c.unite)) return Math.ceil(brut);
+  return Math.ceil(round6(brut * 100)) / 100;
+}
+function fmtBesoin(c, N) { return fmtN(besoin(c, N), UNITES_ENTIERES.includes(c.unite) ? 0 : 2); }
+function modeleCourant() { return MODELES.find(m => String(m.id) === String(selModele)) || null; }
+function composantsDe(id) { return COMPOSANTS.filter(c => String(c.modele_id) === String(id)); }
+
+/* ---------- Chargement ---------- */
+async function loadProduction() {
+  const m = await sb.from('modeles').select('*').order('nom', { ascending: true });
+  if (m.error) { MODELES = []; COMPOSANTS = []; toastP('Erreur : ' + errMsgP(m.error)); renderAll(errMsgP(m.error)); return; }
+  const c = await sb.from('composants').select('*').order('ordre', { ascending: true }).order('created_at', { ascending: true });
+  if (c.error) { MODELES = m.data || []; COMPOSANTS = []; toastP('Erreur : ' + errMsgP(c.error)); renderAll(errMsgP(c.error)); return; }
+  MODELES = m.data || [];
+  COMPOSANTS = c.data || [];
+  if (!MODELES.some(x => String(x.id) === String(selModele))) selModele = MODELES.length ? MODELES[0].id : null;
+  renderAll();
+}
+
+/* ---------- Affichage ---------- */
+function renderAll(errText) {
+  const sel = $p('#pr-modele');
+  sel.innerHTML = MODELES.length
+    ? MODELES.map(m => '<option value="' + escP(m.id) + '"' + (String(m.id) === String(selModele) ? ' selected' : '') + '>' + escP(m.nom) + '</option>').join('')
+    : '<option value="">— Aucun modèle —</option>';
+
+  const has = !!modeleCourant();
+  $p('#pr-main').style.display = has ? '' : 'none';
+  $p('#pr-empty').style.display = has ? 'none' : '';
+  ['#pr-btn-edit', '#pr-btn-dup', '#pr-btn-del'].forEach(i => { $p(i).disabled = !has; });
+  if (errText) {
+    $p('#pr-empty').innerHTML = '<p style="color:#b00020">⚠ ' + escP(errText) + '</p>';
+    return;
+  }
+  if (!has) {
+    $p('#pr-empty').innerHTML = '<h2>Aucun modèle pour le moment</h2>' +
+      '<p>Un modèle est un produit à fabriquer (ex : sac à dos). Vous y listez tout ce qu’il faut pour <b>une</b> pièce, ' +
+      'puis l’application calcule les quantités pour 100, 500 ou 1000 pièces.</p>' +
+      '<button class="btn p" type="button" onclick="showFormModele()">+ Créer mon premier modèle</button> ' +
+      '<button class="btn" type="button" onclick="createExemple()">Voir un exemple (sac à dos)</button>';
+    return;
+  }
+  renderDatalists();
+  renderComposants();
+  renderBesoins();
+}
+
+function renderDatalists() {
+  const at = $p('#pr-ateliers');
+  const noms = (typeof ATELIERS !== 'undefined' ? ATELIERS : []).map(a => a.nom);
+  at.innerHTML = noms.map(n => '<option value="' + escP(n) + '">').join('');
+}
+
+function renderComposants() {
+  const m = modeleCourant(), list = composantsDe(m.id);
+  $p('#pr-comp-title').textContent = 'Composition d’une pièce — ' + m.nom;
+  $p('#pr-comp-desc').textContent = m.description || '';
+  $p('#pr-comp-desc').style.display = m.description ? '' : 'none';
+  $p('#pr-comp-body').innerHTML = list.length ? list.map(c =>
+    '<tr><td><b>' + escP(c.nom) + '</b></td>' +
+    '<td><span class="pr-unit-tag">' + escP(c.unite) + '</span></td>' +
+    '<td>' + fmtN(c.quantite, 4) + '</td>' +
+    '<td>' + (Number(c.perte_pct) ? fmtN(c.perte_pct, 2) + ' %' : '—') + '</td>' +
+    '<td>' + escP(c.note || '') + '</td>' +
+    '<td class="emp-act"><button class="btn s" type="button" onclick="showFormComposant(\'' + escP(c.id) + '\')">Modifier</button> ' +
+    '<button class="btn s d" type="button" onclick="removeComposant(\'' + escP(c.id) + '\')">Supprimer</button></td></tr>'
+  ).join('') : '<tr><td colspan="6" class="at-empty">Aucun composant. Cliquez sur « + Ajouter un composant ».</td></tr>';
+}
+
+function renderBesoins() {
+  const m = modeleCourant(), list = composantsDe(m.id), N = qteFabriquer();
+  $p('#pr-stats').innerHTML =
+    '<div class="at-stat"><span>Pièces à fabriquer</span><b>' + fmtN(N, 0) + '</b></div>' +
+    '<div class="at-stat"><span>Composants à sortir du dépôt</span><b>' + list.length + '</b></div>';
+  $p('#pr-need-body').innerHTML = list.length ? list.map(c =>
+    '<tr class="pr-need"><td><b>' + escP(c.nom) + '</b>' + (c.note ? '<small>' + escP(c.note) + '</small>' : '') + '</td>' +
+    '<td>' + fmtN(c.quantite, 4) + ' ' + escP(c.unite) + '</td>' +
+    '<td>' + (Number(c.perte_pct) ? fmtN(c.perte_pct, 2) + ' %' : '—') + '</td>' +
+    '<td><b>' + fmtBesoin(c, N) + ' ' + escP(c.unite) + '</b></td></tr>'
+  ).join('') : '<tr><td colspan="4" class="at-empty">Ajoutez d’abord les composants du modèle.</td></tr>';
+}
+
+/* ---------- Modèles ---------- */
+function showFormModele(edit) {
+  editModele = !!edit;
+  const m = edit ? modeleCourant() : null;
+  $p('#pr-mform-title').textContent = m ? 'Modifier le modèle' : 'Nouveau modèle';
+  $p('#pr-mnom').value = m ? m.nom : '';
+  $p('#pr-mdesc').value = m ? (m.description || '') : '';
+  $p('#pr-mform').style.display = 'block';
+  $p('#pr-mform').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $p('#pr-mnom').focus();
+}
+function cancelFormModele() { editModele = false; $p('#pr-mform').style.display = 'none'; }
+
+async function saveModele() {
+  const nom = $p('#pr-mnom').value.trim(), description = $p('#pr-mdesc').value.trim();
+  if (!nom) { toastP('Le nom du modèle est obligatoire.'); return; }
+  const res = editModele
+    ? await sb.from('modeles').update({ nom, description }).eq('id', selModele).select()
+    : await sb.from('modeles').insert([{ nom, description }]).select();
+  if (res.error) { toastP('Erreur : ' + errMsgP(res.error)); return; }
+  const wasEdit = editModele;
+  if (!wasEdit && res.data && res.data[0]) selModele = res.data[0].id;
+  toastP(wasEdit ? 'Modèle modifié.' : 'Modèle créé : ajoutez maintenant ses composants.');
+  cancelFormModele();
+  await loadProduction();
+  if (!wasEdit) showFormComposant();
+}
+
+async function duplicateModele() {
+  const m = modeleCourant(); if (!m) return;
+  const nom = (prompt('Nom du nouveau modèle :', m.nom + ' (copie)') || '').trim();
+  if (!nom) return;
+  const r = await sb.from('modeles').insert([{ nom, description: m.description || '' }]).select();
+  if (r.error || !r.data || !r.data[0]) { toastP('Erreur : ' + errMsgP(r.error || { message: 'création impossible' })); return; }
+  const rows = composantsDe(m.id).map((c, i) => ({
+    modele_id: r.data[0].id, nom: c.nom, unite: c.unite, quantite: c.quantite, perte_pct: c.perte_pct, note: c.note || '', ordre: i + 1
+  }));
+  if (rows.length) {
+    const r2 = await sb.from('composants').insert(rows);
+    if (r2.error) { toastP('Modèle créé, mais copie des composants impossible : ' + errMsgP(r2.error)); }
+  }
+  selModele = r.data[0].id;
+  toastP('Modèle dupliqué.');
+  await loadProduction();
+}
+
+async function removeModele() {
+  const m = modeleCourant(); if (!m) return;
+  const n = composantsDe(m.id).length;
+  if (!confirm('Supprimer le modèle « ' + m.nom + ' » et ses ' + n + ' composant(s) ?')) return;
+  const { error } = await sb.from('modeles').delete().eq('id', m.id);
+  if (error) { toastP('Erreur : ' + errMsgP(error)); return; }
+  selModele = null;
+  toastP('Modèle supprimé.');
+  await loadProduction();
+}
+
+/* Exemple : sac à dos (à modifier / compléter ensuite) */
+async function createExemple() {
+  const r = await sb.from('modeles').insert([{ nom: 'Sac à dos', description: 'Exemple : modifiez les quantités et ajoutez les autres éléments.' }]).select();
+  if (r.error || !r.data || !r.data[0]) { toastP('Erreur : ' + errMsgP(r.error || { message: 'création impossible' })); return; }
+  const id = r.data[0].id;
+  const items = [
+    ['Kawi bébé (matière première)', 'm', 0.5], ['Doubleur', 'm', 0.4], ['Songle', 'pcs', 3], ['Kisseur', 'pcs', 2], ['Poignée', 'pcs', 1]
+  ].map((x, i) => ({ modele_id: id, nom: x[0], unite: x[1], quantite: x[2], perte_pct: 0, note: '', ordre: i + 1 }));
+  const r2 = await sb.from('composants').insert(items);
+  if (r2.error) toastP('Erreur : ' + errMsgP(r2.error));
+  selModele = id;
+  await loadProduction();
+}
+
+/* ---------- Composants ---------- */
+function showFormComposant(id) {
+  if (!modeleCourant()) return;
+  curComposant = id || null;
+  const c = id ? COMPOSANTS.find(x => String(x.id) === String(id)) : null;
+  $p('#pr-cform-title').textContent = c ? 'Modifier le composant' : 'Nouveau composant';
+  $p('#pr-cnom').value = c ? c.nom : '';
+  $p('#pr-cunite').value = c ? c.unite : 'm';
+  $p('#pr-cqte').value = c ? c.quantite : '';
+  $p('#pr-cperte').value = c ? (Number(c.perte_pct) || '') : '';
+  $p('#pr-cnote').value = c ? (c.note || '') : '';
+  $p('#pr-csubmit').textContent = c ? 'Enregistrer les modifications' : 'Ajouter le composant';
+  $p('#pr-cform').style.display = 'block';
+  $p('#pr-cform').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  $p('#pr-cnom').focus();
+}
+function cancelFormComposant() { curComposant = null; $p('#pr-cform').style.display = 'none'; }
+
+async function saveComposant() {
+  const m = modeleCourant(); if (!m) return;
+  const nom = $p('#pr-cnom').value.trim();
+  const unite = $p('#pr-cunite').value;
+  const quantite = parseFloat($p('#pr-cqte').value);
+  const perte = parseFloat($p('#pr-cperte').value) || 0;
+  const note = $p('#pr-cnote').value.trim();
+  if (!nom) { toastP('Le nom du composant est obligatoire.'); return; }
+  if (!(quantite > 0)) { toastP('La quantité par pièce doit être supérieure à 0.'); return; }
+  if (perte < 0 || perte > 100) { toastP('La marge de chute doit être entre 0 et 100 %.'); return; }
+
+  const payload = { nom, unite, quantite, perte_pct: perte, note };
+  let res;
+  if (curComposant) res = await sb.from('composants').update(payload).eq('id', curComposant).select();
+  else {
+    const ordre = composantsDe(m.id).reduce((mx, c) => Math.max(mx, Number(c.ordre) || 0), 0) + 1;
+    res = await sb.from('composants').insert([{ ...payload, modele_id: m.id, ordre }]).select();
+  }
+  if (res.error) { toastP('Erreur : ' + errMsgP(res.error)); return; }
+
+  const wasEdit = !!curComposant;
+  toastP(wasEdit ? 'Composant modifié.' : 'Composant ajouté.');
+  if (wasEdit) cancelFormComposant();
+  else { $p('#pr-cnom').value = ''; $p('#pr-cqte').value = ''; $p('#pr-cperte').value = ''; $p('#pr-cnote').value = ''; $p('#pr-cnom').focus(); }
+  await loadProduction();
+}
+
+async function removeComposant(id) {
+  const c = COMPOSANTS.find(x => String(x.id) === String(id));
+  if (!c || !confirm('Supprimer « ' + c.nom + ' » de ce modèle ?')) return;
+  const { error } = await sb.from('composants').delete().eq('id', id);
+  if (error) { toastP('Erreur : ' + errMsgP(error)); return; }
+  if (String(curComposant) === String(id)) cancelFormComposant();
+  toastP('Composant supprimé.');
+  await loadProduction();
+}
+
+/* ---------- Bon de sortie : impression ---------- */
+function bonInfos() {
+  const m = modeleCourant(), N = qteFabriquer();
+  return { m, N, list: composantsDe(m.id), atelier: $p('#pr-atelier').value.trim(), chef: $p('#pr-chef').value.trim(),
+           date: $p('#pr-date').value || isoP(new Date()), num: $p('#pr-bon').value.trim() };
+}
+function verifierBon() {
+  if (!modeleCourant()) return null;
+  const b = bonInfos();
+  if (!b.list.length) { toastP('Ajoutez d’abord les composants du modèle.'); return null; }
+  if (b.N < 1) { toastP('Indiquez la quantité à fabriquer.'); return null; }
+  return b;
+}
+
+function imprimerBon() {
+  const b = verifierBon(); if (!b) return;
+  const rows = b.list.map((c, i) =>
+    '<tr><td class="c">' + (i + 1) + '</td><td><b>' + escP(c.nom) + '</b>' + (c.note ? '<small>' + escP(c.note) + '</small>' : '') + '</td>' +
+    '<td class="c">' + escP(c.unite) + '</td><td class="c">' + fmtN(c.quantite, 4) + '</td>' +
+    '<td class="bon-qte">' + fmtBesoin(c, b.N) + ' ' + escP(c.unite) + '</td><td class="bon-box"></td><td class="bon-box"></td></tr>').join('');
+  $p('#bon-print').innerHTML =
+    '<div class="bon-head"><img src="icons/icon-192.png" alt=""><div><h1>BON DE SORTIE DE MATIÈRES</h1><p>Dépôt → Atelier · MARIA BAG</p></div>' +
+    '<div class="bon-num">N° ' + escP(b.num || '—') + '<br>' + fdP(b.date) + '</div></div>' +
+    '<div class="bon-info"><div><span>Produit :</span><b>' + escP(b.m.nom) + '</b></div>' +
+    '<div><span>Quantité à fabriquer :</span><b>' + fmtN(b.N, 0) + ' pièces</b></div>' +
+    '<div><span>Atelier destinataire :</span><b>' + escP(b.atelier || '………………………') + '</b></div>' +
+    '<div><span>Chef d’atelier :</span><b>' + escP(b.chef || '………………………') + '</b></div></div>' +
+    '<table><tbody><tr><th class="c">N°</th><th>Désignation</th><th class="c">Unité</th><th class="c">Qté par pièce</th>' +
+    '<th>Quantité à sortir</th><th class="c">Sorti du dépôt</th><th class="c">Reçu à l’atelier</th></tr>' + rows + '</tbody></table>' +
+    '<p class="bon-note">Quantités calculées pour ' + fmtN(b.N, 0) + ' pièces : remettre exactement ces quantités, ni plus, ni moins.</p>' +
+    '<div class="bon-sign"><div>Magasinier (dépôt)</div><div>Chef d’atelier</div><div>Responsable</div></div>';
+  const oldTitle = document.title;
+  document.title = 'Bon de sortie - ' + b.m.nom + ' - ' + b.N + ' pcs - ' + b.date;
+  document.body.classList.add('printing-bon');
+  const fin = () => { document.body.classList.remove('printing-bon'); document.title = oldTitle; window.removeEventListener('afterprint', fin); };
+  window.addEventListener('afterprint', fin);
+  setTimeout(() => window.print(), 60);
+}
+
+/* ---------- Export Excel ---------- */
+function exportBon() {
+  if (typeof XLSX === 'undefined') { toastP('Bibliothèque Excel non chargée.'); return; }
+  const b = verifierBon(); if (!b) return;
+  const aoa = [
+    ['BON DE SORTIE DE MATIÈRES — MARIA BAG'],
+    ['N° du bon', b.num], ['Date', fdP(b.date)], ['Produit', b.m.nom], ['Quantité à fabriquer', b.N],
+    ['Atelier destinataire', b.atelier], ['Chef d’atelier', b.chef], [],
+    ['N°', 'Désignation', 'Unité', 'Quantité par pièce', 'Marge de chute (%)', 'Quantité à sortir', 'Sorti du dépôt', 'Reçu à l’atelier']
+  ].concat(b.list.map((c, i) => [i + 1, c.nom, c.unite, Number(c.quantite), Number(c.perte_pct) || 0, besoin(c, b.N), '', '']));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 6 }, { wch: 34 }, { wch: 9 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 16 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Bon de sortie');
+  const nomFichier = ('Bon_matieres_' + b.m.nom + '_' + b.N + 'pcs').replace(/[^\w\-]+/g, '_');
+  XLSX.writeFile(wb, nomFichier + '.xlsx');
+}
+
+/* ---------- Initialisation et événements ---------- */
+$p('#pr-qte').value = 1000;
+$p('#pr-date').value = isoP(new Date());
+$p('#pr-bon').value = 'BM-' + isoP(new Date()).replace(/-/g, '') + '-01';
+$p('#pr-cunite').innerHTML = UNITES.map(u => '<option>' + u + '</option>').join('');
+
+$p('#pr-modele').addEventListener('change', e => { selModele = e.target.value || null; cancelFormComposant(); renderAll(); });
+$p('#pr-qte').addEventListener('input', () => { if (modeleCourant()) renderBesoins(); });
+$p('#pr-mform').addEventListener('submit', ev => { ev.preventDefault(); saveModele(); });
+$p('#pr-cform').addEventListener('submit', ev => { ev.preventDefault(); saveComposant(); });
+document.querySelector('nav button[data-v="production"]').addEventListener('click', loadProduction);
+
+document.addEventListener('mariabag:authenticated', loadProduction);
+if (!document.getElementById('app').classList.contains('hide')) loadProduction();

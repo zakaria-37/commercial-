@@ -1,0 +1,48 @@
+/* ============================================================
+   MARIA BAG — Section Production : fiche matières + bon de sortie
+   ============================================================ */
+#toastP{display:none;position:fixed;right:20px;bottom:20px;z-index:1000;background:#222;color:#fff;padding:12px 16px;border-radius:10px;max-width:80vw}
+#pr-empty{text-align:center;padding:28px 16px}
+#pr-empty p{color:var(--mut);margin:6px 0 14px}
+.pr-total{font-weight:700;background:var(--nb)}
+.pr-need b{font-size:15px}
+.pr-help{color:var(--mut);font-size:13px;margin:0 0 10px}
+.pr-unit-tag{display:inline-block;padding:1px 8px;border-radius:12px;background:var(--nb);font-size:12px;color:var(--n)}
+
+/* ---------- Bon de sortie (impression) ---------- */
+#bon-print{display:none}
+@media print{
+  @page{size:A4;margin:12mm}
+  body.printing-bon{background:#fff!important;padding:0!important}
+  body.printing-bon #app,body.printing-bon #login,body.printing-bon #toast{display:none!important}
+  body.printing-bon #bon-print{display:block;color:#000;font:13px/1.4 "Segoe UI",Arial,sans-serif}
+  #bon-print .bon-head{display:flex;align-items:center;gap:14px;border-bottom:3px solid #000;padding-bottom:10px;margin-bottom:12px}
+  #bon-print .bon-head img{width:64px;height:64px}
+  #bon-print .bon-head h1{margin:0;font-size:20px;letter-spacing:.04em}
+  #bon-print .bon-head p{margin:2px 0 0;color:#444}
+  #bon-print .bon-num{margin-left:auto;text-align:right;font-weight:700;font-size:14px}
+  #bon-print .bon-info{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:14px}
+  #bon-print .bon-info div{border-bottom:1px dotted #777;padding:3px 0}
+  #bon-print .bon-info span{color:#555;margin-right:6px}
+  #bon-print .bon-info b{font-size:14px}
+  #bon-print table{width:100%;border-collapse:collapse;min-width:0}
+  #bon-print th,#bon-print td{border:1px solid #000;padding:7px 8px;text-align:left;font-size:13px;cursor:default}
+  #bon-print th{background:#eee;font-size:12px;color:#000;white-space:normal}
+  #bon-print td.c,#bon-print th.c{text-align:center}
+  #bon-print td.bon-qte{font-size:16px;font-weight:700;text-align:right;white-space:nowrap}
+  #bon-print td.bon-box{width:70px}
+  #bon-print td small{display:block;color:#555}
+  #bon-print tr{break-inside:avoid}
+  #bon-print .bon-note{margin:12px 0;font-weight:600}
+  #bon-print .bon-sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:34px}
+  #bon-print .bon-sign div{border-top:1px solid #000;padding-top:6px;text-align:center;min-height:70px}
+}
+
+/* ---------- Téléphone : 6 onglets dans la barre du bas ---------- */
+@media (max-width:700px){
+  nav button{font-size:10.8px;padding:10px 1px}
+  table.m-cards td:empty{display:none}          /* cellules vides (notes) masquées dans les fiches */
+}
+@media (max-width:360px){
+  nav button{font-size:9.8px}
+}
