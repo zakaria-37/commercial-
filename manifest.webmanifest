@@ -1,11 +1,11 @@
 {
   "name": "MARIA BAG – Suivi commercial",
   "short_name": "Maria Bag",
-  "description": "Contacts, ateliers, employés et charges de MARIA BAG",
+  "description": "Contacts, ateliers, employés, charges, production et coût des produits de MARIA BAG — fonctionne aussi hors ligne",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#000000",
   "lang": "fr",

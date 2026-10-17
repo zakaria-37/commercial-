@@ -1,6 +1,9 @@
 /* ============================================================
    MARIA BAG — Installation de l'application (Android + iPhone/iPad)
    - Android / Chrome : bouton « Installer » (événement beforeinstallprompt)
+   - PC (Chrome / Edge) : même bandeau + bouton « Installer sur ce PC » dans
+     l'en-tête : l'application s'ouvre dans sa propre fenêtre, avec une icône
+     sur le bureau, et fonctionne sans internet (données sur le PC)
    - iPhone / iPad    : Safari ne propose AUCUNE installation automatique ;
                         on affiche donc un guide « Partager → Sur l'écran d'accueil »
    - Si la page est ouverte dans une appli (WhatsApp, Instagram, Facebook…)
@@ -32,10 +35,29 @@
   var isIOSOtherBrowser = isIOS && /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
 
   if (isStandalone) return;                       // déjà installée
+  var isDesktop = !isIOS && !/Android|Mobi/i.test(ua);
 
+  /* ---------- PC : bouton « Installer sur ce PC » dans l'en-tête (toujours proposé) ---------- */
+  var deferred = null;
+  function headerButton() {
+    var out = document.getElementById('bLogout');
+    if (!isDesktop || !out || document.getElementById('bInstall')) return;
+    var b = document.createElement('button');
+    b.className = 'btn p'; b.id = 'bInstall'; b.type = 'button'; b.textContent = 'Installer sur ce PC';
+    b.title = 'Installer Maria Bag comme une application : icône sur le bureau, fonctionne sans internet';
+    b.style.marginLeft = '4px';
+    out.parentNode.insertBefore(b, out);
+    b.addEventListener('click', function () {
+      if (!deferred) return;
+      deferred.prompt();
+      deferred.userChoice.then(function () { deferred = null; b.remove(); });
+    });
+  }
+
+  var dismissed = false;
   try {
     var d = parseInt(localStorage.getItem(DISMISS_KEY) || '0', 10);
-    if (d && Date.now() - d < DISMISS_DAYS * 86400000) return;
+    dismissed = !!(d && Date.now() - d < DISMISS_DAYS * 86400000);
   } catch (e) {}
 
   /* ---------- Styles ---------- */
@@ -72,7 +94,7 @@
     bar.setAttribute('role', 'dialog');
     bar.innerHTML =
       '<div class="ih"><img src="icons/icon-192.png" alt="">' +
-      '<div><b>Installer Maria Bag</b><small>Accès rapide depuis votre écran d\'accueil</small></div>' +
+      '<div><b>Installer Maria Bag</b><small>' + (isDesktop ? 'Icône sur le bureau · fonctionne sans internet' : 'Accès rapide depuis votre écran d\'accueil · fonctionne sans internet') + '</small></div>' +
       '<button class="ix" aria-label="Fermer">&times;</button></div>' + inner;
     document.body.appendChild(bar);
     bar.querySelector('.ix').addEventListener('click', dismiss);
@@ -101,11 +123,12 @@
           (isIOSOtherBrowser ? '' : '<div class="ar">⬇</div>'));
   }
 
-  /* ---------- Android / Chrome / Edge ---------- */
-  var deferred = null;
+  /* ---------- Android / Chrome / Edge (téléphone et PC) ---------- */
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     deferred = e;
+    headerButton();
+    if (dismissed) return;
     build('<button class="ib" id="instGo">Installer l\'application</button>');
     document.getElementById('instGo').addEventListener('click', function () {
       if (!deferred) return;
@@ -113,9 +136,12 @@
       deferred.userChoice.then(function () { deferred = null; if (bar) { bar.remove(); bar = null; } });
     });
   });
-  window.addEventListener('appinstalled', function () { if (bar) { bar.remove(); bar = null; } });
+  window.addEventListener('appinstalled', function () {
+    if (bar) { bar.remove(); bar = null; }
+    var b = document.getElementById('bInstall'); if (b) b.remove();
+  });
 
-  if (isIOS) {
+  if (isIOS && !dismissed) {
     var go = function () { setTimeout(showIOS, 1200); };
     if (document.readyState === 'complete') go(); else window.addEventListener('load', go);
   }

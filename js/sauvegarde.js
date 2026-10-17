@@ -1,7 +1,10 @@
 /* ============================================================
    MARIA BAG — Sauvegarde sur le disque de l'ordinateur
    - « Sauvegarder maintenant » : un fichier .json (toutes les données) + un classeur Excel
-   - Dossier automatique (Chrome / Edge sur PC) : une copie par jour, sans rien faire
+   - Dossier automatique (Chrome / Edge sur PC) : une copie par jour, sans rien faire,
+     + le fichier « MariaBag_donnees_actuelles.json » réécrit après chaque changement
+   - Les données sont lues dans la base locale du PC (js/local-db.js) :
+     la sauvegarde marche aussi sans internet
    - « Restaurer » : recharge un fichier .json (n'efface rien, remet/ajoute les lignes)
    - Rappel si aucune sauvegarde depuis 7 jours
    ============================================================ */
@@ -16,6 +19,7 @@
   var KEEP_FILES = 30;                       // nombre de sauvegardes gardées dans le dossier
   var REMIND_DAYS = 7;
   var canFolder = 'showDirectoryPicker' in window;
+  var LIVE_FILE = 'MariaBag_donnees_actuelles.json';   // toujours à jour, réécrit après chaque changement
 
   /* ---------- petits outils ---------- */
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -65,6 +69,10 @@
     return out;
   }
   async function snapshot() {
+    if (window.LocalDB) {
+      var loc = await LocalDB.snapshot();
+      return { app: 'mariabag', version: 1, date: new Date().toISOString(), counts: loc.counts, tables: loc.tables };
+    }
     var data = {}, counts = {};
     for (var i = 0; i < TABLES.length; i++) {
       var rows = await fetchAll(TABLES[i]);
@@ -126,6 +134,21 @@
     if (await perm(dir, false)) { try { await writeToFolder(dir); say('Sauvegarde automatique enregistrée sur le PC'); } catch (e) {} }
   }
 
+  /* ---------- fichier toujours à jour (après chaque changement) ---------- */
+  var liveTimer = null, liveBusy = false;
+  async function writeLive() {
+    if (!canFolder || liveBusy) return;
+    var dir = await getHandle(); if (!dir || !(await perm(dir, false))) return;
+    liveBusy = true;
+    try {
+      var snap = await snapshot();
+      var fh = await dir.getFileHandle(LIVE_FILE, { create: true });
+      var w = await fh.createWritable(); await w.write(jsonBlob(snap)); await w.close();
+    } catch (e) { console.warn('Copie sur le disque impossible', e); }
+    liveBusy = false;
+  }
+  if (window.LocalDB) LocalDB.onChange(function () { clearTimeout(liveTimer); liveTimer = setTimeout(writeLive, 8000); });
+
   /* ---------- restauration ---------- */
   async function restore(file) {
     var snap;
@@ -157,11 +180,13 @@
     var dir = canFolder ? await getHandle() : null;
     var bg = document.createElement('div'); bg.id = 'bkBg';
     bg.innerHTML = '<div id="bkBox"><h3>Sauvegarde des données</h3>' +
-      '<p>Vos données vivent dans la base en ligne. Cette fenêtre en garde une <b>copie sur le disque de votre ordinateur</b>.</p>' +
+      '<p>Vos données sont enregistrées <b>sur cet ordinateur</b> (l’application marche sans internet) et envoyées à la base en ligne dès que la connexion est là' +
+      (window.LocalDB ? ' — <b>' + (LocalDB.pending() ? LocalDB.pending() + ' changement(s) en attente d’envoi' : 'tout est synchronisé') + '</b>' : '') + '.</p>' +
+      '<p>Cette fenêtre en garde aussi une <b>copie en fichier</b> sur le disque, pour ne rien perdre même si le navigateur est réinstallé.</p>' +
       '<div class="st">Dernière sauvegarde : <b>' + fmt(lastBackup()) + '</b><br>' +
       (canFolder ? 'Dossier automatique : <b>' + (dir ? dir.name : 'non choisi') + '</b>' : 'Dossier automatique : indisponible (utilisez Chrome ou Edge sur PC)') + '</div>' +
       '<button class="bk" id="bkNow">Sauvegarder maintenant (JSON + Excel)</button>' +
-      (canFolder ? '<button class="bk o" id="bkDir">' + (dir ? 'Changer le dossier automatique' : 'Choisir un dossier automatique (1 copie par jour)') + '</button>' : '') +
+      (canFolder ? '<button class="bk o" id="bkDir">' + (dir ? 'Changer le dossier automatique' : 'Choisir un dossier automatique (copie à chaque changement + 1 par jour)') + '</button>' : '') +
       '<button class="bk o" id="bkRes">Restaurer depuis un fichier .json</button>' +
       '<input type="file" id="bkFile" accept=".json,application/json" hidden>' +
       '<button class="bk o" id="bkClose">Fermer</button><div id="bkMsg"></div></div>';
@@ -178,7 +203,7 @@
       try {
         var n = await backupNow(true);
         var d = canFolder ? await getHandle() : null;
-        if (d && await perm(d, true)) await writeToFolder(d);
+        if (d && await perm(d, true)) { await writeToFolder(d); await writeLive(); }
         msg('✔ ' + n + ' enregistrements sauvegardés. Fichiers dans votre dossier Téléchargements.');
       } catch (e) { msg('Échec : ' + e.message, true); }
       busy(false);
@@ -187,16 +212,21 @@
       try {
         var d = await window.showDirectoryPicker({ mode: 'readwrite', id: 'mariabag' });
         await setHandle(d); busy(true); msg('Première copie en cours…');
-        await writeToFolder(d); msg('✔ Dossier « ' + d.name + ' » activé. Une copie sera faite chaque jour à l\'ouverture de l\'app.');
+        await writeToFolder(d); await writeLive();
+        msg('✔ Dossier « ' + d.name + ' » activé : le fichier ' + LIVE_FILE + ' est mis à jour après chaque changement, et une copie datée est faite chaque jour.');
         busy(false);
       } catch (e) { if (e.name !== 'AbortError') msg('Échec : ' + e.message, true); busy(false); }
     };
     $('#bkRes').onclick = function () { $('#bkFile').click(); };
     $('#bkFile').onchange = async function (ev) {
       var f = ev.target.files[0]; if (!f) return;
-      if (!confirm('Restaurer « ' + f.name + ' » ?\n\nRien n\'est supprimé : les lignes du fichier sont ajoutées ou remplacent celles qui ont le même identifiant.')) return;
+      if (!confirm('Restaurer « ' + f.name + ' » ?\n\nRien n\'est supprimé : les lignes du fichier sont ajoutées ou remplacent celles qui ont le même identifiant. Elles seront aussi envoyées à la base en ligne.')) return;
       busy(true); msg('Restauration en cours…');
-      try { var n = await restore(f); msg('✔ ' + n + ' enregistrements restaurés. Rechargement…'); setTimeout(function () { location.reload(); }, 1500); }
+      try {
+        var n = await restore(f);
+        if (window.LocalDB) LocalDB.sync();          // envoi en ligne en arrière-plan (la file est gardée sur le PC)
+        msg('✔ ' + n + ' enregistrements restaurés. Rechargement…'); setTimeout(function () { location.reload(); }, 1500);
+      }
       catch (e) { msg('Échec : ' + e.message, true); busy(false); }
     };
   }

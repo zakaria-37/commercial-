@@ -5,7 +5,8 @@
    au lieu du localStorage du navigateur.
    ============================================================ */
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Base locale sur l'ordinateur (js/local-db.js), synchronisée avec Supabase quand internet est disponible
+const sb = LocalDB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const TABLE = 'contacts';
 
 const $ = s => document.querySelector(s);
@@ -63,18 +64,16 @@ function rel(c) {
   return {k:'ok', l:'OK', c:'g', d};
 }
 
-/* ---------- Chargement / synchronisation avec Supabase ---------- */
+/* ---------- Chargement (base locale, synchronisée avec Supabase) ---------- */
 async function loadContacts() {
-  setSync('warn', 'Connexion…');
   const { data, error } = await sb.from(TABLE).select('*').order('nom', { ascending: true });
   if (error) {
-    setSync('err', 'Hors ligne');
-    toast('Erreur de connexion à la base : ' + error.message);
+    toast('Erreur de lecture des contacts : ' + error.message);
     return;
   }
   D = (data || []).map(fromDb);
   loaded = true;
-  setSync('ok', 'En ligne');
+  LocalDB.status();
   refresh();
 }
 

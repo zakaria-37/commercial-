@@ -1,11 +1,13 @@
 /* ============================================================
-   MARIA BAG — Service worker (installation + mode hors ligne léger)
-   - Pages et scripts du site : réseau d'abord, copie en cache si hors ligne
-   - Bibliothèques CDN (supabase, xlsx, jspdf) : cache puis mise à jour
-   - Les appels à la base Supabase ne sont JAMAIS mis en cache
+   MARIA BAG — Service worker (installation sur PC / téléphone + hors ligne)
+   - Pages et scripts du site : réseau d'abord (4 s maximum), sinon la copie
+     enregistrée sur l'appareil : l'application s'ouvre même sans internet
+   - Bibliothèques du dossier lib/ (supabase, xlsx, jspdf) : copie locale d'abord
+   - Les appels à la base Supabase ne sont JAMAIS mis en cache (les données
+     hors ligne sont gérées par js/local-db.js)
    Changez CACHE_VERSION pour forcer la mise à jour chez tous les utilisateurs.
    ============================================================ */
-const CACHE_VERSION = 'mariabag-v5';
+const CACHE_VERSION = 'mariabag-v6';
 const SHELL = [
   './',
   './index.html',
@@ -13,7 +15,13 @@ const SHELL = [
   './css/styles.css',
   './css/production.css',
   './css/produits.css',
+  './lib/supabase.min.js',
+  './lib/591.supabase.js',
+  './lib/xlsx.full.min.js',
+  './lib/jspdf.umd.min.js',
+  './lib/jspdf.plugin.autotable.min.js',
   './js/config.js',
+  './js/local-db.js',
   './js/auth.js',
   './js/app.js',
   './js/ateliers.js',
@@ -72,18 +80,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Fichiers du site : réseau d'abord (toujours la dernière version), sinon cache
-  event.respondWith(
-    fetch(req)
-      .then((res) => {
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE_VERSION).then((c) => c.put(req, copy));
-        }
-        return res;
-      })
-      .catch(() =>
-        caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('./index.html') : undefined))
-      )
-  );
+  // Bibliothèques incluses (lib/) : ne changent jamais, copie locale d'abord
+  if (url.pathname.includes('/lib/')) {
+    event.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+      if (res && res.ok) { const copy = res.clone(); caches.open(CACHE_VERSION).then((c) => c.put(req, copy)); }
+      return res;
+    })));
+    return;
+  }
+
+  // Fichiers du site : réseau d'abord (toujours la dernière version), sinon cache.
+  // Connexion lente ou coupée : au bout de 4 s on ouvre la copie enregistrée.
+  const fromCache = () => caches.match(req, { ignoreSearch: true })
+    .then((hit) => hit || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
+  const network = fetch(req).then((res) => {
+    if (res && res.ok) {
+      const copy = res.clone();
+      caches.open(CACHE_VERSION).then((c) => c.put(req, copy));
+    }
+    return res;
+  });
+  event.respondWith(new Promise((resolve) => {
+    let done = false;
+    const finish = (r) => { if (!done && r) { done = true; resolve(r); } };
+    const timer = setTimeout(() => fromCache().then(finish), 4000);
+    network.then((res) => { clearTimeout(timer); finish(res); })
+      .catch(() => { clearTimeout(timer); fromCache().then((hit) => { finish(hit); if (!done) { done = true; resolve(Response.error()); } }); });
+  }));
 });
