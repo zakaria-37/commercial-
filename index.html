@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/production.css">
 <link rel="stylesheet" href="css/produits.css">
+<link rel="stylesheet" href="css/dashboard.css">
 <style>
 /* Module Ateliers MARIA BAG */
 .at-wrap{display:grid;gap:16px}.at-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 16px}.at-tabs button{border:1px solid var(--line,#ddd);background:var(--card,#fff);padding:10px 14px;border-radius:9px;cursor:pointer}.at-tabs button.on{background:var(--ink,#171717);color:#fff}.at-pane{display:none}.at-pane.on{display:block}.at-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:12px;margin:12px 0}.at-stat{padding:16px;border:1px solid var(--line,#e5e5e5);border-radius:12px;background:var(--card,#fff)}.at-stat span{display:block;color:var(--mut,#777);font-size:13px}.at-stat b{font-size:25px;display:block;margin-top:6px}.at-form{display:none;margin:14px 0;padding:16px;border:1px solid var(--line,#ddd);border-radius:12px;background:var(--card,#fff)}.at-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));gap:12px}.at-fields label{display:grid;gap:5px;font-size:13px;color:var(--mut,#555)}.at-fields input,.at-fields select,.at-fields textarea{width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit;color:inherit;background:transparent}.at-fields textarea{min-height:70px}.at-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.at-scroll{overflow:auto}.at-scroll table{min-width:850px;width:100%;border-collapse:collapse}.at-scroll th,.at-scroll td{padding:10px;text-align:left;border-bottom:1px solid var(--line,#eee);font-size:13px}.at-empty{padding:20px;text-align:center;color:var(--mut,#777)}#toastA{display:none;position:fixed;right:20px;bottom:20px;z-index:1000;background:#222;color:#fff;padding:12px 16px;border-radius:10px;max-width:80vw}@media(max-width:700px){.at-fields{grid-template-columns:1fr}}
@@ -53,19 +54,36 @@
 </header>
 <main>
 <section id="v-dash" class="on">
-  <div class="hello"><span class="fl">&#10047;</span><div><h2>Bonjour Khalida</h2><p>Chaque échange compte, chaque relance peut devenir une commande. Belle journée et bonnes ventes !</p></div></div>
-  <div class="kpis" id="kpis"></div>
-  <div class="kpis" id="kpis-at"></div>
-  <div class="grid2">
-    <div class="card"><h2>Notifications<span class="ncount" id="notif-count" style="display:none"></span></h2><div class="nlist" id="notif"></div></div>
-    <div class="card"><h2>Statut des contacts après la foire</h2><div id="bars"></div></div>
+  <div class="hello"><span class="fl">&#10047;</span><div><h2 id="d-hello">Bonjour Khalida</h2><p id="d-sub">Chaque échange compte, chaque relance peut devenir une commande. Belle journée et bonnes ventes !</p></div></div>
+
+  <!-- Raccourcis : les actions du quotidien en un clic -->
+  <div class="dbar" id="d-quick">
+    <button class="dq" type="button" data-q="contact"><b>+</b> Contact</button>
+    <button class="dq" type="button" data-q="charge"><b>+</b> Charge</button>
+    <button class="dq" type="button" data-q="production"><b>+</b> Production</button>
+    <button class="dq" type="button" data-q="commande"><b>+</b> Commande</button>
+    <button class="dq" type="button" data-q="pointage">Pointage</button>
+    <button class="dq" type="button" data-q="produits">Coût produit</button>
+    <span class="dsp"></span>
+    <button class="dq dq-edit" type="button" id="d-edit" aria-expanded="false">⚙ Personnaliser</button>
   </div>
-  <div class="card"><h2>Relances à effectuer en priorité</h2><div id="urg"></div></div>
-  <div class="grid2">
-    <div class="card"><h2>Productions en cours</h2><div id="dash-prod"></div></div>
-    <div class="card"><h2>Charge des ateliers</h2><div id="dash-charge"></div></div>
+
+  <!-- Panneau de personnalisation : afficher / masquer / réordonner / élargir -->
+  <div class="card dcust" id="d-cust" hidden></div>
+
+  <div class="dgrid" id="d-grid">
+    <div class="dw dw-plain" data-w="apercu" data-t="Vue d’ensemble"><div class="kpis dkpis" id="kpis-all"></div></div>
+    <div class="dw card" data-w="notif" data-t="À faire aujourd’hui"><div class="dh"><h2>À faire aujourd’hui<span class="ncount" id="notif-count" style="display:none"></span></h2></div><div class="db"><div class="nlist" id="notif"></div></div></div>
+    <div class="dw card" data-w="relances" data-t="Relances à effectuer"><div class="dh"><h2>Relances à effectuer</h2></div><div class="db"><div id="urg"></div></div></div>
+    <div class="dw dw-plain" data-w="contacts" data-t="Chiffres contacts"><div class="kpis dkpis" id="kpis"></div></div>
+    <div class="dw card" data-w="statuts" data-t="Statut des contacts"><div class="dh"><h2>Statut des contacts après la foire</h2></div><div class="db"><div id="bars"></div></div></div>
+    <div class="dw dw-plain" data-w="ateliers" data-t="Chiffres ateliers"><div class="kpis dkpis" id="kpis-at"></div></div>
+    <div class="dw card" data-w="prod" data-t="Productions en cours"><div class="dh"><h2>Productions en cours</h2></div><div class="db"><div id="dash-prod"></div></div></div>
+    <div class="dw card" data-w="charge" data-t="Charge des ateliers"><div class="dh"><h2>Charge des ateliers</h2></div><div class="db"><div id="dash-charge"></div></div></div>
+    <div class="dw card" data-w="cmd" data-t="Commandes à suivre"><div class="dh"><h2>Commandes à suivre</h2></div><div class="db"><div id="dash-cmd"></div></div></div>
+    <div class="dw card" data-w="finance" data-t="Charges du mois"><div class="dh"><h2>Charges du mois</h2></div><div class="db"><div id="d-finance"></div></div></div>
+    <div class="dw card" data-w="produits" data-t="Coût de revient des produits"><div class="dh"><h2>Coût de revient des produits</h2></div><div class="db"><div id="d-produits"></div></div></div>
   </div>
-  <div class="card"><h2>Commandes à suivre</h2><div id="dash-cmd"></div></div>
 </section>
 <section id="v-list">
   <div class="tools">
@@ -394,6 +412,7 @@
 <script src="js/charges.js"></script>
 <script src="js/production.js"></script>
 <script src="js/produits.js"></script>
+<script src="js/dashboard.js"></script>
 <script src="js/mobile.js"></script>
 <script src="js/sauvegarde.js"></script>
 <script src="js/install.js"></script>
