@@ -1,0 +1,628 @@
+/* ============================================================
+   MARIA BAG — Produits : coût de revient d'UNE pièce avant production
+   - Un PRODUIT (ex : Sac à dos) contient des LIGNES DE COÛT pour 1 pièce :
+     matière (tissu), doublure, sangle, curseur, emballage, autres outils
+     Coût d'une ligne = quantité pour 1 pièce × (1 + chute %) × prix unitaire
+   - MAIN D'ŒUVRE d'une pièce =
+       (salaires de tous les employés du jour + autres charges du jour)
+       ÷ nombre de pièces fabriquées le même jour
+     Salaires : calculés d'après le pointage (onglet Employés)
+     Autres charges : onglet Charges (hors « Paie des employés »)
+   - Coût de revient = matières et fournitures + main d'œuvre
+   - Import des composants depuis la fiche matières (onglet Production)
+   - Export Excel et fiche PDF (téléchargement / partage)
+   ============================================================ */
+
+let PRODUITS = [], LIGNES = [];
+let selProduit = null;      // id du produit affiché
+let editProduit = false;    // le formulaire produit sert à renommer
+let curLigne = null;        // ligne en cours de modification
+
+const $d = s => document.querySelector(s);
+const CAT_PAIE_D = 'Paie des employés';
+const CATS_D = [
+  { k: 'Matière',     lbl: 'Matière (tissu)',            ex: 'Ex : Kawi bébé, simili cuir…' },
+  { k: 'Doublure',    lbl: 'Doublure',                   ex: 'Ex : doublure polyester' },
+  { k: 'Sangle',      lbl: 'Sangle',                     ex: 'Ex : sangle 3 cm' },
+  { k: 'Curseur',     lbl: 'Curseur',                    ex: 'Ex : curseur n°5' },
+  { k: 'Emballage',   lbl: 'Emballage',                  ex: 'Ex : sachet, carton, étiquette prix' },
+  { k: 'Autre outil', lbl: 'Autres outils / fournitures', ex: 'Ex : fil, fermeture éclair, boucle, mousse, étiquette…' }
+];
+const UNITES_D = ['m', 'cm', 'pcs', 'paire', 'kg', 'g', 'L', 'bobine', 'rouleau'];
+
+/* ---------- Utilitaires ---------- */
+function escD(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function isoD(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function fdD(s) { return s ? s.split('-').reverse().join('/') : ''; }
+function r2D(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+function numD(n, maxDec) {
+  return (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: maxDec });
+}
+function moneyD(n) {
+  return (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' DA';
+}
+function toastD(msg) {
+  const e = $d('#toastD');
+  if (!e) return;
+  e.textContent = msg; e.style.display = 'block';
+  clearTimeout(toastD.t); toastD.t = setTimeout(() => e.style.display = 'none', 6000);
+}
+function errMsgD(error) {
+  const m = (error && error.message) || String(error);
+  if (/schema cache|does not exist|Could not find|column/i.test(m))
+    return 'Tables « produits » introuvables dans Supabase. Exécutez supabase/produits.sql dans SQL Editor, puis rechargez la page. (' + m + ')';
+  if (/row-level security|permission denied|policy/i.test(m))
+    return 'Accès refusé par Supabase (RLS). Réexécutez supabase/produits.sql. (' + m + ')';
+  if (/duplicate key|unique/i.test(m))
+    return 'Un produit porte déjà ce nom. Choisissez un autre nom. (' + m + ')';
+  return m;
+}
+function catLbl(k) { const c = CATS_D.find(x => x.k === k); return c ? c.lbl : k; }
+
+/* ---------- Calculs ---------- */
+function produitCourant() { return PRODUITS.find(p => String(p.id) === String(selProduit)) || null; }
+function lignesDe(id) { return LIGNES.filter(l => String(l.produit_id) === String(id)); }
+
+/* Quantité réellement consommée pour 1 pièce (chute incluse) */
+function qteReelle(l) { return Number(l.quantite || 0) * (1 + Number(l.perte_pct || 0) / 100); }
+/* Coût d'une ligne pour 1 pièce */
+function coutLigne(l) { return qteReelle(l) * Number(l.prix_unitaire || 0); }
+function coutCat(list, k) { return list.filter(l => l.categorie === k).reduce((s, l) => s + coutLigne(l), 0); }
+function coutMatieres(list) { return list.reduce((s, l) => s + coutLigne(l), 0); }
+
+/* Main d'œuvre d'une pièce = (salaires du jour + autres charges du jour) ÷ pièces du jour */
+function moValeurs() {
+  return {
+    date: $d('#pd-mo-date').value,
+    sal: Math.max(0, parseFloat($d('#pd-mo-sal').value) || 0),
+    ch: Math.max(0, parseFloat($d('#pd-mo-ch').value) || 0),
+    pcs: Math.max(0, Math.floor(parseFloat($d('#pd-mo-pcs').value) || 0))
+  };
+}
+function moUnitaire(v) { return v.pcs > 0 ? (v.sal + v.ch) / v.pcs : 0; }
+function moDuProduit(p) {
+  return moUnitaire({ sal: Number(p.mo_salaires || 0), ch: Number(p.mo_charges || 0), pcs: Number(p.mo_pieces || 0) });
+}
+
+/* Récapitulatif complet d'un produit (valeurs enregistrées) */
+function recap(p) {
+  const list = lignesDe(p.id);
+  const cats = CATS_D.map(c => ({ k: c.k, lbl: c.lbl, v: coutCat(list, c.k) }));
+  const autres = list.filter(l => !CATS_D.some(c => c.k === l.categorie));     // catégories inconnues : comptées dans « Autres »
+  if (autres.length) cats[cats.length - 1].v += autres.reduce((s, l) => s + coutLigne(l), 0);
+  const mat = coutMatieres(list), mo = moDuProduit(p);
+  return { list, cats, mat, mo, total: mat + mo };
+}
+
+/* ---------- Chargement ---------- */
+async function loadProduits() {
+  const p = await sb.from('produits').select('*').order('nom', { ascending: true });
+  if (p.error) { PRODUITS = []; LIGNES = []; toastD('Erreur : ' + errMsgD(p.error)); renderProduits(errMsgD(p.error)); return; }
+  const l = await sb.from('produit_lignes').select('*').order('ordre', { ascending: true }).order('created_at', { ascending: true });
+  if (l.error) { PRODUITS = p.data || []; LIGNES = []; toastD('Erreur : ' + errMsgD(l.error)); renderProduits(errMsgD(l.error)); return; }
+  PRODUITS = p.data || [];
+  LIGNES = l.data || [];
+  if (!PRODUITS.some(x => String(x.id) === String(selProduit))) selProduit = PRODUITS.length ? PRODUITS[0].id : null;
+  renderProduits();
+}
+
+/* ---------- Affichage ---------- */
+function renderProduits(errText) {
+  const sel = $d('#pd-produit');
+  sel.innerHTML = PRODUITS.length
+    ? PRODUITS.map(p => '<option value="' + escD(p.id) + '"' + (String(p.id) === String(selProduit) ? ' selected' : '') + '>' + escD(p.nom) + '</option>').join('')
+    : '<option value="">— Aucun produit —</option>';
+
+  renderComparatif();
+  const p = produitCourant();
+  $d('#pd-main').style.display = p ? '' : 'none';
+  $d('#pd-empty').style.display = p ? 'none' : '';
+  ['#pd-btn-edit', '#pd-btn-dup', '#pd-btn-del'].forEach(i => { $d(i).disabled = !p; });
+  if (errText) {
+    $d('#pd-empty').innerHTML = '<p style="color:#b00020">⚠ ' + escD(errText) + '</p>';
+    return;
+  }
+  if (!p) {
+    $d('#pd-empty').innerHTML = '<h2>Aucun produit pour le moment</h2>' +
+      '<p>Un produit est un article de bagagerie (sac à dos, sac à main, trousse…). Vous y indiquez le prix de chaque élément ' +
+      'pour <b>une</b> pièce (matière, doublure, sangle, curseur, emballage…) et la main d’œuvre : l’application calcule son ' +
+      '<b>coût de revient</b> avant de lancer la production.</p>' +
+      '<button class="btn p" type="button" onclick="showFormProduit()">+ Créer mon premier produit</button> ' +
+      '<button class="btn" type="button" onclick="createExempleProduit()">Voir un exemple (sac à dos)</button>';
+    return;
+  }
+  $d('#pd-desc').textContent = p.description || '';
+  $d('#pd-desc').style.display = p.description ? '' : 'none';
+  renderLignes();
+  renderMoForm(p);
+  renderCout();
+}
+
+function renderLignes() {
+  const p = produitCourant(), list = lignesDe(p.id);
+  $d('#pd-lignes-title').textContent = 'Matières et fournitures d’une pièce — ' + p.nom;
+  // lignes groupées par catégorie, dans l'ordre des catégories
+  const ordre = k => { const i = CATS_D.findIndex(c => c.k === k); return i < 0 ? 99 : i; };
+  const sorted = [...list].sort((a, b) => ordre(a.categorie) - ordre(b.categorie) || (Number(a.ordre) || 0) - (Number(b.ordre) || 0));
+  $d('#pd-lignes-body').innerHTML = sorted.length ? sorted.map(l =>
+    '<tr><td><span class="pd-cat pd-cat-' + ordre(l.categorie) + '">' + escD(catLbl(l.categorie)) + '</span></td>' +
+    '<td><b>' + escD(l.designation) + '</b>' + (l.note ? '<small class="pd-note">' + escD(l.note) + '</small>' : '') + '</td>' +
+    '<td>' + numD(l.quantite, 4) + ' ' + escD(l.unite) + '</td>' +
+    '<td>' + numD(l.prix_unitaire, 2) + ' DA / ' + escD(l.unite) + '</td>' +
+    '<td>' + (Number(l.perte_pct) ? numD(l.perte_pct, 2) + ' %' : '—') + '</td>' +
+    '<td><b>' + moneyD(coutLigne(l)) + '</b></td>' +
+    '<td class="emp-act"><button class="btn s" type="button" onclick="showFormLigne(\'' + escD(l.id) + '\')">Modifier</button> ' +
+    '<button class="btn s d" type="button" onclick="removeLigne(\'' + escD(l.id) + '\')">Supprimer</button></td></tr>'
+  ).join('') +
+    '<tr class="pr-total"><td colspan="5">Total matières et fournitures (1 pièce)</td><td>' + moneyD(coutMatieres(list)) + '</td><td></td></tr>'
+    : '<tr><td colspan="7" class="at-empty">Aucune ligne. Cliquez sur « + Ajouter une ligne » ou importez la fiche matières d’un modèle.</td></tr>';
+
+  // modèles de la fiche matières (onglet Production) pour l'import
+  const mods = (typeof MODELES !== 'undefined' ? MODELES : []);
+  $d('#pd-import-modele').innerHTML = mods.length
+    ? mods.map(m => '<option value="' + escD(m.id) + '"' + (String(m.id) === String(p.modele_id) ? ' selected' : '') + '>' + escD(m.nom) + '</option>').join('')
+    : '<option value="">— Aucun modèle (onglet Production) —</option>';
+}
+
+function renderMoForm(p) {
+  $d('#pd-mo-date').value = p.mo_date || isoD(new Date());
+  $d('#pd-mo-sal').value = Number(p.mo_salaires) ? p.mo_salaires : '';
+  $d('#pd-mo-ch').value = Number(p.mo_charges) ? p.mo_charges : '';
+  $d('#pd-mo-pcs').value = Number(p.mo_pieces) ? p.mo_pieces : '';
+  $d('#pd-mo-hint').textContent = '';
+  renderMoResultat();
+}
+
+/* Résultat de la main d'œuvre d'après les champs (avant enregistrement) */
+function renderMoResultat() {
+  const v = moValeurs(), mo = moUnitaire(v);
+  $d('#pd-mo-res').innerHTML = v.pcs > 0
+    ? '<div class="pd-formule">(' + moneyD(v.sal) + ' salaires + ' + moneyD(v.ch) + ' charges) ÷ ' + numD(v.pcs, 0) + ' pièces</div>' +
+      '<div class="pd-mo-val">Main d’œuvre d’une pièce : <b>' + moneyD(mo) + '</b></div>'
+    : '<div class="pd-formule">Main d’œuvre d’une pièce = (salaires de tous les employés du jour + autres charges du jour) ÷ pièces fabriquées le même jour</div>' +
+      '<div class="pd-mo-val" style="color:var(--mut)">Indiquez le nombre de pièces fabriquées ce jour-là.</div>';
+  const p = produitCourant();
+  const modif = p && (v.date !== (p.mo_date || v.date) || r2D(v.sal) !== r2D(p.mo_salaires) || r2D(v.ch) !== r2D(p.mo_charges) || v.pcs !== Number(p.mo_pieces || 0));
+  $d('#pd-mo-save').classList.toggle('p', !!modif);
+  $d('#pd-mo-save').textContent = modif ? 'Enregistrer la main d’œuvre *' : 'Enregistrer la main d’œuvre';
+}
+
+function renderCout() {
+  const p = produitCourant(), r = recap(p);
+  $d('#pd-stats').innerHTML =
+    '<div class="at-stat"><span>Matières et fournitures</span><b>' + moneyD(r.mat) + '</b><small style="color:var(--mut)">' + r.list.length + ' ligne' + (r.list.length > 1 ? 's' : '') + '</small></div>' +
+    '<div class="at-stat"><span>Main d’œuvre</span><b>' + moneyD(r.mo) + '</b><small style="color:var(--mut)">' +
+      (Number(p.mo_pieces) ? 'Jour de référence : ' + fdD(p.mo_date) : 'Non renseignée') + '</small></div>' +
+    '<div class="at-stat pd-total"><span>Coût de revient d’une pièce</span><b>' + moneyD(r.total) + '</b></div>';
+
+  const pct = v => r.total ? Math.round(v / r.total * 1000) / 10 : 0;
+  $d('#pd-cout-body').innerHTML =
+    r.cats.map(c => '<tr><td>' + escD(c.lbl) + '</td><td>' + moneyD(c.v) + '</td><td>' + numD(pct(c.v), 1) + ' %</td></tr>').join('') +
+    '<tr><td>Main d’œuvre</td><td>' + moneyD(r.mo) + '</td><td>' + numD(pct(r.mo), 1) + ' %</td></tr>' +
+    '<tr class="pr-total"><td>Coût de revient d’une pièce</td><td>' + moneyD(r.total) + '</td><td>100 %</td></tr>';
+
+  const N = Math.max(0, Math.floor(Number($d('#pd-qte').value) || 0));
+  $d('#pd-qte-res').innerHTML = N
+    ? 'Coût total pour <b>' + numD(N, 0) + '</b> pièces : <b>' + moneyD(r.total * N) + '</b> ' +
+      '<span style="color:var(--mut)">(matières ' + moneyD(r.mat * N) + ' + main d’œuvre ' + moneyD(r.mo * N) + ')</span>'
+    : '';
+  if (!Number(p.mo_pieces)) $d('#pd-qte-res').innerHTML += '<div style="color:#b26a00;margin-top:6px">⚠ Main d’œuvre non renseignée : le coût de revient est incomplet.</div>';
+}
+
+/* Tableau comparatif de tous les produits */
+function renderComparatif() {
+  const body = $d('#pd-comp-body');
+  body.innerHTML = PRODUITS.length ? PRODUITS.map(p => {
+    const r = recap(p);
+    return '<tr' + (String(p.id) === String(selProduit) ? ' class="pd-sel"' : '') + '><td><b>' + escD(p.nom) + '</b></td>' +
+      '<td>' + moneyD(r.mat) + '</td><td>' + (Number(p.mo_pieces) ? moneyD(r.mo) : '—') + '</td>' +
+      '<td><b>' + moneyD(r.total) + '</b></td>' +
+      '<td class="emp-act"><button class="btn s" type="button" onclick="choisirProduit(\'' + escD(p.id) + '\')">Voir</button></td></tr>';
+  }).join('') : '<tr><td colspan="5" class="at-empty">Aucun produit.</td></tr>';
+}
+
+function choisirProduit(id) {
+  selProduit = id; cancelFormLigne(); renderProduits();
+  $d('#pd-main').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ---------- Produits ---------- */
+function showFormProduit(edit) {
+  editProduit = !!edit;
+  const p = edit ? produitCourant() : null;
+  $d('#pd-pform-title').textContent = p ? 'Modifier le produit' : 'Nouveau produit';
+  $d('#pd-pnom').value = p ? p.nom : '';
+  $d('#pd-pdesc').value = p ? (p.description || '') : '';
+  $d('#pd-pform').style.display = 'block';
+  $d('#pd-pform').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $d('#pd-pnom').focus();
+}
+function cancelFormProduit() { editProduit = false; $d('#pd-pform').style.display = 'none'; }
+
+async function saveProduit() {
+  const nom = $d('#pd-pnom').value.trim(), description = $d('#pd-pdesc').value.trim();
+  if (!nom) { toastD('Le nom du produit est obligatoire.'); return; }
+  const res = editProduit
+    ? await sb.from('produits').update({ nom, description }).eq('id', selProduit).select()
+    : await sb.from('produits').insert([{ nom, description, mo_date: isoD(new Date()) }]).select();
+  if (res.error) { toastD('Erreur : ' + errMsgD(res.error)); return; }
+  const wasEdit = editProduit;
+  if (!wasEdit && res.data && res.data[0]) selProduit = res.data[0].id;
+  toastD(wasEdit ? 'Produit modifié.' : 'Produit créé : ajoutez maintenant le coût de ses éléments.');
+  cancelFormProduit();
+  await loadProduits();
+  if (!wasEdit) showFormLigne();
+}
+
+async function duplicateProduit() {
+  const p = produitCourant(); if (!p) return;
+  const nom = (prompt('Nom du nouveau produit :', p.nom + ' (copie)') || '').trim();
+  if (!nom) return;
+  const r = await sb.from('produits').insert([{
+    nom, description: p.description || '', modele_id: p.modele_id || null,
+    mo_date: p.mo_date, mo_salaires: p.mo_salaires, mo_charges: p.mo_charges, mo_pieces: p.mo_pieces
+  }]).select();
+  if (r.error || !r.data || !r.data[0]) { toastD('Erreur : ' + errMsgD(r.error || { message: 'création impossible' })); return; }
+  const rows = lignesDe(p.id).map((l, i) => ({
+    produit_id: r.data[0].id, categorie: l.categorie, designation: l.designation, unite: l.unite, quantite: l.quantite,
+    prix_unitaire: l.prix_unitaire, perte_pct: l.perte_pct, note: l.note || '', ordre: i + 1
+  }));
+  if (rows.length) {
+    const r2 = await sb.from('produit_lignes').insert(rows);
+    if (r2.error) toastD('Produit créé, mais copie des lignes impossible : ' + errMsgD(r2.error));
+  }
+  selProduit = r.data[0].id;
+  toastD('Produit dupliqué.');
+  await loadProduits();
+}
+
+async function removeProduit() {
+  const p = produitCourant(); if (!p) return;
+  const n = lignesDe(p.id).length;
+  if (!confirm('Supprimer le produit « ' + p.nom + ' » et ses ' + n + ' ligne(s) de coût ?')) return;
+  const { error } = await sb.from('produits').delete().eq('id', p.id);
+  if (error) { toastD('Erreur : ' + errMsgD(error)); return; }
+  selProduit = null;
+  toastD('Produit supprimé.');
+  await loadProduits();
+}
+
+/* Exemple : sac à dos (prix à remplacer par vos vrais prix) */
+async function createExempleProduit() {
+  const r = await sb.from('produits').insert([{
+    nom: 'Sac à dos', description: 'Exemple : remplacez les prix par vos vrais prix d’achat.', mo_date: isoD(new Date())
+  }]).select();
+  if (r.error || !r.data || !r.data[0]) { toastD('Erreur : ' + errMsgD(r.error || { message: 'création impossible' })); return; }
+  const id = r.data[0].id;
+  const items = [
+    ['Matière', 'Kawi bébé', 'm', 0.5, 0], ['Doublure', 'Doublure polyester', 'm', 0.4, 0],
+    ['Sangle', 'Sangle', 'pcs', 3, 0], ['Curseur', 'Curseur', 'pcs', 2, 0],
+    ['Emballage', 'Sachet + étiquette', 'pcs', 1, 0], ['Autre outil', 'Fil', 'bobine', 0.05, 0]
+  ].map((x, i) => ({ produit_id: id, categorie: x[0], designation: x[1], unite: x[2], quantite: x[3], prix_unitaire: x[4], perte_pct: 0, note: '', ordre: i + 1 }));
+  const r2 = await sb.from('produit_lignes').insert(items);
+  if (r2.error) toastD('Erreur : ' + errMsgD(r2.error));
+  selProduit = id;
+  await loadProduits();
+  toastD('Exemple créé : cliquez sur « Modifier » pour saisir le prix de chaque élément.');
+}
+
+/* ---------- Lignes de coût ---------- */
+function majExempleCat() {
+  const c = CATS_D.find(x => x.k === $d('#pd-lcat').value);
+  $d('#pd-ldes').placeholder = c ? c.ex : '';
+}
+
+function showFormLigne(id) {
+  if (!produitCourant()) return;
+  curLigne = id || null;
+  const l = id ? LIGNES.find(x => String(x.id) === String(id)) : null;
+  $d('#pd-lform-title').textContent = l ? 'Modifier la ligne' : 'Nouvelle ligne de coût';
+  $d('#pd-lcat').value = l ? (CATS_D.some(c => c.k === l.categorie) ? l.categorie : 'Autre outil') : CATS_D[0].k;
+  $d('#pd-ldes').value = l ? l.designation : '';
+  $d('#pd-lunite').value = l ? l.unite : 'm';
+  $d('#pd-lqte').value = l ? l.quantite : '';
+  $d('#pd-lprix').value = l ? l.prix_unitaire : '';
+  $d('#pd-lperte').value = l ? (Number(l.perte_pct) || '') : '';
+  $d('#pd-lnote').value = l ? (l.note || '') : '';
+  $d('#pd-lsubmit').textContent = l ? 'Enregistrer les modifications' : 'Ajouter la ligne';
+  majExempleCat();
+  majApercuLigne();
+  $d('#pd-lform').style.display = 'block';
+  $d('#pd-lform').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  $d(l ? '#pd-lprix' : '#pd-ldes').focus();
+}
+function cancelFormLigne() { curLigne = null; $d('#pd-lform').style.display = 'none'; }
+
+/* Aperçu du coût de la ligne pendant la saisie */
+function majApercuLigne() {
+  const l = {
+    quantite: parseFloat($d('#pd-lqte').value) || 0, prix_unitaire: parseFloat($d('#pd-lprix').value) || 0,
+    perte_pct: parseFloat($d('#pd-lperte').value) || 0
+  };
+  const u = $d('#pd-lunite').value;
+  $d('#pd-lhint').textContent = l.quantite && l.prix_unitaire
+    ? 'Coût pour 1 pièce : ' + numD(l.quantite, 4) + ' ' + u + (l.perte_pct ? ' (+ ' + numD(l.perte_pct, 2) + ' % de chute)' : '') +
+      ' × ' + numD(l.prix_unitaire, 2) + ' DA = ' + moneyD(coutLigne(l))
+    : '';
+}
+
+async function saveLigne() {
+  const p = produitCourant(); if (!p) return;
+  const categorie = $d('#pd-lcat').value;
+  const designation = $d('#pd-ldes').value.trim() || catLbl(categorie);
+  const unite = $d('#pd-lunite').value;
+  const quantite = parseFloat($d('#pd-lqte').value);
+  const prix = parseFloat($d('#pd-lprix').value);
+  const perte = parseFloat($d('#pd-lperte').value) || 0;
+  const note = $d('#pd-lnote').value.trim();
+  if (!(quantite > 0)) { toastD('La quantité pour une pièce doit être supérieure à 0.'); return; }
+  if (!(prix >= 0)) { toastD('Indiquez le prix unitaire (0 si inconnu pour le moment).'); return; }
+  if (perte < 0 || perte > 100) { toastD('La chute doit être entre 0 et 100 %.'); return; }
+
+  const payload = { categorie, designation, unite, quantite, prix_unitaire: prix, perte_pct: perte, note };
+  let res;
+  if (curLigne) res = await sb.from('produit_lignes').update(payload).eq('id', curLigne).select();
+  else {
+    const ordre = lignesDe(p.id).reduce((mx, l) => Math.max(mx, Number(l.ordre) || 0), 0) + 1;
+    res = await sb.from('produit_lignes').insert([{ ...payload, produit_id: p.id, ordre }]).select();
+  }
+  if (res.error) { toastD('Erreur : ' + errMsgD(res.error)); return; }
+
+  const wasEdit = !!curLigne;
+  toastD(wasEdit ? 'Ligne modifiée.' : 'Ligne ajoutée.');
+  if (wasEdit) cancelFormLigne();
+  else {
+    ['#pd-ldes', '#pd-lqte', '#pd-lprix', '#pd-lperte', '#pd-lnote'].forEach(s => { $d(s).value = ''; });
+    $d('#pd-lhint').textContent = '';
+    // passe à la catégorie suivante pour enchaîner la saisie
+    const i = CATS_D.findIndex(c => c.k === categorie);
+    if (i >= 0 && i < CATS_D.length - 1) { $d('#pd-lcat').value = CATS_D[i + 1].k; majExempleCat(); }
+    $d('#pd-ldes').focus();
+  }
+  await loadProduits();
+}
+
+async function removeLigne(id) {
+  const l = LIGNES.find(x => String(x.id) === String(id));
+  if (!l || !confirm('Supprimer « ' + l.designation + ' » de ce produit ?')) return;
+  const { error } = await sb.from('produit_lignes').delete().eq('id', id);
+  if (error) { toastD('Erreur : ' + errMsgD(error)); return; }
+  if (String(curLigne) === String(id)) cancelFormLigne();
+  toastD('Ligne supprimée.');
+  await loadProduits();
+}
+
+/* Import depuis la fiche matières (onglet Production) : quantités et chutes reprises, prix à compléter */
+function devinerCat(nom) {
+  const n = String(nom || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  if (/doubl/.test(n)) return 'Doublure';
+  if (/sangl|songl/.test(n)) return 'Sangle';
+  if (/curs|kiss/.test(n)) return 'Curseur';
+  if (/emball|sachet|carton|boite/.test(n)) return 'Emballage';
+  if (/tissu|matiere|kawi|cuir|simili|toile|nylon/.test(n)) return 'Matière';
+  return 'Autre outil';
+}
+
+async function importerFiche() {
+  const p = produitCourant(); if (!p) return;
+  const mid = $d('#pd-import-modele').value;
+  if (!mid) { toastD('Créez d’abord un modèle dans l’onglet Production.'); return; }
+  const c = await sb.from('composants').select('*').eq('modele_id', mid).order('ordre', { ascending: true });
+  if (c.error) { toastD('Erreur : ' + errMsgD(c.error)); return; }
+  const comps = c.data || [];
+  if (!comps.length) { toastD('Ce modèle n’a aucun composant.'); return; }
+  const existants = lignesDe(p.id).map(l => l.designation.trim().toLowerCase());
+  const nouveaux = comps.filter(x => !existants.includes(String(x.nom).trim().toLowerCase()));
+  if (!nouveaux.length) { toastD('Tous les composants de ce modèle sont déjà dans le produit.'); return; }
+  if (!confirm('Importer ' + nouveaux.length + ' composant(s) de la fiche matières ? Il faudra ensuite saisir le prix de chacun.')) return;
+  let ordre = lignesDe(p.id).reduce((mx, l) => Math.max(mx, Number(l.ordre) || 0), 0);
+  const rows = nouveaux.map(x => ({
+    produit_id: p.id, categorie: devinerCat(x.nom), designation: x.nom, unite: x.unite || 'pcs',
+    quantite: x.quantite, prix_unitaire: 0, perte_pct: x.perte_pct || 0, note: x.note || '', ordre: ++ordre
+  }));
+  const r = await sb.from('produit_lignes').insert(rows);
+  if (r.error) { toastD('Erreur : ' + errMsgD(r.error)); return; }
+  await sb.from('produits').update({ modele_id: mid }).eq('id', p.id);
+  toastD(rows.length + ' ligne(s) importée(s) : cliquez sur « Modifier » pour saisir les prix.');
+  await loadProduits();
+}
+
+/* ---------- Main d'œuvre : calcul automatique du jour ---------- */
+/* Salaires du jour = gain de TOUS les employés pointés ce jour-là (comme l'onglet Employés).
+   Autres charges du jour = charges de l'onglet Charges à cette date, hors « Paie des employés ». */
+async function calculerMo() {
+  const date = $d('#pd-mo-date').value;
+  if (!date) { toastD('Choisissez le jour de référence.'); return; }
+  const hint = $d('#pd-mo-hint');
+  hint.textContent = 'Calcul en cours…';
+
+  // 1) Salaires d'après le pointage
+  let sal = null, nEmp = 0;
+  const pt = await sb.from('pointages').select('*').eq('date_pointage', date);
+  if (!pt.error && typeof gainPointage === 'function' && typeof hrs === 'function') {
+    let emps = (typeof EMPLOYES !== 'undefined' && EMPLOYES.length) ? EMPLOYES : null;
+    if (!emps) { const e = await sb.from('employes').select('*'); emps = e.error ? [] : (e.data || []); }
+    let t = 0;
+    (pt.data || []).forEach(p => {
+      const e = emps.find(x => String(x.id) === String(p.employe_id));
+      if (!e || hrs(p) <= 0) return;
+      nEmp++; t += gainPointage(p, e);
+    });
+    if (nEmp) sal = r2D(t);
+  }
+
+  // 2) Charges du jour
+  const ch = await sb.from('charges').select('*').eq('date_charge', date);
+  if ($d('#pd-mo-date').value !== date) return;      // la date a changé pendant le calcul
+  if (ch.error) { hint.textContent = 'Charges du jour indisponibles : ' + errMsgD(ch.error); return; }
+  const charges = ch.data || [];
+  const paieSaisie = r2D(charges.filter(c => c.categorie === CAT_PAIE_D).reduce((s, c) => s + Number(c.montant || 0), 0));
+  const autres = charges.filter(c => c.categorie !== CAT_PAIE_D);
+  const totAutres = r2D(autres.reduce((s, c) => s + Number(c.montant || 0), 0));
+
+  let srcSal;
+  if (sal !== null) srcSal = 'salaires calculés d’après le pointage de ' + nEmp + ' employé' + (nEmp > 1 ? 's' : '');
+  else if (paieSaisie > 0) { sal = paieSaisie; srcSal = 'salaires repris de la charge « Paie des employés » du jour'; }
+  else { sal = 0; srcSal = 'aucun pointage ni paie enregistré ce jour-là : saisissez les salaires à la main'; }
+
+  $d('#pd-mo-sal').value = sal || '';
+  $d('#pd-mo-ch').value = totAutres || '';
+  const detailCh = autres.length
+    ? autres.map(c => c.categorie + ' ' + moneyD(c.montant)).join(', ')
+    : 'aucune autre charge enregistrée ce jour-là';
+  hint.textContent = fdD(date) + ' : ' + srcSal + ' → ' + moneyD(sal) + ' ; autres charges : ' + detailCh +
+    '. Vérifiez les montants (ex : un loyer mensuel saisi ce jour-là doit être ramené à la journée), indiquez les pièces fabriquées puis enregistrez.';
+  renderMoResultat();
+  $d('#pd-mo-pcs').focus();
+}
+
+async function saveMo() {
+  const p = produitCourant(); if (!p) return;
+  const v = moValeurs();
+  if (!v.date) { toastD('Choisissez le jour de référence.'); return; }
+  if (v.pcs < 1) { toastD('Indiquez le nombre de pièces fabriquées ce jour-là.'); return; }
+  const { error } = await sb.from('produits').update({ mo_date: v.date, mo_salaires: r2D(v.sal), mo_charges: r2D(v.ch), mo_pieces: v.pcs }).eq('id', p.id);
+  if (error) { toastD('Erreur : ' + errMsgD(error)); return; }
+  toastD('Main d’œuvre enregistrée : ' + moneyD(moUnitaire(v)) + ' par pièce.');
+  await loadProduits();
+}
+
+/* ---------- Export Excel ---------- */
+function exportProduit() {
+  if (typeof XLSX === 'undefined') { toastD('Bibliothèque Excel non chargée.'); return; }
+  const p = produitCourant(); if (!p) return;
+  const r = recap(p);
+  const aoa = [
+    ['FICHE DE COÛT DE REVIENT — MARIA BAG'], ['Produit', p.nom], ['Description', p.description || ''], ['Date', fdD(isoD(new Date()))], [],
+    ['Catégorie', 'Désignation', 'Unité', 'Qté pour 1 pièce', 'Chute (%)', 'Prix unitaire (DA)', 'Coût pour 1 pièce (DA)']
+  ].concat(r.list.map(l => [catLbl(l.categorie), l.designation, l.unite, Number(l.quantite), Number(l.perte_pct) || 0, Number(l.prix_unitaire), r2D(coutLigne(l))]))
+    .concat([['Total matières et fournitures', '', '', '', '', '', r2D(r.mat)], [],
+      ['MAIN D’ŒUVRE D’UNE PIÈCE'], ['Jour de référence', fdD(p.mo_date)], ['Salaires du jour (DA)', Number(p.mo_salaires || 0)],
+      ['Autres charges du jour (DA)', Number(p.mo_charges || 0)], ['Pièces fabriquées ce jour-là', Number(p.mo_pieces || 0)],
+      ['Main d’œuvre par pièce (DA)', r2D(r.mo)], [],
+      ['RÉCAPITULATIF', 'Coût pour 1 pièce (DA)']])
+    .concat(r.cats.map(c => [c.lbl, r2D(c.v)]))
+    .concat([['Main d’œuvre', r2D(r.mo)], ['COÛT DE REVIENT D’UNE PIÈCE', r2D(r.total)]]);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 30 }, { wch: 30 }, { wch: 9 }, { wch: 16 }, { wch: 10 }, { wch: 18 }, { wch: 22 }];
+  const all = PRODUITS.map(x => { const t = recap(x); return {
+    Produit: x.nom, 'Matières et fournitures (DA)': r2D(t.mat), "Main d'œuvre (DA)": r2D(t.mo), 'Coût de revient (DA)': r2D(t.total) }; });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Coût ' + p.nom.slice(0, 25).replace(/[\\\/\?\*\[\]:]/g, ' '));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(all), 'Tous les produits');
+  XLSX.writeFile(wb, ('Cout_de_revient_' + p.nom).replace(/[^\w\-]+/g, '_') + '.xlsx');
+}
+
+/* ---------- Fiche PDF (téléchargement / partage) ---------- */
+/* jsPDF n'a pas le « œ » : remplacé par « oe » avant le nettoyage du texte */
+const txtD = v => { const t = String(v ?? '').replace(/œ/g, 'oe').replace(/Œ/g, 'OE'); return typeof pdfTxt === 'function' ? pdfTxt(t) : t; };
+
+function creerPdfProduit(p) {
+  if (!(window.jspdf && window.jspdf.jsPDF)) throw new Error('Bibliothèque PDF non chargée : vérifiez la connexion internet puis rechargez la page.');
+  const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+  if (typeof doc.autoTable !== 'function') throw new Error('Module de tableaux PDF non chargé : vérifiez la connexion internet puis rechargez la page.');
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 14;
+  const r = recap(p), today = isoD(new Date());
+
+  if (typeof LOGO_PDF !== 'undefined' && LOGO_PDF) doc.addImage(LOGO_PDF, 'PNG', M, 9, 22, 22);
+  doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(17);
+  doc.text(txtD('FICHE DE COÛT DE REVIENT'), M + 26, 18);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+  doc.text(txtD('Coût d\'une pièce avant production  |  MARIA BAG'), M + 26, 25);
+  doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+  doc.text(txtD(fdD(today)), W - M, 17, { align: 'right' });
+  doc.setDrawColor(0); doc.setLineWidth(0.8); doc.line(M, 34, W - M, 34);
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90); doc.text(txtD('Produit'), M, 43);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(0); doc.text(txtD(p.nom), M, 49);
+  if (p.description) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(90); doc.text(txtD(p.description), M, 55); }
+
+  doc.autoTable({
+    startY: 61, margin: { left: M, right: M, bottom: 18 },
+    head: [['Catégorie', 'Désignation', 'Qté / pièce', 'Chute', 'Prix unitaire', 'Coût / pièce'].map(txtD)],
+    body: r.list.map(l => [catLbl(l.categorie), l.designation, numD(l.quantite, 4) + ' ' + l.unite,
+      Number(l.perte_pct) ? numD(l.perte_pct, 2) + ' %' : '-', numD(l.prix_unitaire, 2) + ' DA', moneyD(coutLigne(l))].map(txtD)),
+    foot: [['', txtD('Total matières et fournitures'), '', '', '', txtD(moneyD(r.mat))]],
+    theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 9.5, cellPadding: 2.5, textColor: 0, lineColor: 0, lineWidth: 0.2 },
+    headStyles: { fillColor: [235, 235, 235], textColor: 0, fontStyle: 'bold' },
+    footStyles: { fillColor: [245, 245, 245], textColor: 0, fontStyle: 'bold' },
+    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'center' }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } }
+  });
+
+  let y = doc.lastAutoTable.finalY + 8;
+  if (y > H - 95) { doc.addPage(); y = 20; }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(txtD('Main d\'œuvre d\'une pièce'), M, y);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+  const moTxt = Number(p.mo_pieces)
+    ? '(' + moneyD(p.mo_salaires) + ' salaires + ' + moneyD(p.mo_charges) + ' charges du ' + fdD(p.mo_date) + ') / ' + numD(p.mo_pieces, 0) + ' pièces = ' + moneyD(r.mo)
+    : 'Non renseignée';
+  doc.text(txtD(moTxt), M, y + 6);
+
+  doc.autoTable({
+    startY: y + 11, margin: { left: M, right: M, bottom: 18 },
+    head: [['Récapitulatif', 'Coût / pièce', 'Part'].map(txtD)],
+    body: r.cats.map(c => [c.lbl, moneyD(c.v), (r.total ? numD(c.v / r.total * 100, 1) : '0') + ' %'].map(txtD))
+      .concat([[txtD('Main d\'œuvre'), txtD(moneyD(r.mo)), txtD((r.total ? numD(r.mo / r.total * 100, 1) : '0') + ' %')]]),
+    foot: [[txtD('COÛT DE REVIENT D\'UNE PIÈCE'), txtD(moneyD(r.total)), '100 %']],
+    theme: 'grid', tableWidth: 120,
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 2.5, textColor: 0, lineColor: 0, lineWidth: 0.2 },
+    headStyles: { fillColor: [235, 235, 235], textColor: 0, fontStyle: 'bold' },
+    footStyles: { fillColor: [0, 0, 0], textColor: 255, fontStyle: 'bold', fontSize: 11 },
+    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } }
+  });
+
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120);
+    doc.text(txtD('MARIA BAG - Coût de revient ' + p.nom + ' - Page ' + i + '/' + n), W / 2, H - 8, { align: 'center' });
+  }
+  return { doc, name: ('Cout_de_revient_' + p.nom + '_' + today).replace(/[^\w\-]+/g, '_') + '.pdf' };
+}
+
+function telechargerPdfProduit() {
+  const p = produitCourant(); if (!p) return;
+  try { const r = creerPdfProduit(p); r.doc.save(r.name); toastD('PDF enregistré : ' + r.name); }
+  catch (e) { toastD('Erreur PDF : ' + e.message); }
+}
+
+async function partagerPdfProduit() {
+  const p = produitCourant(); if (!p) return;
+  let r;
+  try { r = creerPdfProduit(p); } catch (e) { toastD('Erreur PDF : ' + e.message); return; }
+  const file = new File([r.doc.output('blob')], r.name, { type: 'application/pdf' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'Coût de revient - ' + p.nom, text: 'Coût de revient d’une pièce : ' + p.nom + ' = ' + moneyD(recap(p).total) });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+  }
+  r.doc.save(r.name);
+  toastD('Partage direct indisponible sur cet appareil : le PDF a été téléchargé.');
+}
+
+/* ---------- Initialisation et événements ---------- */
+$d('#pd-lcat').innerHTML = CATS_D.map(c => '<option value="' + escD(c.k) + '">' + escD(c.lbl) + '</option>').join('');
+$d('#pd-lunite').innerHTML = UNITES_D.map(u => '<option>' + u + '</option>').join('');
+$d('#pd-qte').value = 1000;
+
+$d('#pd-produit').addEventListener('change', e => { selProduit = e.target.value || null; cancelFormLigne(); renderProduits(); });
+$d('#pd-pform').addEventListener('submit', ev => { ev.preventDefault(); saveProduit(); });
+$d('#pd-lform').addEventListener('submit', ev => { ev.preventDefault(); saveLigne(); });
+$d('#pd-lcat').addEventListener('change', majExempleCat);
+['#pd-lqte', '#pd-lprix', '#pd-lperte'].forEach(s => $d(s).addEventListener('input', majApercuLigne));
+$d('#pd-lunite').addEventListener('change', majApercuLigne);
+['#pd-mo-sal', '#pd-mo-ch', '#pd-mo-pcs'].forEach(s => $d(s).addEventListener('input', renderMoResultat));
+$d('#pd-mo-date').addEventListener('change', () => { $d('#pd-mo-hint').textContent = ''; renderMoResultat(); });
+$d('#pd-qte').addEventListener('input', () => { if (produitCourant()) renderCout(); });
+// Recharge à chaque ouverture de l'onglet (les prix des modèles / charges ont pu changer)
+document.querySelector('nav button[data-v="produits"]').addEventListener('click', loadProduits);
+
+document.addEventListener('mariabag:authenticated', loadProduits);
+if (!document.getElementById('app').classList.contains('hide')) loadProduits();

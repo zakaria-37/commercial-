@@ -10,7 +10,8 @@
 
   // Ordre important pour la restauration (les tables « parents » d'abord)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'composants',
-                'productions', 'commandes', 'acomptes', 'pointages', 'charges'];
+                'productions', 'commandes', 'acomptes', 'pointages', 'charges',
+                'produits', 'produit_lignes'];
   var LAST_KEY = 'mariabag_last_backup';
   var KEEP_FILES = 30;                       // nombre de sauvegardes gardées dans le dossier
   var REMIND_DAYS = 7;
