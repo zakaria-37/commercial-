@@ -384,7 +384,7 @@
     <div class="card">
       <div class="at-actions" style="margin-top:0"><h2 id="pd-lignes-title" style="margin-right:auto">Matières et fournitures d’une pièce</h2><button class="btn p" type="button" onclick="showFormLigne()">+ Ajouter une ligne</button></div>
       <p class="pr-help">Pour <b>une seule pièce</b> : quantité utilisée × prix d’achat de l’unité (prix du mètre de tissu, prix d’une sangle, d’un curseur…). La chute (%) ajoute la perte de matière à la coupe.</p>
-      <div class="pd-import">Importer les quantités depuis la fiche matières (onglet Production) : <select id="pd-import-modele"></select><button class="btn s" type="button" onclick="importerFiche()">Importer</button></div>
+      <div class="pd-import"><button class="btn s" type="button" onclick="reclasserLignes()" title="Place « Fermeture éclair », « Étiquette »… dans leur catégorie">Ranger les « Autres outils »</button> Importer les quantités depuis la fiche matières (onglet Production) : <select id="pd-import-modele"></select><button class="btn s" type="button" onclick="importerFiche()">Importer</button></div>
       <form id="pd-lform" class="at-form">
         <h2 id="pd-lform-title" style="margin-top:0">Nouvelle ligne de coût</h2>
         <div class="at-fields">

@@ -20,13 +20,24 @@ let curLigne = null;        // ligne en cours de modification
 
 const $d = s => document.querySelector(s);
 const CAT_PAIE_D = 'Paie des employés';
+/* Catégories de coût (les mêmes que celles du Stock, + prestations). Les clés existantes
+   « Matière » et « Autre outil » sont gardées : les lignes déjà saisies restent valables.
+   « Autre outil » reste TOUJOURS en dernier (reçoit les catégories inconnues). u = unité proposée. */
 const CATS_D = [
-  { k: 'Matière',     lbl: 'Matière (tissu)',            ex: 'Ex : Kawi bébé, simili cuir…' },
-  { k: 'Doublure',    lbl: 'Doublure',                   ex: 'Ex : doublure polyester' },
-  { k: 'Sangle',      lbl: 'Sangle',                     ex: 'Ex : sangle 3 cm' },
-  { k: 'Curseur',     lbl: 'Curseur',                    ex: 'Ex : curseur n°5' },
-  { k: 'Emballage',   lbl: 'Emballage',                  ex: 'Ex : sachet, carton, étiquette prix' },
-  { k: 'Autre outil', lbl: 'Autres outils / fournitures', ex: 'Ex : fil, fermeture éclair, boucle, mousse, étiquette…' }
+  { k: 'Matière',     lbl: 'Matière (tissu principal)',   u: 'm',      ex: 'Ex : Kawi normal, Kawi bébé, Sky…' },
+  { k: 'Doublure',    lbl: 'Doublure',                    u: 'm',      ex: 'Ex : doublure polyester' },
+  { k: 'Sangle',      lbl: 'Sangle',                      u: 'm',      ex: 'Ex : sangle 3 cm' },
+  { k: 'Curseur',     lbl: 'Curseur',                     u: 'pcs',    ex: 'Ex : curseur n°5' },
+  { k: 'Fermeture',   lbl: 'Fermeture éclair',            u: 'm',      ex: 'Ex : fermeture éclair n°5' },
+  { k: 'Éponge',      lbl: 'Éponge / mousse / bourre',    u: 'm',      ex: 'Ex : éponge 5 mm, mousse dos' },
+  { k: 'Poignée',     lbl: 'Poignée',                     u: 'pcs',    ex: 'Ex : poignée de transport' },
+  { k: 'Boucle',      lbl: 'Boucle / attache',            u: 'pcs',    ex: 'Ex : boucle plastique, mousqueton' },
+  { k: 'Fil',         lbl: 'Fil',                         u: 'bobine', ex: 'Ex : fil nylon, fil de couture' },
+  { k: 'Étiquette',   lbl: 'Étiquette / logo',            u: 'pcs',    ex: 'Ex : étiquette tissée, patch logo' },
+  { k: 'Emballage',   lbl: 'Emballage',                   u: 'pcs',    ex: 'Ex : sachet, carton, étiquette prix' },
+  { k: 'Broderie',    lbl: 'Broderie / impression',       u: 'pcs',    ex: 'Ex : broderie logo, sérigraphie' },
+  { k: 'Transport',   lbl: 'Transport / livraison',       u: 'pcs',    ex: 'Ex : transport des matières, livraison' },
+  { k: 'Autre outil', lbl: 'Autres outils / fournitures', u: 'pcs',    ex: 'Ex : tout ce qui ne rentre pas ailleurs…' }
 ];
 const UNITES_D = ['m', 'cm', 'pcs', 'paire', 'kg', 'g', 'L', 'bobine', 'rouleau'];
 
@@ -78,7 +89,8 @@ function prixLigne(l) {
   if (a) { const p = StockAPI.priceFor(a, l.unite); if (p != null) return p; }
   return Number(l.prix_unitaire || 0);
 }
-const CAT_STOCK_VERS_PRODUIT = { 'Tissu principal': 'Matière', 'Doublure': 'Doublure', 'Sangle': 'Sangle', 'Curseur': 'Curseur', 'Emballage': 'Emballage' };
+const CAT_STOCK_VERS_PRODUIT = { 'Tissu principal': 'Matière', 'Doublure': 'Doublure', 'Sangle': 'Sangle', 'Curseur': 'Curseur', 'Fermeture': 'Fermeture', 'Éponge': 'Éponge',
+  'Poignée': 'Poignée', 'Boucle': 'Boucle', 'Fil': 'Fil', 'Étiquette': 'Étiquette', 'Emballage': 'Emballage' };
 function coutLigne(l) { return qteReelle(l) * prixLigne(l); }
 function coutCat(list, k) { return list.filter(l => l.categorie === k).reduce((s, l) => s + coutLigne(l), 0); }
 function coutMatieres(list) { return list.reduce((s, l) => s + coutLigne(l), 0); }
@@ -100,11 +112,13 @@ function moDuProduit(p) {
 /* Récapitulatif complet d'un produit (valeurs enregistrées) */
 function recap(p) {
   const list = lignesDe(p.id);
-  const cats = CATS_D.map(c => ({ k: c.k, lbl: c.lbl, v: coutCat(list, c.k) }));
+  const cats = CATS_D.map(c => ({ k: c.k, lbl: c.lbl, v: coutCat(list, c.k), n: list.filter(l => l.categorie === c.k).length }));
   const autres = list.filter(l => !CATS_D.some(c => c.k === l.categorie));     // catégories inconnues : comptées dans « Autres »
-  if (autres.length) cats[cats.length - 1].v += autres.reduce((s, l) => s + coutLigne(l), 0);
+  if (autres.length) { cats[cats.length - 1].v += autres.reduce((s, l) => s + coutLigne(l), 0); cats[cats.length - 1].n += autres.length; }
+  // seules les catégories utilisées apparaissent dans le récapitulatif
+  const used = cats.filter(c => c.n > 0);
   const mat = coutMatieres(list), mo = moDuProduit(p);
-  return { list, cats, mat, mo, total: mat + mo };
+  return { list, cats: used.length ? used : cats.slice(0, 1), mat, mo, total: mat + mo };
 }
 
 /* ---------- Chargement ---------- */
@@ -321,9 +335,11 @@ async function createExempleProduit() {
 }
 
 /* ---------- Lignes de coût ---------- */
-function majExempleCat() {
+function majExempleCat(changeUnite) {
   const c = CATS_D.find(x => x.k === $d('#pd-lcat').value);
   $d('#pd-ldes').placeholder = c ? c.ex : '';
+  // nouvelle ligne saisie à la main : l'unité habituelle de la catégorie est proposée (m, pcs, bobine…)
+  if (changeUnite === true && c && !curLigne && !$d('#pd-lart').value) $d('#pd-lunite').value = c.u;
 }
 
 function showFormLigne(id) {
@@ -334,7 +350,7 @@ function showFormLigne(id) {
   if (window.StockAPI) StockAPI.fillSelect($d('#pd-lart'), l ? l.article_id : '', '— Aucun (prix saisi à la main) —');
   $d('#pd-lcat').value = l ? (CATS_D.some(c => c.k === l.categorie) ? l.categorie : 'Autre outil') : CATS_D[0].k;
   $d('#pd-ldes').value = l ? l.designation : '';
-  $d('#pd-lunite').value = l ? l.unite : 'm';
+  $d('#pd-lunite').value = l ? l.unite : CATS_D[0].u;
   $d('#pd-lqte').value = l ? l.quantite : '';
   $d('#pd-lprix').value = l ? (articleLigne(l) ? r2D(prixLigne(l) * 10000) / 10000 : l.prix_unitaire) : '';
   $d('#pd-lperte').value = l ? (Number(l.perte_pct) || '') : '';
@@ -408,7 +424,7 @@ async function saveLigne() {
     $d('#pd-lhint').textContent = '';
     // passe à la catégorie suivante pour enchaîner la saisie
     const i = CATS_D.findIndex(c => c.k === categorie);
-    if (i >= 0 && i < CATS_D.length - 1) { $d('#pd-lcat').value = CATS_D[i + 1].k; majExempleCat(); }
+    if (i >= 0 && i < CATS_D.length - 1) { $d('#pd-lcat').value = CATS_D[i + 1].k; majExempleCat(true); }
     $d('#pd-ldes').focus();
   }
   await loadProduits();
@@ -430,9 +446,32 @@ function devinerCat(nom) {
   if (/doubl/.test(n)) return 'Doublure';
   if (/sangl|songl/.test(n)) return 'Sangle';
   if (/curs|kiss/.test(n)) return 'Curseur';
+  if (/fermeture|zip|eclair/.test(n)) return 'Fermeture';
+  if (/eponge|mousse|bourre|molleton/.test(n)) return 'Éponge';
+  if (/poign|anse/.test(n)) return 'Poignée';
+  if (/boucle|mousqueton|anneau|attache|rivet/.test(n)) return 'Boucle';
+  if (/\bfil\b|bobine/.test(n)) return 'Fil';
+  if (/etiquet|logo|patch|marque/.test(n)) return 'Étiquette';
   if (/emball|sachet|carton|boite/.test(n)) return 'Emballage';
-  if (/tissu|matiere|kawi|cuir|simili|toile|nylon/.test(n)) return 'Matière';
+  if (/broder|impress|serigraph/.test(n)) return 'Broderie';
+  if (/transport|livraison/.test(n)) return 'Transport';
+  if (/tissu|matiere|kawi|cuir|simili|toile|nylon|sky|oyster|loyster/.test(n)) return 'Matière';
   return 'Autre outil';
+}
+
+/* Range les lignes « Autres outils » dans les bonnes catégories d'après leur désignation
+   (ex : « Fermeture éclair » → Fermeture, « Étiquette » → Étiquette) */
+async function reclasserLignes() {
+  const p = produitCourant(); if (!p) return;
+  const aChanger = lignesDe(p.id).filter(l => (l.categorie === 'Autre outil' || !CATS_D.some(c => c.k === l.categorie)) && devinerCat(l.designation) !== 'Autre outil');
+  if (!aChanger.length) { toastD('Aucune ligne à ranger : les « Autres outils » ne correspondent à aucune catégorie connue.'); return; }
+  if (!confirm('Ranger ' + aChanger.length + ' ligne(s) dans leur catégorie ?\n\n' + aChanger.map(l => '• ' + l.designation + ' → ' + catLbl(devinerCat(l.designation))).join('\n') + '\n\nLes prix et les quantités ne changent pas.')) return;
+  for (const l of aChanger) {
+    const r = await sb.from('produit_lignes').update({ categorie: devinerCat(l.designation) }).eq('id', l.id);
+    if (r.error) { toastD('Erreur : ' + errMsgD(r.error)); return; }
+  }
+  toastD(aChanger.length + ' ligne(s) rangée(s).');
+  await loadProduits();
 }
 
 async function importerFiche() {
@@ -652,7 +691,7 @@ $d('#pd-qte').value = 1000;
 $d('#pd-produit').addEventListener('change', e => { selProduit = e.target.value || null; cancelFormLigne(); renderProduits(); });
 $d('#pd-pform').addEventListener('submit', ev => { ev.preventDefault(); saveProduit(); });
 $d('#pd-lform').addEventListener('submit', ev => { ev.preventDefault(); saveLigne(); });
-$d('#pd-lcat').addEventListener('change', majExempleCat);
+$d('#pd-lcat').addEventListener('change', () => majExempleCat(true));
 ['#pd-lqte', '#pd-lprix', '#pd-lperte'].forEach(s => $d(s).addEventListener('input', majApercuLigne));
 $d('#pd-lunite').addEventListener('change', majApercuLigne);
 ['#pd-mo-sal', '#pd-mo-ch', '#pd-mo-pcs'].forEach(s => $d(s).addEventListener('input', renderMoResultat));

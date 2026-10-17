@@ -11,6 +11,15 @@
 .pd-cat-2{background:#e6f4ea;color:#1e6b34}
 .pd-cat-3{background:#f6e8f3;color:#7a2667}
 .pd-cat-4{background:#fdf0e1;color:#8a4b00}
+.pd-cat-5{background:#e3f4f4;color:#14606b}
+.pd-cat-6{background:#f1e7fb;color:#53307a}
+.pd-cat-7{background:#fbe9e7;color:#8a2f1f}
+.pd-cat-8{background:#eaf4e0;color:#4a6b14}
+.pd-cat-9{background:#e9eaf6;color:#2f3a7a}
+.pd-cat-10{background:#fbeee0;color:#7a4a1f}
+.pd-cat-11{background:#fce4ef;color:#8a1f55}
+.pd-cat-12{background:#e8eef2;color:#3a4f5c}
+.pd-cat-13{background:#eee;color:#444}
 .pd-stat-hint,#pd-mo-hint,#pd-lhint{color:var(--mut);font-size:13px;margin-top:10px}
 #pd-mo-hint:empty,#pd-lhint:empty{display:none}
 .pd-formule{font-size:13px;color:var(--mut);margin-top:12px}
