@@ -258,7 +258,12 @@ function showFormComposant(id) {
   curComposant = id || null;
   const c = id ? COMPOSANTS.find(x => String(x.id) === String(id)) : null;
   $p('#pr-cform-title').textContent = c ? 'Modifier le composant' : 'Nouveau composant';
-  if (window.StockAPI) StockAPI.fillSelect($p('#pr-cart'), c ? c.article_id : '', '— Aucun (saisie libre) —');
+  if (window.StockAPI) {
+    StockAPI.fillSelect($p('#pr-cart'), c ? c.article_id : '', '— Aucun (saisie libre) —');
+    // les noms du Stock sont proposés à la saisie
+    $p('#pr-noms').innerHTML = [...new Set(['Tissu principal', 'Doublure', 'Sangle', 'Curseur', 'Fermeture éclair', 'Poignée', 'Boucle', 'Fil', 'Bourre / mousse', 'Étiquette', 'Emballage',
+      ...StockAPI.list().map(a => a.nom)])].map(n => '<option value="' + escP(n) + '">').join('');
+  }
   prAutoNom = '';
   $p('#pr-cnom').value = c ? c.nom : '';
   $p('#pr-cunite').value = c ? c.unite : 'm';
@@ -283,7 +288,13 @@ async function saveComposant() {
   if (!(quantite > 0)) { toastP('La quantité par pièce doit être supérieure à 0.'); return; }
   if (perte < 0 || perte > 100) { toastP('La marge de chute doit être entre 0 et 100 %.'); return; }
 
-  const payload = { nom, unite, quantite, perte_pct: perte, note, article_id: $p('#pr-cart').value || null };
+  // Nom déjà présent dans le Stock (ex. « Kawi normal ») : le composant s'y lie tout seul
+  let articleId = $p('#pr-cart').value || null;
+  if (!articleId && window.StockAPI) {
+    const a = StockAPI.find(nom) || StockAPI.find(nom.replace(/^.*[—–-]\s*/, ''));
+    if (a && StockAPI.toBase(a, 1, unite) != null) articleId = a.id;
+  }
+  const payload = { nom, unite, quantite, perte_pct: perte, note, article_id: articleId };
   let res;
   if (curComposant) res = await sb.from('composants').update(payload).eq('id', curComposant).select();
   else {

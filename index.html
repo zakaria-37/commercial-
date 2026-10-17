@@ -384,19 +384,22 @@
     <div class="card">
       <div class="at-actions" style="margin-top:0"><h2 id="pd-lignes-title" style="margin-right:auto">Matières et fournitures d’une pièce</h2><button class="btn p" type="button" onclick="showFormLigne()">+ Ajouter une ligne</button></div>
       <p class="pr-help">Pour <b>une seule pièce</b> : quantité utilisée × prix d’achat de l’unité (prix du mètre de tissu, prix d’une sangle, d’un curseur…). La chute (%) ajoute la perte de matière à la coupe.</p>
-      <div class="pd-import"><button class="btn s" type="button" onclick="reclasserLignes()" title="Place « Fermeture éclair », « Étiquette »… dans leur catégorie">Ranger les « Autres outils »</button> Importer les quantités depuis la fiche matières (onglet Production) : <select id="pd-import-modele"></select><button class="btn s" type="button" onclick="importerFiche()">Importer</button></div>
+      <div class="pd-import"><button class="btn s p" type="button" onclick="synchroniserProduitsStock()" title="Lie toutes les lignes de tous les produits au Stock (crée les articles manquants)">Synchroniser avec le Stock</button> <button class="btn s" type="button" onclick="reclasserLignes()" title="Place « Fermeture éclair », « Étiquette »… dans leur catégorie">Ranger les « Autres outils »</button> Importer les quantités depuis la fiche matières (onglet Production) : <select id="pd-import-modele"></select><button class="btn s" type="button" onclick="importerFiche()">Importer</button></div>
       <form id="pd-lform" class="at-form">
         <h2 id="pd-lform-title" style="margin-top:0">Nouvelle ligne de coût</h2>
         <div class="at-fields">
-          <label style="grid-column:1/-1">Article du stock (le prix se met à jour tout seul : prix du rouleau ÷ mètres)<select id="pd-lart"></select></label>
+          <label style="grid-column:1/-1">Article du Stock (se remplit tout seul quand le nom existe dans le Stock ; prix = prix du rouleau ÷ mètres)<select id="pd-lart"></select></label>
           <label>Catégorie *<select id="pd-lcat"></select></label>
-          <label>Désignation<input id="pd-ldes" maxlength="120" placeholder="Ex : Kawi bébé"></label>
+          <label>Désignation<input id="pd-ldes" maxlength="120" list="pd-noms-stock" autocomplete="off" placeholder="Ex : Kawi bébé"></label>
           <label>Unité<select id="pd-lunite"></select></label>
           <label>Quantité pour 1 pièce *<input id="pd-lqte" type="number" min="0" step="0.0001" inputmode="decimal" required placeholder="Ex : 0.5"></label>
           <label>Prix unitaire (DA) *<input id="pd-lprix" type="number" min="0" step="0.01" inputmode="decimal" required placeholder="Prix d’une unité, ex : 450"></label>
           <label>Chute (%)<input id="pd-lperte" type="number" min="0" max="100" step="0.1" inputmode="decimal" placeholder="Facultatif, ex : 5"></label>
           <label style="grid-column:1/-1">Note<input id="pd-lnote" maxlength="200" placeholder="Facultatif : fournisseur, couleur, référence…"></label>
         </div>
+        <datalist id="pd-noms-stock"></datalist>
+        <label id="pd-lsync-wrap" class="st-check"><input id="pd-lsync" type="checkbox" checked> Synchroniser avec le Stock : lier à l’article du même nom, ou l’ajouter au Stock s’il n’existe pas (visible dans toute la plateforme)</label>
+        <div id="pd-lstock" class="st-hint"></div>
         <div id="pd-lhint"></div>
         <div class="at-actions"><button id="pd-lsubmit" class="btn p" type="submit">Ajouter la ligne</button><button class="btn" type="button" onclick="cancelFormLigne()">Fermer</button></div>
       </form>

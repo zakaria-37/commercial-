@@ -112,6 +112,7 @@ function toBase(a, q, unite) {
   return null;
 }
 function qtyOf(id) { return r4(STK_QTY[String(id)] || 0); }
+function normNom(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim(); }
 function articleById(id) { return STOCK_ARTICLES.find(a => String(a.id) === String(id)) || null; }
 /* Affichage : « 562,5 m » + « 12,5 rouleaux » */
 function fmtQty(a, q) {
@@ -348,8 +349,17 @@ async function saveArticle() {
   const prix = parseFloat($s('#st-aprix').value) || 0, seuil = parseFloat($s('#st-aseuil').value) || 0;
   if (!nom) { toastS('Le nom du modèle est obligatoire (ex : Kawi normal).'); return; }
   if (cond_nom && !(cond_qte > 0)) { toastS('Indiquez le contenu d’un ' + cond_nom + ' (ex : 45 ' + unite + ').'); return; }
+  // Article créé depuis Produits : son prix était « par mètre ». Si on lui ajoute un rouleau, le prix saisi
+  // peut rester le prix du mètre (converti en prix du rouleau) ou être le prix du rouleau.
+  let prixFinal = prix;
+  const avant = curArticle ? articleById(curArticle) : null;
+  if (avant && !aCond(avant) && cond_nom && cond_qte > 0 && prix > 0 && Math.abs(prix - (Number(avant.prix_achat) || 0)) < 0.005 &&
+      confirm('Le prix actuel (' + moneyS(prix) + ') est un prix PAR ' + unite.toUpperCase() + ' (utilisé dans vos coûts de production).\n\n' +
+              'OK = garder ce prix par ' + unite + ' → le ' + cond_nom + ' vaudra ' + moneyS(prix * cond_qte) + '\n' +
+              'Annuler = ' + moneyS(prix) + ' est le prix d’un ' + cond_nom + ' (' + moneyS(prix / cond_qte) + ' / ' + unite + ')'))
+    prixFinal = Math.round(prix * cond_qte * 100) / 100;
   const payload = {
-    categorie, nom, unite, cond_nom, cond_qte, prix_achat: prix, seuil_alerte: seuil,
+    categorie, nom, unite, cond_nom, cond_qte, prix_achat: prixFinal, seuil_alerte: seuil,
     fournisseur: $s('#st-afour').value.trim(), couleur: $s('#st-acoul').value.trim(), note: $s('#st-anote').value.trim()
   };
   const res = curArticle
@@ -539,6 +549,27 @@ window.StockAPI = {
     if (r.error) return { error: r.error, n: 0 };
     await loadStock();
     return { error: null, n: rows.length };
+  },
+  /* Recherche par nom (sans accents ni majuscules) : dans la catégorie donnée d'abord, sinon dans toutes */
+  norm: normNom,
+  find(nom, categorie) {
+    const n = normNom(nom); if (!n) return null;
+    const all = STOCK_ARTICLES.filter(a => normNom(a.nom) === n);
+    return all.find(a => a.categorie === categorie) || (categorie ? null : all[0]) || null;
+  },
+  /* Crée un ou plusieurs articles (ex. saisis depuis Produits) : ils apparaissent aussitôt partout */
+  async create(rows) {
+    const list = Array.isArray(rows) ? rows : [rows];
+    const r = await sb.from('stock_articles').insert(list).select();
+    if (r.error) return { error: r.error, articles: [] };
+    await loadStock();
+    return { error: null, articles: r.data || [], article: (r.data || [])[0] };
+  },
+  /* Met à jour le prix d'achat d'un article puis recharge (tous les coûts se recalculent) */
+  async setPrix(id, prix) {
+    const r = await sb.from('stock_articles').update({ prix_achat: prix }).eq('id', id);
+    if (!r.error) await loadStock();
+    return r;
   },
   /* Sorties déjà enregistrées avec cette référence (évite de valider deux fois le même bon) */
   dejaSorti(reference) { return reference ? STOCK_MVTS.filter(m => m.type === 'sortie' && m.reference === reference) : []; }
