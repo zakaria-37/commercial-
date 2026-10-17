@@ -21,7 +21,7 @@
 
   // Ordre = parents d'abord (important pour envoyer les nouvelles lignes à Supabase)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants', 'productions', 'commandes',
-                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements'];
+                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes'];
 
   // Valeurs par défaut (les mêmes que dans les fichiers supabase/*.sql)
   var DEFAULTS = {
@@ -36,7 +36,8 @@
     pointages: { heures: 0, heure_debut: null, heure_fin: null },
     charges: { montant: 0, employe_id: null, employe_nom: '', note: '' },
     modeles: { description: '' },
-    composants: { unite: 'pcs', quantite: 0, perte_pct: 0, note: '', ordre: 0, article_id: null },
+    composants: { unite: 'pcs', quantite: 0, perte_pct: 0, note: '', ordre: 0, article_id: null, type: 'matiere', prix_unitaire: 0 },
+    charges_fixes: { categorie: 'Autre charge fixe', montant: 0, jours: 'travailles', date_debut: null, date_fin: null, actif: true, note: '' },
     stock_articles: { unite: 'm', cond_nom: '', cond_qte: 0, prix_achat: 0, seuil_alerte: 0, fournisseur: '', couleur: '', note: '' },
     stock_mouvements: { date_mvt: null, type: 'entree', prix_achat: null, fournisseur: '', reference: '', note: '', source: 'manuel' },
     produits: { description: '', modele_id: null, mo_date: null, mo_salaires: 0, mo_charges: 0, mo_pieces: 0 },

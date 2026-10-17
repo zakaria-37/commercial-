@@ -55,7 +55,7 @@
   .pr-calc{grid-template-columns:1fr 1fr!important}
   .pr-calc label:nth-child(-n+3){grid-column:1/-1}
   #pr-cform .at-fields{grid-template-columns:1fr 1fr!important;align-items:end}
-  #pr-cform .at-fields label:nth-child(1),#pr-cform .at-fields label:nth-child(2),#pr-cform .at-fields label:nth-child(5),#pr-cform .at-fields label:nth-child(6){grid-column:1/-1}
+  #pr-cform .at-fields label:nth-child(1),#pr-cform .at-fields label:nth-child(2),#pr-cform .at-fields label:nth-child(5),#pr-cform .at-fields label:nth-child(6),#pr-cform .at-fields label:nth-child(7){grid-column:1/-1}
   #prod-form .at-fields,#cmd-form .at-fields{grid-template-columns:1fr 1fr!important}
   #prod-form .at-fields label:nth-child(1),#prod-form .at-fields label:nth-child(2),#prod-form .at-fields label:nth-child(8),
   #cmd-form .at-fields label:nth-child(1),#cmd-form .at-fields label:nth-child(2),#cmd-form .at-fields label:nth-child(9){grid-column:1/-1}
@@ -71,3 +71,11 @@
   #production-tbody td:last-child .btn,#commande-tbody td:last-child .btn{flex:1 1 0}
   #production-tbody td[data-span],#commande-tbody td[data-span]{grid-column:1/-1;text-align:center}
 }
+/* ---------- Type de composant : matière ou finition extérieure ---------- */
+.pr-type{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 14px}
+.pr-typ{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}
+.pr-typ small{grid-column:2;color:var(--mut);font-size:12px}
+.pr-typ input{width:18px;height:18px;accent-color:#000;grid-row:1/3}
+.pr-typ.on{border-color:#000;background:var(--nb)}
+.pr-fin-tag{display:inline-block;padding:2px 9px;border-radius:12px;background:#fce4ef;color:#8a1f55;font-size:12px;font-weight:600}
+@media (max-width:700px){.pr-type{grid-template-columns:1fr}}

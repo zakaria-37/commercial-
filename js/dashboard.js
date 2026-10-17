@@ -120,13 +120,14 @@
   }
 
   /* ---------- Vue d'ensemble (chiffres clés cliquables) ---------- */
-  let chargesMois = null, pointesAuj = null, dataErr = false;
+  let chargesMois = null, pointesAuj = null, dataErr = false, fixesMois = { total: 0, jours: 0, parJour: 0 };
   async function loadExtras() {
     try {
       const today = iso(new Date()), mois = today.slice(0, 7);
       const last = String(new Date(+mois.slice(0, 4), +mois.slice(5, 7), 0).getDate()).padStart(2, '0');
       const c = await sb.from('charges').select('*').gte('date_charge', mois + '-01').lte('date_charge', mois + '-' + last);
       chargesMois = c.error ? null : (c.data || []);
+      try { if (window.ChargesAPI) fixesMois = await ChargesAPI.moisFixes(mois); } catch (e) { fixesMois = { total: 0, jours: 0, parJour: 0 }; }
       const p = await sb.from('pointages').select('*').eq('date_pointage', today);
       try { if (window.StockAPI) await StockAPI.load(); } catch (e) { /* stock non installé */ }
       pointesAuj = p.error ? null : (p.data || []).filter(x => Number(x.heures) > 0 || (x.heure_debut && x.heure_fin)).length;
@@ -147,8 +148,8 @@
     const cmds = typeof COMMANDES !== 'undefined' ? COMMANDES.filter(cmdOuverte) : [];
     const cmdLate = cmds.filter(c => c.date_reception_prevue && c.date_reception_prevue < today).length;
     const reste = cmds.reduce((n, c) => n + Math.max(0, (Number(c.quantite_commandee) || 0) - (Number(c.quantite_recue) || 0)), 0);
-    const totCh = chargesMois ? chargesMois.reduce((s, c) => s + Number(c.montant || 0), 0) : null;
-    const chAuj = chargesMois ? chargesMois.filter(c => c.date_charge === today).reduce((s, c) => s + Number(c.montant || 0), 0) : 0;
+    const totCh = chargesMois ? chargesMois.reduce((s, c) => s + Number(c.montant || 0), 0) + fixesMois.total : null;       // saisies + charges fixes calculées
+    const chAuj = chargesMois ? chargesMois.filter(c => c.date_charge === today).reduce((s, c) => s + Number(c.montant || 0), 0) + (fixesMois.parJour && pointesAuj ? fixesMois.parJour : 0) : 0;
     const nbEmp = typeof EMPLOYES !== 'undefined' ? EMPLOYES.length : 0;
     el.innerHTML =
       kpi(late ? 'u' : '', 'Relances à faire', late + soon, late + ' en retard · ' + soon + ' cette semaine', 'rel') +
@@ -223,12 +224,15 @@
   }
 
   /* ---------- Charges du mois ---------- */
-  const CAT_COL = { 'Paie des employés': 'var(--g)', 'Électricité': 'var(--o)', 'Loyer': 'var(--r)', 'Dîner des employés': 'var(--rose)', 'Autre charge': 'var(--mut)' };
+  const CAT_COL = { 'Paie des employés': 'var(--g)', 'Charges fixes': 'var(--o)', 'Charges variables': 'var(--mut)' };
   function renderFinance() {
     const box = $q('#d-finance'); if (!box) return;
     if (chargesMois === null) { box.innerHTML = '<div class="empty" style="padding:22px">Charges indisponibles pour le moment.</div>'; return; }
-    const tot = chargesMois.reduce((s, c) => s + Number(c.montant || 0), 0);
-    const cats = {}; chargesMois.forEach(c => { cats[c.categorie] = (cats[c.categorie] || 0) + Number(c.montant || 0); });
+    // paie + charges fixes (calculées chaque jour) + charges variables (saisies, hors main d'œuvre)
+    const cats = { 'Paie des employés': 0, 'Charges fixes': fixesMois.total, 'Charges variables': 0 };
+    chargesMois.forEach(c => { cats[c.categorie === 'Paie des employés' ? 'Paie des employés' : 'Charges variables'] += Number(c.montant || 0); });
+    Object.keys(cats).forEach(k => { if (!cats[k]) delete cats[k]; });
+    const tot = Object.values(cats).reduce((s, v) => s + v, 0);
     const rows = Object.keys(cats).sort((a, b) => cats[b] - cats[a]);
     const jours = Math.max(1, new Date().getDate());
     box.innerHTML = '<div class="fbig"><b>' + money(tot) + '</b><span>ce mois · moyenne ' + money(tot / jours) + ' / jour</span></div>' +
@@ -361,6 +365,7 @@
     });
     if (window.LocalDB) LocalDB.onChange(render);
     document.addEventListener('mariabag:authenticated', render);
+    document.addEventListener('mariabag:charges', render);
     // Le stock a changé : rendu léger (sans recharger le stock, pour ne pas boucler)
     document.addEventListener('mariabag:stock', () => { if ($q('#v-dash').classList.contains('on')) { renderApercu(); renderProduits(); renderStock(); } });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); });

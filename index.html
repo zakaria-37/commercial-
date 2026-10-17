@@ -208,30 +208,65 @@
   <div id="toastE"></div>
 </section>
 <section id="v-charges">
-  <div class="hello"><span class="fl"></span><div><h2>Charges de l’atelier</h2><p>Dépenses de chaque jour : paie des employés, électricité, loyer, dîner des employés et autres charges.</p></div></div>
+  <div class="hello"><span class="fl"></span><div><h2>Charges de l’atelier</h2><p>Charges fixes réglées une seule fois (dîner, loyer, électricité…) et charges variables saisies au jour le jour.</p></div></div>
   <div class="tools">
     <label style="display:flex;gap:8px;align-items:center;font-weight:600">Mois <input id="ch-mois" type="month"></label>
     <select id="ch-fcat"></select>
     <input id="ch-q" type="search" placeholder="Rechercher : note, employé…">
     <button class="btn" type="button" onclick="exportCharges()">Exporter Excel</button>
-    <button class="btn p" type="button" onclick="showFormCharge()">+ Nouvelle charge</button>
+    <button class="btn p" type="button" onclick="showFormCharge()">+ Charge variable / paie</button>
   </div>
   <div id="ch-stats" class="at-stats"></div>
+
+  <!-- Charges FIXES : saisies une seule fois, appliquées automatiquement à chaque jour -->
+  <div class="card cf-card" id="cf-card">
+    <div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">Charges fixes de chaque jour</h2><button class="btn p" type="button" onclick="showFormFixe()">+ Charge fixe</button></div>
+    <p class="pr-help">Dîner des employés, loyer, électricité… : saisissez le montant <b>par jour</b> une seule fois, il s’applique tout seul à chaque jour, sans rien ressaisir. Ce sont <b>les seules charges comptées dans la main d’œuvre</b> d’une pièce (avec les salaires).</p>
+    <form id="cf-quick" class="at-form" style="display:none">
+      <h2 style="margin-top:0">Vos charges fixes habituelles (montant par jour)</h2>
+      <div class="at-fields">
+        <label>Dîner des employés (DA / jour)<input id="cq-diner" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
+        <label>Loyer (DA / jour)<input id="cq-loyer" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
+        <label>Électricité (DA / jour)<input id="cq-elec" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
+        <label>Autre charge fixe (DA / jour)<input id="cq-autre" type="number" min="0" step="0.01" inputmode="decimal" value="400"></label>
+      </div>
+      <p class="pr-help" style="margin:10px 0 0">Laissez à vide ou à 0 ce qui ne vous concerne pas. Vous pourrez tout modifier ensuite, ou ajouter d’autres charges fixes.</p>
+      <div class="at-actions"><button class="btn p" type="submit">Enregistrer mes charges fixes</button></div>
+    </form>
+    <form id="cf-form" class="at-form">
+      <h2 id="cf-form-title" style="margin-top:0">Nouvelle charge fixe</h2>
+      <div class="at-fields">
+        <label>Nom *<input id="cf-libelle" required maxlength="80" list="cf-noms" placeholder="Ex : Loyer, Dîner des employés…"></label>
+        <label>Catégorie<select id="cf-cat"></select></label>
+        <label>Montant par jour (DA) *<input id="cf-montant" type="number" min="0" step="0.01" inputmode="decimal" required></label>
+        <label>S’applique<select id="cf-jours"><option value="travailles">Aux jours travaillés (pointage)</option><option value="tous">À tous les jours</option></select></label>
+        <label>À partir du<input id="cf-debut" type="date"></label>
+        <label>Jusqu’au (facultatif)<input id="cf-fin" type="date"></label>
+        <label style="grid-column:1/-1">Note<input id="cf-note" maxlength="200" placeholder="Facultatif"></label>
+      </div>
+      <datalist id="cf-noms"><option value="Dîner des employés"><option value="Loyer"><option value="Électricité"><option value="Eau"><option value="Gardiennage"><option value="Internet / téléphone"></datalist>
+      <label class="st-check"><input id="cf-actif" type="checkbox" checked> Charge active (décochez pour l’arrêter sans la supprimer)</label>
+      <div id="cf-hint" class="st-hint"></div>
+      <div class="at-actions"><button id="cf-submit" class="btn p" type="submit">Ajouter la charge fixe</button><button class="btn" type="button" onclick="cancelFormFixe()">Fermer</button></div>
+    </form>
+    <div class="at-scroll"><table style="min-width:700px"><thead><tr><th>Charge fixe</th><th>Catégorie</th><th>Montant par jour</th><th>S’applique</th><th>Période</th><th>Actions</th></tr></thead><tbody id="cf-tbody"></tbody></table></div>
+  </div>
+
   <form id="ch-form" class="at-form">
     <h2 id="ch-form-title" style="margin-top:0">Nouvelle charge</h2>
     <div class="at-fields">
       <label>Date *<input id="ch-date" type="date" required></label>
       <label>Catégorie *<select id="ch-cat" required></select></label>
       <label>Montant (DA) *<input id="ch-montant" type="number" min="0" step="0.01" required></label>
-      <label style="grid-column:1/-1">Note / description<input id="ch-note" maxlength="200" placeholder="Ex : facture d’électricité, repas du vendredi, réparation…"></label>
+      <label style="grid-column:1/-1">Note / description<input id="ch-note" maxlength="200" placeholder="Ex : réparation machine, achat de fournitures, transport…"></label>
     </div>
     <div id="ch-hint"></div>
     <div class="at-actions"><button id="ch-submit" class="btn p" type="submit">Ajouter la charge</button><button class="btn" type="button" onclick="cancelFormCharge()">Fermer</button></div>
   </form>
   <div class="card"><h2>Récapitulatif par jour</h2>
-    <div class="at-scroll"><table style="min-width:720px"><thead><tr><th>Date</th><th>Jour</th><th>Paie employés (total du jour)</th><th>Électricité</th><th>Loyer</th><th>Dîner employés</th><th>Autres</th><th>Total du jour</th></tr></thead><tbody id="ch-jours"><tr><td colspan="8" class="at-empty">Chargement…</td></tr></tbody></table></div>
+    <div class="at-scroll"><table style="min-width:640px"><thead><tr><th>Date</th><th>Jour</th><th>Paie des employés</th><th>Charges fixes</th><th>Charges variables</th><th>Total du jour</th></tr></thead><tbody id="ch-jours"><tr><td colspan="6" class="at-empty">Chargement…</td></tr></tbody></table></div>
   </div>
-  <div class="card" style="margin-top:16px"><h2>Détail des charges</h2>
+  <div class="card" style="margin-top:16px"><h2>Détail des charges saisies (paie et charges variables)</h2>
     <div class="at-scroll"><table style="min-width:720px"><thead><tr><th>Date</th><th>Catégorie</th><th>Note</th><th>Montant</th><th>Actions</th></tr></thead><tbody id="ch-tbody"><tr><td colspan="5" class="at-empty">Chargement…</td></tr></tbody></table></div>
   </div>
   <div id="toastC"></div>
@@ -325,17 +360,23 @@
     <div class="card">
       <div class="at-actions" style="margin-top:0"><h2 id="pr-comp-title" style="margin-right:auto">Composition d’une pièce</h2><button class="btn p" type="button" onclick="showFormComposant()">+ Ajouter un composant</button></div>
       <p id="pr-comp-desc" class="pr-help"></p>
-      <p class="pr-help">Indiquez la quantité nécessaire pour <b>une seule pièce</b> : tissu, doublure, sangles, curseurs, poignée, fil, étiquette, emballage…</p>
+      <p class="pr-help">Indiquez la quantité nécessaire pour <b>une seule pièce</b> : tissu, doublure, sangles, curseurs, poignée, fil, étiquette, emballage… et, s’il y en a, la <b>finition extérieure</b> payée à la pièce aux finisseurs.</p>
       <form id="pr-cform" class="at-form">
         <h2 id="pr-cform-title" style="margin-top:0">Nouveau composant</h2>
-        <div class="at-fields">
-          <label style="grid-column:1/-1">Article du stock (relie le stock et le prix à ce composant)<select id="pr-cart"></select></label>
-          <label>Composant *<input id="pr-cnom" required maxlength="120" list="pr-noms" placeholder="Ex : Tissu principal"></label>
-          <label>Unité<select id="pr-cunite"></select></label>
-          <label>Quantité pour 1 pièce *<input id="pr-cqte" type="number" min="0" step="0.0001" inputmode="decimal" required placeholder="Ex : 0.5"></label>
-          <label>Marge de chute (%) <input id="pr-cperte" type="number" min="0" max="100" step="0.1" inputmode="decimal" placeholder="Facultatif, ex : 5"></label>
-          <label style="grid-column:1/-1">Note<input id="pr-cnote" maxlength="200" placeholder="Facultatif : couleur, dimension, référence fournisseur…"></label>
+        <div class="pr-type" id="pr-ctype">
+          <label class="pr-typ on"><input type="radio" name="pr-ctype" value="matiere" checked> <b>Matière / fourniture</b><small>sort du dépôt (tissu, sangle, curseur…)</small></label>
+          <label class="pr-typ"><input type="radio" name="pr-ctype" value="finition"> <b>Finition extérieure</b><small>payée à la pièce aux finisseurs</small></label>
         </div>
+        <div class="at-fields">
+          <label id="pr-cart-wrap" style="grid-column:1/-1">Article du stock (relie le stock et le prix à ce composant)<select id="pr-cart"></select></label>
+          <label>Composant *<input id="pr-cnom" required maxlength="120" list="pr-noms" placeholder="Ex : Tissu principal"></label>
+          <label id="pr-cunite-wrap">Unité<select id="pr-cunite"></select></label>
+          <label><span id="pr-cqte-lbl">Quantité pour 1 pièce *</span><input id="pr-cqte" type="number" min="0" step="0.0001" inputmode="decimal" required placeholder="Ex : 0.5"></label>
+          <label id="pr-cperte-wrap">Marge de chute (%) <input id="pr-cperte" type="number" min="0" max="100" step="0.1" inputmode="decimal" placeholder="Facultatif, ex : 5"></label>
+          <label style="grid-column:1/-1">Note<input id="pr-cnote" maxlength="200" placeholder="Facultatif : couleur, dimension, référence fournisseur…"></label>
+          <label id="pr-cprix-wrap" style="display:none">Prix payé au finisseur par pièce (DA) *<input id="pr-cprix" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex : 35"></label>
+        </div>
+        <div id="pr-cfin-hint" class="st-hint"></div>
         <datalist id="pr-noms"><option value="Tissu principal"><option value="Doublure"><option value="Sangle"><option value="Curseur"><option value="Fermeture éclair"><option value="Poignée"><option value="Boucle"><option value="Fil"><option value="Bourre / mousse"><option value="Étiquette"><option value="Emballage"></datalist>
         <div class="at-actions"><button id="pr-csubmit" class="btn p" type="submit">Ajouter le composant</button><button class="btn" type="button" onclick="cancelFormComposant()">Fermer</button></div>
       </form>
@@ -353,6 +394,11 @@
       </div>
       <div id="pr-stats" class="at-stats"></div>
       <div class="at-scroll"><table style="min-width:900px"><thead><tr><th>Composant</th><th>Qté pour 1 pièce</th><th>Marge</th><th>À sortir du dépôt</th><th>En stock</th><th>Après la sortie</th><th>Coût estimé</th></tr></thead><tbody id="pr-need-body"></tbody></table></div>
+      <div id="pr-fin-wrap" style="display:none;margin-top:16px">
+        <h3 style="margin:0 0 6px">Finition extérieure (payée à la pièce)</h3>
+        <p class="pr-help">Les finisseurs sont payés à chaque pièce produite : rien à sortir du dépôt, c’est un coût à régler.</p>
+        <div class="at-scroll"><table style="min-width:640px"><thead><tr><th>Finition</th><th>Par pièce</th><th>Prix par pièce</th><th>Coût pour 1 pièce</th><th>À payer pour la production</th></tr></thead><tbody id="pr-fin-body"></tbody></table></div>
+      </div>
       <p class="pr-help" id="pr-stock-help" style="margin-top:10px"></p>
       <div class="at-actions"><button class="btn p" type="button" id="pr-btn-sortie" onclick="validerSortieStock()">Valider la sortie de stock</button><button class="btn p" type="button" onclick="telechargerPdf()">Télécharger le bon en PDF</button><button class="btn p" type="button" onclick="partagerPdf()">Envoyer le PDF (WhatsApp, e-mail…)</button><button class="btn" type="button" onclick="imprimerBon()">Imprimer</button><button class="btn" type="button" onclick="exportBon()">Exporter Excel</button></div>
     </div>
@@ -408,11 +454,11 @@
 
     <div class="card" style="margin-top:16px">
       <h2>Main d’œuvre d’une pièce</h2>
-      <p class="pr-help">Main d’œuvre = (total des salaires de tous les employés du jour + autres charges du jour de l’atelier) ÷ total des pièces fabriquées le même jour. Le bouton « Calculer » reprend le pointage (onglet Employés) et les charges (onglet Charges) du jour choisi.</p>
+      <p class="pr-help">Main d’œuvre = (total des salaires de tous les employés du jour + charges fixes du jour : dîner, loyer, électricité…) ÷ total des pièces fabriquées le même jour. Le bouton « Calculer » reprend le pointage (onglet Employés) et les charges (onglet Charges) du jour choisi.</p>
       <div class="at-fields pd-mo">
         <label>Jour de référence *<input id="pd-mo-date" type="date"></label>
         <label>Salaires du jour (DA)<input id="pd-mo-sal" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Total des salaires"></label>
-        <label>Autres charges du jour (DA)<input id="pd-mo-ch" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Électricité, loyer, dîner…"></label>
+        <label>Charges fixes du jour (DA)<input id="pd-mo-ch" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Dîner, loyer, électricité…"></label>
         <label>Pièces fabriquées ce jour-là *<input id="pd-mo-pcs" type="number" min="1" step="1" inputmode="numeric" placeholder="Ex : 120"></label>
       </div>
       <div id="pd-mo-hint"></div>

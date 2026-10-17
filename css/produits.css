@@ -19,7 +19,8 @@
 .pd-cat-10{background:#fbeee0;color:#7a4a1f}
 .pd-cat-11{background:#fce4ef;color:#8a1f55}
 .pd-cat-12{background:#e8eef2;color:#3a4f5c}
-.pd-cat-13{background:#eee;color:#444}
+.pd-cat-13{background:#fce4ef;color:#8a1f55}
+.pd-cat-14{background:#eee;color:#444}
 .pd-stat-hint,#pd-mo-hint,#pd-lhint{color:var(--mut);font-size:13px;margin-top:10px}
 #pd-mo-hint:empty,#pd-lhint:empty{display:none}
 .pd-formule{font-size:13px;color:var(--mut);margin-top:12px}

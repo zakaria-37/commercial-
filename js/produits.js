@@ -4,10 +4,11 @@
      matière (tissu), doublure, sangle, curseur, emballage, autres outils
      Coût d'une ligne = quantité pour 1 pièce × (1 + chute %) × prix unitaire
    - MAIN D'ŒUVRE d'une pièce =
-       (salaires de tous les employés du jour + autres charges du jour)
+       (salaires de tous les employés du jour + charges FIXES du jour)
        ÷ nombre de pièces fabriquées le même jour
      Salaires : calculés d'après le pointage (onglet Employés)
-     Autres charges : onglet Charges (hors « Paie des employés »)
+     Charges fixes : onglet Charges > « Charges fixes de chaque jour » (dîner, loyer,
+     électricité… saisis une seule fois) ; les charges variables n'y entrent pas
    - Coût de revient = matières et fournitures + main d'œuvre
    - Import des composants depuis la fiche matières (onglet Production)
    - Export Excel et fiche PDF (téléchargement / partage)
@@ -37,6 +38,7 @@ const CATS_D = [
   { k: 'Emballage',   lbl: 'Emballage',                   u: 'pcs',    ex: 'Ex : sachet, carton, étiquette prix' },
   { k: 'Broderie',    lbl: 'Broderie / impression',       u: 'pcs',    ex: 'Ex : broderie logo, sérigraphie' },
   { k: 'Transport',   lbl: 'Transport / livraison',       u: 'pcs',    ex: 'Ex : transport des matières, livraison' },
+  { k: 'Finition',    lbl: 'Finition extérieure (payée à la pièce)', u: 'pcs', ex: 'Ex : finition, assemblage, repassage (payé par pièce)' },
   { k: 'Autre outil', lbl: 'Autres outils / fournitures', u: 'pcs',    ex: 'Ex : tout ce qui ne rentre pas ailleurs…' }
 ];
 const UNITES_D = ['m', 'cm', 'pcs', 'paire', 'kg', 'g', 'L', 'bobine', 'rouleau'];
@@ -101,7 +103,7 @@ function coutLigne(l) { return qteReelle(l) * prixLigne(l); }
 function coutCat(list, k) { return list.filter(l => l.categorie === k).reduce((s, l) => s + coutLigne(l), 0); }
 function coutMatieres(list) { return list.reduce((s, l) => s + coutLigne(l), 0); }
 
-/* Main d'œuvre d'une pièce = (salaires du jour + autres charges du jour) ÷ pièces du jour */
+/* Main d'œuvre d'une pièce = (salaires du jour + charges fixes du jour) ÷ pièces du jour */
 function moValeurs() {
   return {
     date: $d('#pd-mo-date').value,
@@ -211,9 +213,9 @@ function renderMoForm(p) {
 function renderMoResultat() {
   const v = moValeurs(), mo = moUnitaire(v);
   $d('#pd-mo-res').innerHTML = v.pcs > 0
-    ? '<div class="pd-formule">(' + moneyD(v.sal) + ' salaires + ' + moneyD(v.ch) + ' charges) ÷ ' + numD(v.pcs, 0) + ' pièces</div>' +
+    ? '<div class="pd-formule">(' + moneyD(v.sal) + ' salaires + ' + moneyD(v.ch) + ' charges fixes) ÷ ' + numD(v.pcs, 0) + ' pièces</div>' +
       '<div class="pd-mo-val">Main d’œuvre d’une pièce : <b>' + moneyD(mo) + '</b></div>'
-    : '<div class="pd-formule">Main d’œuvre d’une pièce = (salaires de tous les employés du jour + autres charges du jour) ÷ pièces fabriquées le même jour</div>' +
+    : '<div class="pd-formule">Main d’œuvre d’une pièce = (salaires de tous les employés du jour + charges fixes du jour) ÷ pièces fabriquées le même jour</div>' +
       '<div class="pd-mo-val" style="color:var(--mut)">Indiquez le nombre de pièces fabriquées ce jour-là.</div>';
   const p = produitCourant();
   const modif = p && (v.date !== (p.mo_date || v.date) || r2D(v.sal) !== r2D(p.mo_salaires) || r2D(v.ch) !== r2D(p.mo_charges) || v.pcs !== Number(p.mo_pieces || 0));
@@ -498,6 +500,7 @@ function devinerCat(nom) {
   if (/\bfil\b|bobine/.test(n)) return 'Fil';
   if (/etiquet|logo|patch|marque/.test(n)) return 'Étiquette';
   if (/emball|sachet|carton|boite/.test(n)) return 'Emballage';
+  if (/finition|assembl|repass|finisseur/.test(n)) return 'Finition';
   if (/broder|impress|serigraph/.test(n)) return 'Broderie';
   if (/transport|livraison/.test(n)) return 'Transport';
   if (/tissu|matiere|kawi|cuir|simili|toile|nylon|sky|oyster|loyster/.test(n)) return 'Matière';
@@ -596,6 +599,9 @@ async function importerFiche() {
       (nouveaux.length - nbLies ? (nouveaux.length - nbLies) + ' non lié(s) : il faudra saisir leur prix.' : ''))) return;
   let ordre = lignesDe(p.id).reduce((mx, l) => Math.max(mx, Number(l.ordre) || 0), 0);
   const rows = nouveaux.map(x => {
+    // finition extérieure de la fiche matières : ligne « Finition » avec le prix payé par pièce
+    if (x.type === 'finition') return { produit_id: p.id, categorie: 'Finition', designation: x.nom, unite: 'pcs', quantite: x.quantite,
+      prix_unitaire: Number(x.prix_unitaire) || 0, perte_pct: 0, note: x.note || '', ordre: ++ordre, article_id: null };
     const a = x.article_id && window.StockAPI ? StockAPI.byId(x.article_id) : null;
     const prix = a ? StockAPI.priceFor(a, x.unite) : null;
     return {
@@ -607,14 +613,15 @@ async function importerFiche() {
   const r = await sb.from('produit_lignes').insert(rows);
   if (r.error) { toastD('Erreur : ' + errMsgD(r.error)); return; }
   await sb.from('produits').update({ modele_id: mid }).eq('id', p.id);
-  const sansPrix = rows.filter(r => !r.article_id).length;
+  const sansPrix = rows.filter(r => !r.article_id && r.categorie !== 'Finition').length;
   toastD(rows.length + ' ligne(s) importée(s)' + (sansPrix ? ' : cliquez sur « Modifier » pour saisir le prix des ' + sansPrix + ' non liée(s) au stock.' : ' : prix repris du stock.'));
   await loadProduits();
 }
 
 /* ---------- Main d'œuvre : calcul automatique du jour ---------- */
 /* Salaires du jour = gain de TOUS les employés pointés ce jour-là (comme l'onglet Employés).
-   Autres charges du jour = charges de l'onglet Charges à cette date, hors « Paie des employés ». */
+   Charges fixes du jour = charges fixes de l'onglet Charges (dîner, loyer, électricité…) applicables à cette date.
+   Les charges VARIABLES saisies ce jour-là n'entrent pas dans la main d'œuvre. */
 async function calculerMo() {
   const date = $d('#pd-mo-date').value;
   if (!date) { toastD('Choisissez le jour de référence.'); return; }
@@ -636,14 +643,15 @@ async function calculerMo() {
     if (nEmp) sal = r2D(t);
   }
 
-  // 2) Charges du jour
+  // 2) Charges FIXES du jour (réglées une seule fois dans l'onglet Charges)
   const ch = await sb.from('charges').select('*').eq('date_charge', date);
+  const fx = window.ChargesAPI ? await ChargesAPI.fixesDuJour(date) : { total: 0, lignes: [], travaille: false, installee: false, nbDefinies: 0 };
   if ($d('#pd-mo-date').value !== date) return;      // la date a changé pendant le calcul
-  if (ch.error) { hint.textContent = 'Charges du jour indisponibles : ' + errMsgD(ch.error); return; }
-  const charges = ch.data || [];
+  const charges = ch.error ? [] : (ch.data || []);
   const paieSaisie = r2D(charges.filter(c => c.categorie === CAT_PAIE_D).reduce((s, c) => s + Number(c.montant || 0), 0));
-  const autres = charges.filter(c => c.categorie !== CAT_PAIE_D);
-  const totAutres = r2D(autres.reduce((s, c) => s + Number(c.montant || 0), 0));
+  const variables = r2D(charges.filter(c => c.categorie !== CAT_PAIE_D).reduce((s, c) => s + Number(c.montant || 0), 0));   // information : non comptées
+  const autres = fx.lignes.map(f => ({ categorie: f.libelle, montant: f.montant }));
+  const totAutres = r2D(fx.total);
 
   let srcSal;
   if (sal !== null) srcSal = 'salaires calculés d’après le pointage de ' + nEmp + ' employé' + (nEmp > 1 ? 's' : '');
@@ -652,11 +660,14 @@ async function calculerMo() {
 
   $d('#pd-mo-sal').value = sal || '';
   $d('#pd-mo-ch').value = totAutres || '';
-  const detailCh = autres.length
-    ? autres.map(c => c.categorie + ' ' + moneyD(c.montant)).join(', ')
-    : 'aucune autre charge enregistrée ce jour-là';
-  hint.textContent = fdD(date) + ' : ' + srcSal + ' → ' + moneyD(sal) + ' ; autres charges : ' + detailCh +
-    '. Vérifiez les montants (ex : un loyer mensuel saisi ce jour-là doit être ramené à la journée), indiquez les pièces fabriquées puis enregistrez.';
+  let detailCh;
+  if (fx.erreur) detailCh = 'charges fixes indisponibles (' + fx.erreur + ')';
+  else if (!fx.nbDefinies) detailCh = 'aucune charge fixe définie : saisissez-les une seule fois dans Charges > « Charges fixes de chaque jour »';
+  else if (!autres.length) detailCh = fx.travaille ? 'aucune charge fixe active ce jour-là' : 'aucune (jour non travaillé : aucun pointage)';
+  else detailCh = autres.map(c => c.categorie + ' ' + moneyD(c.montant)).join(', ');
+  hint.textContent = fdD(date) + ' : ' + srcSal + ' → ' + moneyD(sal) + ' ; charges fixes : ' + detailCh + ' → ' + moneyD(totAutres) +
+    (variables > 0 ? ' (charges variables de ' + moneyD(variables) + ' non comptées)' : '') +
+    '. Indiquez les pièces fabriquées puis enregistrez.';
   renderMoResultat();
   $d('#pd-mo-pcs').focus();
 }
@@ -683,7 +694,7 @@ function exportProduit() {
   ].concat(r.list.map(l => [catLbl(l.categorie), nomLigne(l), l.unite, Number(l.quantite), Number(l.perte_pct) || 0, r2D(prixLigne(l)), r2D(coutLigne(l))]))
     .concat([['Total matières et fournitures', '', '', '', '', '', r2D(r.mat)], [],
       ['MAIN D’ŒUVRE D’UNE PIÈCE'], ['Jour de référence', fdD(p.mo_date)], ['Salaires du jour (DA)', Number(p.mo_salaires || 0)],
-      ['Autres charges du jour (DA)', Number(p.mo_charges || 0)], ['Pièces fabriquées ce jour-là', Number(p.mo_pieces || 0)],
+      ['Charges fixes du jour (DA)', Number(p.mo_charges || 0)], ['Pièces fabriquées ce jour-là', Number(p.mo_pieces || 0)],
       ['Main d’œuvre par pièce (DA)', r2D(r.mo)], [],
       ['RÉCAPITULATIF', 'Coût pour 1 pièce (DA)']])
     .concat(r.cats.map(c => [c.lbl, r2D(c.v)]))
@@ -740,7 +751,7 @@ function creerPdfProduit(p) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(txtD('Main d\'œuvre d\'une pièce'), M, y);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
   const moTxt = Number(p.mo_pieces)
-    ? '(' + moneyD(p.mo_salaires) + ' salaires + ' + moneyD(p.mo_charges) + ' charges du ' + fdD(p.mo_date) + ') / ' + numD(p.mo_pieces, 0) + ' pièces = ' + moneyD(r.mo)
+    ? '(' + moneyD(p.mo_salaires) + ' salaires + ' + moneyD(p.mo_charges) + ' charges fixes du ' + fdD(p.mo_date) + ') / ' + numD(p.mo_pieces, 0) + ' pièces = ' + moneyD(r.mo)
     : 'Non renseignée';
   doc.text(txtD(moTxt), M, y + 6);
 
