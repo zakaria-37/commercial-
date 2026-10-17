@@ -14,6 +14,7 @@ let MODELES = [], COMPOSANTS = [];
 let selModele = null;       // id du modèle affiché
 let editModele = false;     // le formulaire modèle sert à renommer
 let curComposant = null;    // composant en cours de modification
+let prAutoNom = '';         // nom rempli automatiquement depuis l'article du stock
 
 const $p = s => document.querySelector(s);
 const UNITES = ['m', 'cm', 'pcs', 'paire', 'kg', 'g', 'L', 'bobine', 'rouleau'];
@@ -63,6 +64,7 @@ function composantsDe(id) { return COMPOSANTS.filter(c => String(c.modele_id) ==
 
 /* ---------- Chargement ---------- */
 async function loadProduction() {
+  try { if (window.StockAPI) await StockAPI.load(); } catch (e) { /* stock non installé : la fiche matières marche sans */ }
   const m = await sb.from('modeles').select('*').order('nom', { ascending: true });
   if (m.error) { MODELES = []; COMPOSANTS = []; toastP('Erreur : ' + errMsgP(m.error)); renderAll(errMsgP(m.error)); return; }
   const c = await sb.from('composants').select('*').order('ordre', { ascending: true }).order('created_at', { ascending: true });
@@ -117,23 +119,66 @@ function renderComposants() {
     '<td><span class="pr-unit-tag">' + escP(c.unite) + '</span></td>' +
     '<td>' + fmtN(c.quantite, 4) + '</td>' +
     '<td>' + (Number(c.perte_pct) ? fmtN(c.perte_pct, 2) + ' %' : '—') + '</td>' +
+    '<td>' + stockCell(c) + '</td>' +
     '<td>' + escP(c.note || '') + '</td>' +
     '<td class="emp-act"><button class="btn s" type="button" onclick="showFormComposant(\'' + escP(c.id) + '\')">Modifier</button> ' +
     '<button class="btn s d" type="button" onclick="removeComposant(\'' + escP(c.id) + '\')">Supprimer</button></td></tr>'
-  ).join('') : '<tr><td colspan="6" class="at-empty">Aucun composant. Cliquez sur « + Ajouter un composant ».</td></tr>';
+  ).join('') : '<tr><td colspan="7" class="at-empty">Aucun composant. Cliquez sur « + Ajouter un composant ».</td></tr>';
+}
+
+/* ---------- Liaison avec le STOCK ---------- */
+function articleDe(c) { return c.article_id && window.StockAPI ? StockAPI.byId(c.article_id) : null; }
+function stockCell(c) {
+  const a = articleDe(c);
+  if (!a) return c.article_id ? '<small>Article supprimé</small>' : '<small style="color:var(--mut)">Non lié</small>';
+  const q = StockAPI.fmtQty(a, StockAPI.qty(a.id)), e = StockAPI.etat(a);
+  return '<b>' + escP(a.nom) + '</b><small>' + q.main + (q.sub ? ' · ' + q.sub : '') + '</small><span class="bd ' + e.c + '">' + e.l + '</span>';
+}
+/* Besoin d'un composant pour N pièces, comparé au stock (unité de mesure de l'article) */
+function stockInfo(c, N) {
+  const a = articleDe(c); if (!a) return null;
+  const need = StockAPI.toBase(a, besoin(c, N), c.unite);
+  if (need == null) return { a, bad: true };
+  const stock = StockAPI.qty(a.id), reste = stock - need, manque = Math.max(0, -reste);
+  let achat = 0, nb = 0;
+  if (manque > 0) { if (StockAPI.aCond(a)) { nb = Math.ceil(manque / StockAPI.condQte(a)); achat = nb * (Number(a.prix_achat) || 0); } else achat = manque * (Number(a.prix_achat) || 0); }
+  return { a, need, stock, reste, manque, nb, achat, cout: need * StockAPI.unitPrice(a) };
 }
 
 function renderBesoins() {
   const m = modeleCourant(), list = composantsDe(m.id), N = qteFabriquer();
+  const infos = list.map(c => stockInfo(c, N));
+  const lies = infos.filter(i => i && !i.bad), manques = lies.filter(i => i.manque > 0);
+  const coutTot = lies.reduce((s, i) => s + i.cout, 0), achatTot = manques.reduce((s, i) => s + i.achat, 0);
+  const money = n => (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' DA';
   $p('#pr-stats').innerHTML =
     '<div class="at-stat"><span>Pièces à fabriquer</span><b>' + fmtN(N, 0) + '</b></div>' +
-    '<div class="at-stat"><span>Composants à sortir du dépôt</span><b>' + list.length + '</b></div>';
-  $p('#pr-need-body').innerHTML = list.length ? list.map(c =>
-    '<tr class="pr-need"><td><b>' + escP(c.nom) + '</b>' + (c.note ? '<small>' + escP(c.note) + '</small>' : '') + '</td>' +
-    '<td>' + fmtN(c.quantite, 4) + ' ' + escP(c.unite) + '</td>' +
-    '<td>' + (Number(c.perte_pct) ? fmtN(c.perte_pct, 2) + ' %' : '—') + '</td>' +
-    '<td><b>' + fmtBesoin(c, N) + ' ' + escP(c.unite) + '</b></td></tr>'
-  ).join('') : '<tr><td colspan="4" class="at-empty">Ajoutez d’abord les composants du modèle.</td></tr>';
+    '<div class="at-stat"><span>Composants à sortir du dépôt</span><b>' + list.length + '</b><small style="color:var(--mut)">' + lies.length + ' lié(s) au stock</small></div>' +
+    (lies.length ? '<div class="at-stat"><span>Coût matières estimé</span><b>' + money(coutTot) + '</b><small style="color:var(--mut)">' + money(N ? coutTot / N : 0) + ' par pièce</small></div>' +
+      '<div class="at-stat' + (manques.length ? ' st-warn' : '') + '"><span>Stock insuffisant</span><b>' + manques.length + '</b><small style="color:var(--mut)">' + (manques.length ? 'À acheter : ≈ ' + money(achatTot) : 'Tout est disponible') + '</small></div>' : '');
+  $p('#pr-need-body').innerHTML = list.length ? list.map((c, i) => {
+    const s = infos[i];
+    let stockTd = '<td><small style="color:var(--mut)">—</small></td><td><small style="color:var(--mut)">—</small></td><td><small style="color:var(--mut)">—</small></td>';
+    let sub = '';
+    if (s && s.bad) stockTd = '<td colspan="3"><small style="color:var(--r)">Unité « ' + escP(c.unite) + ' » incompatible avec l’article « ' + escP(s.a.nom) + ' » (' + escP(s.a.unite) + ')</small></td>';
+    else if (s) {
+      const f = StockAPI.fmtQty(s.a, s.stock), r = StockAPI.fmtQty(s.a, Math.abs(s.reste)), n = StockAPI.fmtQty(s.a, s.need);
+      if (n.sub && c.unite === s.a.unite) sub = '<small>= ' + n.sub + '</small>';
+      stockTd = '<td><b>' + escP(s.a.nom) + '</b><small>' + f.main + (f.sub ? ' · ' + f.sub : '') + '</small></td>' +
+        '<td>' + (s.manque > 0
+          ? '<b class="st-neg">Manque ' + r.main + '</b><small>' + (s.nb ? 'à acheter : ' + s.nb + ' ' + StockAPI.plur(s.a.cond_nom, s.nb) : 'à acheter') + ' ≈ ' + money(s.achat) + '</small>'
+          : '<b class="st-pos">' + r.main + '</b>' + (r.sub ? '<small>' + r.sub + '</small>' : '')) + '</td>' +
+        '<td><b>' + money(s.cout) + '</b><small>' + (s.cout && N ? (s.cout / N).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' DA / pièce' : '') + '</small></td>';
+    }
+    return '<tr class="pr-need"><td><b>' + escP(c.nom) + '</b>' + (c.note ? '<small>' + escP(c.note) + '</small>' : '') + '</td>' +
+      '<td>' + fmtN(c.quantite, 4) + ' ' + escP(c.unite) + '</td>' +
+      '<td>' + (Number(c.perte_pct) ? fmtN(c.perte_pct, 2) + ' %' : '—') + '</td>' +
+      '<td><b>' + fmtBesoin(c, N) + ' ' + escP(c.unite) + '</b>' + sub + '</td>' + stockTd + '</tr>';
+  }).join('') : '<tr><td colspan="7" class="at-empty">Ajoutez d’abord les composants du modèle.</td></tr>';
+  $p('#pr-stock-help').innerHTML = !lies.length && list.length
+    ? 'Astuce : reliez chaque composant à un article de l’onglet <b>Stock</b> (bouton « Modifier ») pour voir la disponibilité, le coût estimé et sortir le stock automatiquement.'
+    : (lies.length ? '« Valider la sortie de stock » retire du stock les ' + lies.length + ' composant(s) liés, sous le n° de bon ci-dessus.' : '');
+  $p('#pr-btn-sortie').disabled = !lies.length;
 }
 
 /* ---------- Modèles ---------- */
@@ -171,7 +216,7 @@ async function duplicateModele() {
   const r = await sb.from('modeles').insert([{ nom, description: m.description || '' }]).select();
   if (r.error || !r.data || !r.data[0]) { toastP('Erreur : ' + errMsgP(r.error || { message: 'création impossible' })); return; }
   const rows = composantsDe(m.id).map((c, i) => ({
-    modele_id: r.data[0].id, nom: c.nom, unite: c.unite, quantite: c.quantite, perte_pct: c.perte_pct, note: c.note || '', ordre: i + 1
+    modele_id: r.data[0].id, nom: c.nom, unite: c.unite, quantite: c.quantite, perte_pct: c.perte_pct, note: c.note || '', ordre: i + 1, article_id: c.article_id || null
   }));
   if (rows.length) {
     const r2 = await sb.from('composants').insert(rows);
@@ -213,6 +258,8 @@ function showFormComposant(id) {
   curComposant = id || null;
   const c = id ? COMPOSANTS.find(x => String(x.id) === String(id)) : null;
   $p('#pr-cform-title').textContent = c ? 'Modifier le composant' : 'Nouveau composant';
+  if (window.StockAPI) StockAPI.fillSelect($p('#pr-cart'), c ? c.article_id : '', '— Aucun (saisie libre) —');
+  prAutoNom = '';
   $p('#pr-cnom').value = c ? c.nom : '';
   $p('#pr-cunite').value = c ? c.unite : 'm';
   $p('#pr-cqte').value = c ? c.quantite : '';
@@ -236,7 +283,7 @@ async function saveComposant() {
   if (!(quantite > 0)) { toastP('La quantité par pièce doit être supérieure à 0.'); return; }
   if (perte < 0 || perte > 100) { toastP('La marge de chute doit être entre 0 et 100 %.'); return; }
 
-  const payload = { nom, unite, quantite, perte_pct: perte, note };
+  const payload = { nom, unite, quantite, perte_pct: perte, note, article_id: $p('#pr-cart').value || null };
   let res;
   if (curComposant) res = await sb.from('composants').update(payload).eq('id', curComposant).select();
   else {
@@ -260,6 +307,34 @@ async function removeComposant(id) {
   if (String(curComposant) === String(id)) cancelFormComposant();
   toastP('Composant supprimé.');
   await loadProduction();
+}
+
+/* ---------- Sortie de stock automatique (valide le bon de sortie) ---------- */
+async function validerSortieStock() {
+  const b = verifierBon(); if (!b) return;
+  if (!window.StockAPI) { toastP('Module stock non chargé.'); return; }
+  try { await StockAPI.load(); } catch (e) {}
+  const items = [], manques = [], exclus = [];
+  b.list.forEach(c => {
+    const s = stockInfo(c, b.N);
+    if (!s) { exclus.push(c.nom + ' (non lié)'); return; }
+    if (s.bad) { exclus.push(c.nom + ' (unité incompatible)'); return; }
+    items.push({ article_id: s.a.id, qte: s.need, nom: s.a.nom, txt: StockAPI.fmtQty(s.a, s.need).main });
+    if (s.manque > 0) manques.push(s.a.nom + ' : manque ' + StockAPI.fmtQty(s.a, s.manque).main);
+  });
+  if (!items.length) { toastP('Aucun composant lié au stock : choisissez un « Article du stock » dans chaque composant.'); return; }
+  const ref = b.num || ('BM-' + b.date.replace(/-/g, ''));
+  const deja = StockAPI.dejaSorti(ref).filter(m => items.some(i => String(i.article_id) === String(m.article_id)));
+  if (deja.length && !confirm('Une sortie de stock existe déjà avec la référence « ' + ref + ' » (' + deja.length + ' ligne(s)).\nValider une deuxième fois retirera encore ces quantités du stock. Continuer ?')) return;
+  const msg = 'Sortir du stock pour ' + fmtN(b.N, 0) + ' « ' + b.m.nom + ' » (bon ' + ref + ') :\n\n' + items.map(i => '• ' + i.nom + ' : ' + i.txt).join('\n') +
+    (exclus.length ? '\n\nNon sortis : ' + exclus.join(', ') : '') +
+    (manques.length ? '\n\n⚠ Stock insuffisant (il deviendra négatif) :\n' + manques.join('\n') : '') + '\n\nConfirmer ?';
+  if (!confirm(msg)) return;
+  const r = await StockAPI.sortie(items, ref, 'Production ' + b.m.nom + ' × ' + b.N + ' pièces' + (b.atelier ? ' → ' + b.atelier : ''), 'production');
+  if (r.error) { toastP('Erreur : ' + (r.error.message || r.error)); return; }
+  toastP('Stock mis à jour : ' + r.n + ' article(s) sorti(s) sous le bon ' + ref + '.');
+  // numéro de bon suivant, pour ne pas valider deux fois le même
+  $p('#pr-bon').value = ref.replace(/(\d+)$/, n => String(parseInt(n, 10) + 1).padStart(n.length, '0'));
 }
 
 /* ---------- Bon de sortie : impression ---------- */
@@ -448,6 +523,14 @@ $p('#pr-qte').addEventListener('input', () => { if (modeleCourant()) renderBesoi
 $p('#pr-mform').addEventListener('submit', ev => { ev.preventDefault(); saveModele(); });
 $p('#pr-cform').addEventListener('submit', ev => { ev.preventDefault(); saveComposant(); });
 document.querySelector('nav button[data-v="production"]').addEventListener('click', loadProduction);
+// Choix d'un article du stock : le composant reprend son nom et son unité
+$p('#pr-cart').addEventListener('change', () => {
+  const a = window.StockAPI ? StockAPI.byId($p('#pr-cart').value) : null; if (!a) return;
+  if (!$p('#pr-cnom').value.trim() || $p('#pr-cnom').value === prAutoNom) { prAutoNom = a.categorie + ' — ' + a.nom; $p('#pr-cnom').value = prAutoNom; }
+  $p('#pr-cunite').value = a.unite;
+});
+// Le stock a changé (entrée, sortie, prix) : fiche matières et besoins se recalculent seuls
+document.addEventListener('mariabag:stock', () => { if (modeleCourant()) { renderComposants(); renderBesoins(); } });
 
 document.addEventListener('mariabag:authenticated', loadProduction);
 if (!document.getElementById('app').classList.contains('hide')) loadProduction();

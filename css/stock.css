@@ -1,0 +1,36 @@
+/* ============================================================
+   MARIA BAG — Section Stock
+   ============================================================ */
+#toastS{display:none;position:fixed;right:20px;bottom:20px;z-index:1000;background:#222;color:#fff;padding:12px 16px;border-radius:10px;max-width:80vw}
+#st-empty{text-align:center;padding:28px 16px}
+#st-empty p{color:var(--mut);margin:6px 0 14px}
+#v-stock .chips{margin:0 0 14px}
+.st-alchip{border-style:dashed}
+.st-alchip.on{background:var(--r);border-color:var(--r)}
+.st-warn{border-color:var(--o);background:var(--ob)}
+.st-hint{color:var(--mut);font-size:13px;margin-top:10px;line-height:1.5}
+.st-hint:empty{display:none}
+.st-hint b{color:var(--tx)}
+.st-check{display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:13px;color:var(--mut);cursor:pointer}
+.st-check input{margin-top:2px;width:18px;height:18px;accent-color:#000;flex:none}
+.st-neg{color:var(--r)}
+.st-pos{color:var(--g)}
+tr.st-cat td{background:var(--nb);padding:8px 12px;border-bottom:1px solid var(--line)}
+.st-tag{display:inline-block;padding:2px 12px;border-radius:12px;font-weight:700;font-size:13px;background:#eee;color:#333}
+.st-tag.t0{background:#efe6d6;color:#6b4e16}.st-tag.t1{background:#e7eefb;color:#23467a}.st-tag.t2{background:#e6f4ea;color:#1e6b34}
+.st-tag.t3{background:#f6e8f3;color:#7a2667}.st-tag.t4{background:#fdf0e1;color:#8a4b00}.st-tag.t5{background:#e3f4f4;color:#14606b}
+.st-tag.t6{background:#f1e7fb;color:#53307a}.st-tag.t7{background:#fbe9e7;color:#8a2f1f}.st-tag.t8{background:#eaf4e0;color:#4a6b14}
+.st-tag.t9{background:#e9eaf6;color:#2f3a7a}.st-tag.t10{background:#fbeee0;color:#7a4a1f}.st-tag.t11{background:#eee;color:#444}
+.st-cmd{border-color:var(--o)}
+@media (max-width:700px){
+  #st-aform .at-fields,#st-mform .at-fields{grid-template-columns:1fr 1fr!important;align-items:end}
+  #st-aform .at-fields label:nth-child(1),#st-aform .at-fields label:nth-child(2),#st-aform .at-fields label:nth-child(4){grid-column:1/-1}
+  #st-aform .at-fields label:nth-child(5),#st-aform .at-fields label:nth-child(6){grid-column:auto}
+  #st-mform .at-fields label:nth-child(2),#st-mform .at-fields label:nth-child(1){grid-column:1/-1}
+  #v-stock .chips{flex-wrap:nowrap;overflow-x:auto;margin-left:-12px;margin-right:-12px;padding:0 12px 4px;scrollbar-width:none}
+  #v-stock .chips::-webkit-scrollbar{display:none}
+  #v-stock .chip{flex:none}
+  tr.st-cat{background:none!important;border:0!important;padding:6px 0 2px!important;margin:6px 0 0!important}
+  tr.st-cat td{background:none;border:0;padding:0}
+}
+tr.st-cat small{display:inline!important;margin-left:6px}

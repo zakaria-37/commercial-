@@ -70,7 +70,16 @@ function lignesDe(id) { return LIGNES.filter(l => String(l.produit_id) === Strin
 /* Quantité réellement consommée pour 1 pièce (chute incluse) */
 function qteReelle(l) { return Number(l.quantite || 0) * (1 + Number(l.perte_pct || 0) / 100); }
 /* Coût d'une ligne pour 1 pièce */
-function coutLigne(l) { return qteReelle(l) * Number(l.prix_unitaire || 0); }
+/* Prix d'une unité : repris EN DIRECT du stock si la ligne est liée à un article
+   (prix du rouleau ÷ mètres du rouleau), sinon le prix saisi à la main */
+function articleLigne(l) { return l.article_id && window.StockAPI ? StockAPI.byId(l.article_id) : null; }
+function prixLigne(l) {
+  const a = articleLigne(l);
+  if (a) { const p = StockAPI.priceFor(a, l.unite); if (p != null) return p; }
+  return Number(l.prix_unitaire || 0);
+}
+const CAT_STOCK_VERS_PRODUIT = { 'Tissu principal': 'Matière', 'Doublure': 'Doublure', 'Sangle': 'Sangle', 'Curseur': 'Curseur', 'Emballage': 'Emballage' };
+function coutLigne(l) { return qteReelle(l) * prixLigne(l); }
 function coutCat(list, k) { return list.filter(l => l.categorie === k).reduce((s, l) => s + coutLigne(l), 0); }
 function coutMatieres(list) { return list.reduce((s, l) => s + coutLigne(l), 0); }
 
@@ -100,6 +109,7 @@ function recap(p) {
 
 /* ---------- Chargement ---------- */
 async function loadProduits() {
+  try { if (window.StockAPI) await StockAPI.load(); } catch (e) { /* stock non installé : les prix saisis à la main restent valables */ }
   const p = await sb.from('produits').select('*').order('nom', { ascending: true });
   if (p.error) { PRODUITS = []; LIGNES = []; toastD('Erreur : ' + errMsgD(p.error)); renderProduits(errMsgD(p.error)); return; }
   const l = await sb.from('produit_lignes').select('*').order('ordre', { ascending: true }).order('created_at', { ascending: true });
@@ -152,7 +162,7 @@ function renderLignes() {
     '<tr><td><span class="pd-cat pd-cat-' + ordre(l.categorie) + '">' + escD(catLbl(l.categorie)) + '</span></td>' +
     '<td><b>' + escD(l.designation) + '</b>' + (l.note ? '<small class="pd-note">' + escD(l.note) + '</small>' : '') + '</td>' +
     '<td>' + numD(l.quantite, 4) + ' ' + escD(l.unite) + '</td>' +
-    '<td>' + numD(l.prix_unitaire, 2) + ' DA / ' + escD(l.unite) + '</td>' +
+    '<td>' + numD(prixLigne(l), 2) + ' DA / ' + escD(l.unite) + (articleLigne(l) ? '<small class="pd-note">Stock : ' + escD(articleLigne(l).nom) + '</small>' : '') + '</td>' +
     '<td>' + (Number(l.perte_pct) ? numD(l.perte_pct, 2) + ' %' : '—') + '</td>' +
     '<td><b>' + moneyD(coutLigne(l)) + '</b></td>' +
     '<td class="emp-act"><button class="btn s" type="button" onclick="showFormLigne(\'' + escD(l.id) + '\')">Modifier</button> ' +
@@ -269,7 +279,7 @@ async function duplicateProduit() {
   if (r.error || !r.data || !r.data[0]) { toastD('Erreur : ' + errMsgD(r.error || { message: 'création impossible' })); return; }
   const rows = lignesDe(p.id).map((l, i) => ({
     produit_id: r.data[0].id, categorie: l.categorie, designation: l.designation, unite: l.unite, quantite: l.quantite,
-    prix_unitaire: l.prix_unitaire, perte_pct: l.perte_pct, note: l.note || '', ordre: i + 1
+    prix_unitaire: l.prix_unitaire, perte_pct: l.perte_pct, note: l.note || '', ordre: i + 1, article_id: l.article_id || null
   }));
   if (rows.length) {
     const r2 = await sb.from('produit_lignes').insert(rows);
@@ -321,19 +331,35 @@ function showFormLigne(id) {
   curLigne = id || null;
   const l = id ? LIGNES.find(x => String(x.id) === String(id)) : null;
   $d('#pd-lform-title').textContent = l ? 'Modifier la ligne' : 'Nouvelle ligne de coût';
+  if (window.StockAPI) StockAPI.fillSelect($d('#pd-lart'), l ? l.article_id : '', '— Aucun (prix saisi à la main) —');
   $d('#pd-lcat').value = l ? (CATS_D.some(c => c.k === l.categorie) ? l.categorie : 'Autre outil') : CATS_D[0].k;
   $d('#pd-ldes').value = l ? l.designation : '';
   $d('#pd-lunite').value = l ? l.unite : 'm';
   $d('#pd-lqte').value = l ? l.quantite : '';
-  $d('#pd-lprix').value = l ? l.prix_unitaire : '';
+  $d('#pd-lprix').value = l ? (articleLigne(l) ? r2D(prixLigne(l) * 10000) / 10000 : l.prix_unitaire) : '';
   $d('#pd-lperte').value = l ? (Number(l.perte_pct) || '') : '';
   $d('#pd-lnote').value = l ? (l.note || '') : '';
   $d('#pd-lsubmit').textContent = l ? 'Enregistrer les modifications' : 'Ajouter la ligne';
   majExempleCat();
+  majLienStock(false);
   majApercuLigne();
   $d('#pd-lform').style.display = 'block';
   $d('#pd-lform').scrollIntoView({ behavior: 'smooth', block: 'center' });
   $d(l ? '#pd-lprix' : '#pd-ldes').focus();
+}
+/* Article du stock choisi : catégorie, désignation, unité et PRIX reprennent ceux du stock */
+function majLienStock(applique) {
+  const a = window.StockAPI ? StockAPI.byId($d('#pd-lart').value) : null;
+  const prix = $d('#pd-lprix');
+  prix.readOnly = !!a; prix.required = !a;
+  prix.style.background = a ? 'var(--nb)' : '';
+  if (!a) { if (applique) prix.value = ''; return; }
+  if (applique) {
+    $d('#pd-lcat').value = CAT_STOCK_VERS_PRODUIT[a.categorie] || 'Autre outil';
+    $d('#pd-ldes').value = a.nom; $d('#pd-lunite').value = a.unite; majExempleCat();
+  }
+  const p = StockAPI.priceFor(a, $d('#pd-lunite').value);
+  prix.value = p == null ? '' : Math.round(p * 10000) / 10000;
 }
 function cancelFormLigne() { curLigne = null; $d('#pd-lform').style.display = 'none'; }
 
@@ -356,14 +382,16 @@ async function saveLigne() {
   const designation = $d('#pd-ldes').value.trim() || catLbl(categorie);
   const unite = $d('#pd-lunite').value;
   const quantite = parseFloat($d('#pd-lqte').value);
-  const prix = parseFloat($d('#pd-lprix').value);
+  const art = window.StockAPI ? StockAPI.byId($d('#pd-lart').value) : null;
+  if (art && StockAPI.priceFor(art, unite) == null) { toastD('Unité « ' + unite + ' » incompatible avec l’article « ' + art.nom + ' » (' + art.unite + ').'); return; }
+  const prix = art ? StockAPI.priceFor(art, unite) : parseFloat($d('#pd-lprix').value);
   const perte = parseFloat($d('#pd-lperte').value) || 0;
   const note = $d('#pd-lnote').value.trim();
   if (!(quantite > 0)) { toastD('La quantité pour une pièce doit être supérieure à 0.'); return; }
   if (!(prix >= 0)) { toastD('Indiquez le prix unitaire (0 si inconnu pour le moment).'); return; }
   if (perte < 0 || perte > 100) { toastD('La chute doit être entre 0 et 100 %.'); return; }
 
-  const payload = { categorie, designation, unite, quantite, prix_unitaire: prix, perte_pct: perte, note };
+  const payload = { categorie, designation, unite, quantite, prix_unitaire: Math.round(prix * 10000) / 10000, perte_pct: perte, note, article_id: art ? art.id : null };
   let res;
   if (curLigne) res = await sb.from('produit_lignes').update(payload).eq('id', curLigne).select();
   else {
@@ -418,16 +446,25 @@ async function importerFiche() {
   const existants = lignesDe(p.id).map(l => l.designation.trim().toLowerCase());
   const nouveaux = comps.filter(x => !existants.includes(String(x.nom).trim().toLowerCase()));
   if (!nouveaux.length) { toastD('Tous les composants de ce modèle sont déjà dans le produit.'); return; }
-  if (!confirm('Importer ' + nouveaux.length + ' composant(s) de la fiche matières ? Il faudra ensuite saisir le prix de chacun.')) return;
+  const nbLies = nouveaux.filter(x => x.article_id && window.StockAPI && StockAPI.byId(x.article_id)).length;
+  if (!confirm('Importer ' + nouveaux.length + ' composant(s) de la fiche matières ?\n' +
+      (nbLies ? nbLies + ' lié(s) au stock : leur prix sera repris automatiquement.\n' : '') +
+      (nouveaux.length - nbLies ? (nouveaux.length - nbLies) + ' non lié(s) : il faudra saisir leur prix.' : ''))) return;
   let ordre = lignesDe(p.id).reduce((mx, l) => Math.max(mx, Number(l.ordre) || 0), 0);
-  const rows = nouveaux.map(x => ({
-    produit_id: p.id, categorie: devinerCat(x.nom), designation: x.nom, unite: x.unite || 'pcs',
-    quantite: x.quantite, prix_unitaire: 0, perte_pct: x.perte_pct || 0, note: x.note || '', ordre: ++ordre
-  }));
+  const rows = nouveaux.map(x => {
+    const a = x.article_id && window.StockAPI ? StockAPI.byId(x.article_id) : null;
+    const prix = a ? StockAPI.priceFor(a, x.unite) : null;
+    return {
+      produit_id: p.id, categorie: a ? (CAT_STOCK_VERS_PRODUIT[a.categorie] || 'Autre outil') : devinerCat(x.nom), designation: x.nom, unite: x.unite || 'pcs',
+      quantite: x.quantite, prix_unitaire: prix != null ? Math.round(prix * 10000) / 10000 : 0, perte_pct: x.perte_pct || 0, note: x.note || '', ordre: ++ordre,
+      article_id: a && prix != null ? a.id : null
+    };
+  });
   const r = await sb.from('produit_lignes').insert(rows);
   if (r.error) { toastD('Erreur : ' + errMsgD(r.error)); return; }
   await sb.from('produits').update({ modele_id: mid }).eq('id', p.id);
-  toastD(rows.length + ' ligne(s) importée(s) : cliquez sur « Modifier » pour saisir les prix.');
+  const sansPrix = rows.filter(r => !r.article_id).length;
+  toastD(rows.length + ' ligne(s) importée(s)' + (sansPrix ? ' : cliquez sur « Modifier » pour saisir le prix des ' + sansPrix + ' non liée(s) au stock.' : ' : prix repris du stock.'));
   await loadProduits();
 }
 
@@ -499,7 +536,7 @@ function exportProduit() {
   const aoa = [
     ['FICHE DE COÛT DE REVIENT — MARIA BAG'], ['Produit', p.nom], ['Description', p.description || ''], ['Date', fdD(isoD(new Date()))], [],
     ['Catégorie', 'Désignation', 'Unité', 'Qté pour 1 pièce', 'Chute (%)', 'Prix unitaire (DA)', 'Coût pour 1 pièce (DA)']
-  ].concat(r.list.map(l => [catLbl(l.categorie), l.designation, l.unite, Number(l.quantite), Number(l.perte_pct) || 0, Number(l.prix_unitaire), r2D(coutLigne(l))]))
+  ].concat(r.list.map(l => [catLbl(l.categorie), l.designation, l.unite, Number(l.quantite), Number(l.perte_pct) || 0, r2D(prixLigne(l)), r2D(coutLigne(l))]))
     .concat([['Total matières et fournitures', '', '', '', '', '', r2D(r.mat)], [],
       ['MAIN D’ŒUVRE D’UNE PIÈCE'], ['Jour de référence', fdD(p.mo_date)], ['Salaires du jour (DA)', Number(p.mo_salaires || 0)],
       ['Autres charges du jour (DA)', Number(p.mo_charges || 0)], ['Pièces fabriquées ce jour-là', Number(p.mo_pieces || 0)],
@@ -545,7 +582,7 @@ function creerPdfProduit(p) {
     startY: 61, margin: { left: M, right: M, bottom: 18 },
     head: [['Catégorie', 'Désignation', 'Qté / pièce', 'Chute', 'Prix unitaire', 'Coût / pièce'].map(txtD)],
     body: r.list.map(l => [catLbl(l.categorie), l.designation, numD(l.quantite, 4) + ' ' + l.unite,
-      Number(l.perte_pct) ? numD(l.perte_pct, 2) + ' %' : '-', numD(l.prix_unitaire, 2) + ' DA', moneyD(coutLigne(l))].map(txtD)),
+      Number(l.perte_pct) ? numD(l.perte_pct, 2) + ' %' : '-', numD(prixLigne(l), 2) + ' DA', moneyD(coutLigne(l))].map(txtD)),
     foot: [['', txtD('Total matières et fournitures'), '', '', '', txtD(moneyD(r.mat))]],
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 9.5, cellPadding: 2.5, textColor: 0, lineColor: 0, lineWidth: 0.2 },
@@ -624,5 +661,9 @@ $d('#pd-qte').addEventListener('input', () => { if (produitCourant()) renderCout
 // Recharge à chaque ouverture de l'onglet (les prix des modèles / charges ont pu changer)
 document.querySelector('nav button[data-v="produits"]').addEventListener('click', loadProduits);
 
+$d('#pd-lart').addEventListener('change', () => majLienStock(true));
+$d('#pd-lunite').addEventListener('change', () => { if ($d('#pd-lart').value) majLienStock(false); });
+// Le stock a changé (nouveau prix d'achat…) : tous les coûts de revient se recalculent seuls
+document.addEventListener('mariabag:stock', () => { if (produitCourant()) renderProduits(); });
 document.addEventListener('mariabag:authenticated', loadProduits);
 if (!document.getElementById('app').classList.contains('hide')) loadProduits();

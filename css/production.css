@@ -55,7 +55,7 @@
   .pr-calc{grid-template-columns:1fr 1fr!important}
   .pr-calc label:nth-child(-n+3){grid-column:1/-1}
   #pr-cform .at-fields{grid-template-columns:1fr 1fr!important;align-items:end}
-  #pr-cform .at-fields label:nth-child(1),#pr-cform .at-fields label:nth-child(4),#pr-cform .at-fields label:nth-child(5){grid-column:1/-1}
+  #pr-cform .at-fields label:nth-child(1),#pr-cform .at-fields label:nth-child(2),#pr-cform .at-fields label:nth-child(5),#pr-cform .at-fields label:nth-child(6){grid-column:1/-1}
   #prod-form .at-fields,#cmd-form .at-fields{grid-template-columns:1fr 1fr!important}
   #prod-form .at-fields label:nth-child(1),#prod-form .at-fields label:nth-child(2),#prod-form .at-fields label:nth-child(8),
   #cmd-form .at-fields label:nth-child(1),#cmd-form .at-fields label:nth-child(2),#cmd-form .at-fields label:nth-child(9){grid-column:1/-1}

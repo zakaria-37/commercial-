@@ -32,7 +32,12 @@
   labelAll();
 
   /* ---------- Onglet affiché ---------- */
-  function setView(v) { document.body.setAttribute('data-view', v || 'dash'); }
+  function setView(v) {
+    document.body.setAttribute('data-view', v || 'dash');
+    // barre du bas défilante : centre l'onglet actif
+    const nav = document.querySelector('nav'), b = nav && nav.querySelector('button[data-v="' + (v || 'dash') + '"]');
+    if (b && nav.scrollWidth > nav.clientWidth) nav.scrollTo({ left: b.offsetLeft - (nav.clientWidth - b.offsetWidth) / 2, behavior: 'smooth' });
+  }
   setView('dash');
   document.querySelectorAll('nav button[data-v]').forEach(b =>
     b.addEventListener('click', () => { setView(b.dataset.v); window.scrollTo(0, 0); }));

@@ -34,15 +34,16 @@
     { id: 'prod',     t: 'Productions en cours' },
     { id: 'charge',   t: 'Charge des ateliers' },
     { id: 'cmd',      t: 'Commandes à suivre', wide: true },
+    { id: 'stock',    t: 'Alertes de stock' },
     { id: 'finance',  t: 'Charges du mois' },
     { id: 'produits', t: 'Coût de revient des produits' }
   ];
   // Par défaut : l'essentiel en haut ; les chiffres détaillés sont masqués (réactivables)
   const DEFAULT_HIDDEN = ['contacts', 'ateliers'];
   const PRESETS = {
-    'Essentiel':  { show: ['apercu', 'notif', 'relances', 'prod', 'cmd', 'finance'] },
+    'Essentiel':  { show: ['apercu', 'notif', 'relances', 'prod', 'cmd', 'stock', 'finance'] },
     'Commercial': { show: ['apercu', 'notif', 'relances', 'contacts', 'statuts'] },
-    'Production': { show: ['apercu', 'notif', 'ateliers', 'prod', 'charge', 'cmd', 'produits'] },
+    'Production': { show: ['apercu', 'notif', 'ateliers', 'prod', 'charge', 'cmd', 'stock', 'produits'] },
     'Tout afficher': { show: WIDGETS.map(w => w.id) }
   };
 
@@ -127,6 +128,7 @@
       const c = await sb.from('charges').select('*').gte('date_charge', mois + '-01').lte('date_charge', mois + '-' + last);
       chargesMois = c.error ? null : (c.data || []);
       const p = await sb.from('pointages').select('*').eq('date_pointage', today);
+      try { if (window.StockAPI) await StockAPI.load(); } catch (e) { /* stock non installé */ }
       pointesAuj = p.error ? null : (p.data || []).filter(x => Number(x.heures) > 0 || (x.heure_debut && x.heure_fin)).length;
       dataErr = false;
     } catch (e) { dataErr = true; }
@@ -153,7 +155,33 @@
       kpi(prodLate ? 'u' : '', 'Productions en cours', prods.length, prodLate + ' en retard · ' + prods.reduce((n, p) => n + (Number(p.quantite_lancee) || 0), 0) + ' pièces', 'prod') +
       kpi(cmdLate ? 'u' : '', 'Commandes à livrer', cmds.length, cmdLate + ' en retard · ' + reste + ' pièces restantes', 'cmd') +
       kpi('', 'Charges du mois', totCh === null ? '—' : money(totCh), totCh === null ? 'Indisponible' : 'Aujourd’hui : ' + money(chAuj), 'charges') +
+      kpiStock() +
       kpi('', 'Employés pointés aujourd’hui', pointesAuj === null ? '—' : pointesAuj + (nbEmp ? ' / ' + nbEmp : ''), 'Ouvrir le pointage', 'pointage');
+  }
+
+  /* ---------- Stock : alertes ---------- */
+  const stockOk = () => window.StockAPI && StockAPI.list().length > 0;
+  function kpiStock() {
+    if (!stockOk()) return kpi('', 'Stock', '—', 'Ouvrir le stock', 'stock');
+    const al = StockAPI.list().filter(StockAPI.enAlerte), rup = al.filter(a => StockAPI.etat(a).rank <= 1).length;
+    return kpi(rup ? 'u' : '', 'Stock à surveiller', al.length, rup + ' en rupture · ' + (al.length - rup) + ' stock bas', 'stock');
+  }
+  function renderStock() {
+    const box = $q('#d-stock'); if (!box) return;
+    if (!window.StockAPI || !StockAPI.list().length) {
+      box.innerHTML = '<div class="empty" style="padding:22px">Aucun article en stock. <button type="button" class="more" data-dgo="stock">Ouvrir le stock →</button></div>'; return;
+    }
+    const all = StockAPI.list(), al = all.filter(StockAPI.enAlerte).sort((a, b) => StockAPI.etat(a).rank - StockAPI.etat(b).rank || a.nom.localeCompare(b.nom));
+    const val = all.reduce((s, a) => s + Math.max(0, StockAPI.qty(a.id)) * StockAPI.unitPrice(a), 0);
+    let h = '<div class="fbig"><b>' + money(val) + '</b><span>valeur du stock · ' + all.length + ' articles</span></div>';
+    h += al.length ? '<table style="min-width:0"><tbody>' + al.slice(0, 6).map(a => {
+      const f = StockAPI.fmtQty(a, StockAPI.qty(a.id)), e = StockAPI.etat(a), c = StockAPI.aCommander(a);
+      return '<tr class="row" data-dgo="stock"><td><b>' + esc(a.nom) + '</b><small>' + esc(a.categorie) + '</small></td>' +
+        '<td>' + esc(f.main) + (f.sub ? '<small>' + esc(f.sub) + '</small>' : '') + '</td>' +
+        '<td><span class="bd ' + e.c + '">' + e.l + '</span>' + (c.nb ? '<small>à commander : ' + c.nb + ' ' + esc(StockAPI.plur(a.cond_nom, c.nb)) + '</small>' : '') + '</td></tr>';
+    }).join('') + '</tbody></table>' + (al.length > 6 ? '<button type="button" class="more" data-dgo="stock">Voir les ' + al.length + ' alertes →</button>' : '')
+      : '<div class="empty" style="padding:18px">✔ Aucun article sous son seuil d’alerte.</div>';
+    box.innerHTML = h + '<button type="button" class="more" data-dgo="stock">Ouvrir le stock →</button>';
   }
 
   /* ---------- Relances : filtres + actions rapides ---------- */
@@ -229,7 +257,7 @@
       hello();
       if (dash.classList.contains('on')) {
         await loadExtras();
-        renderApercu(); renderRelances(); renderFinance(); renderProduits();
+        renderApercu(); renderRelances(); renderFinance(); renderProduits(); renderStock();
       }
     }, 120);
   }
@@ -322,6 +350,7 @@
         if (k === 'charges') return go('charges');
         if (k === 'pointage') return go('employes');
         if (k === 'produits') return go('produits');
+        if (k === 'stock') return go('stock');
       }
     }, true);   // phase de capture ; nos blocs utilisent data-dgo (les lignes ateliers gardent data-go, géré par ateliers.js)
 
@@ -332,6 +361,8 @@
     });
     if (window.LocalDB) LocalDB.onChange(render);
     document.addEventListener('mariabag:authenticated', render);
+    // Le stock a changé : rendu léger (sans recharger le stock, pour ne pas boucler)
+    document.addEventListener('mariabag:stock', () => { if ($q('#v-dash').classList.contains('on')) { renderApercu(); renderProduits(); renderStock(); } });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); });
     setInterval(() => { if (document.visibilityState === 'visible') render(); }, 60000);
     document.querySelector('nav button[data-v="dash"]').addEventListener('click', render);

@@ -20,8 +20,8 @@
   var PAGE = 1000;
 
   // Ordre = parents d'abord (important pour envoyer les nouvelles lignes à Supabase)
-  var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'composants', 'productions', 'commandes',
-                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes'];
+  var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants', 'productions', 'commandes',
+                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements'];
 
   // Valeurs par défaut (les mêmes que dans les fichiers supabase/*.sql)
   var DEFAULTS = {
@@ -36,14 +36,16 @@
     pointages: { heures: 0, heure_debut: null, heure_fin: null },
     charges: { montant: 0, employe_id: null, employe_nom: '', note: '' },
     modeles: { description: '' },
-    composants: { unite: 'pcs', quantite: 0, perte_pct: 0, note: '', ordre: 0 },
+    composants: { unite: 'pcs', quantite: 0, perte_pct: 0, note: '', ordre: 0, article_id: null },
+    stock_articles: { unite: 'm', cond_nom: '', cond_qte: 0, prix_achat: 0, seuil_alerte: 0, fournisseur: '', couleur: '', note: '' },
+    stock_mouvements: { date_mvt: null, type: 'entree', prix_achat: null, fournisseur: '', reference: '', note: '', source: 'manuel' },
     produits: { description: '', modele_id: null, mo_date: null, mo_salaires: 0, mo_charges: 0, mo_pieces: 0 },
-    produit_lignes: { categorie: 'Autre outil', designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, perte_pct: 0, note: '', ordre: 0 }
+    produit_lignes: { categorie: 'Autre outil', designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, perte_pct: 0, note: '', ordre: 0, article_id: null }
   };
 
   // Contraintes « unique » (pour afficher la même erreur que Supabase)
   var UNIQUE = {
-    ateliers: [['nom']], modeles: [['nom']], produits: [['nom']],
+    ateliers: [['nom']], modeles: [['nom']], produits: [['nom']], stock_articles: [['categorie', 'nom']],
     pointages: [['employe_id', 'date_pointage']], commandes: [['commande_numero']]
   };
   // Clé utilisée pour envoyer une ligne à Supabase
@@ -53,6 +55,8 @@
   var CASCADE = [
     ['modeles', 'composants', 'modele_id', 'cascade'], ['modeles', 'produits', 'modele_id', 'null'],
     ['produits', 'produit_lignes', 'produit_id', 'cascade'],
+    ['stock_articles', 'stock_mouvements', 'article_id', 'cascade'], ['stock_articles', 'composants', 'article_id', 'null'],
+    ['stock_articles', 'produit_lignes', 'article_id', 'null'],
     ['ateliers', 'productions', 'atelier_id', 'cascade'], ['productions', 'commandes', 'production_id', 'cascade'],
     ['contacts', 'commandes', 'contact_id', 'null'],
     ['employes', 'pointages', 'employe_id', 'cascade'], ['employes', 'acomptes', 'employe_id', 'cascade'],
@@ -464,7 +468,7 @@
       var app = document.getElementById('app');
       if (!app || app.classList.contains('hide')) return;
       if (document.querySelector('#m.on, #m.show, #bkBg')) return;     // fenêtre ouverte : pas de rechargement sous les doigts
-      ['loadContacts', 'loadAteliers', 'loadProductions', 'loadCommandes', 'loadEmployes', 'loadCharges', 'loadProduction', 'loadProduits']
+      ['loadContacts', 'loadAteliers', 'loadProductions', 'loadCommandes', 'loadEmployes', 'loadCharges', 'loadProduction', 'loadProduits', 'loadStock']
         .forEach(function (f) { try { if (typeof window[f] === 'function') window[f](); } catch (e) {} });
     }, 300);
   }

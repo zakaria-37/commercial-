@@ -30,5 +30,5 @@
   .pd-mo{grid-template-columns:1fr 1fr!important}
   .pd-mo label:nth-child(1){grid-column:1/-1}
   #pd-lform .at-fields{grid-template-columns:1fr 1fr!important;align-items:end}
-  #pd-lform .at-fields label:nth-child(1),#pd-lform .at-fields label:nth-child(2),#pd-lform .at-fields label:nth-child(7){grid-column:1/-1}
+  #pd-lform .at-fields label:nth-child(1),#pd-lform .at-fields label:nth-child(2),#pd-lform .at-fields label:nth-child(3),#pd-lform .at-fields label:nth-child(8){grid-column:1/-1}
 }
