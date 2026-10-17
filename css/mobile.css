@@ -1,0 +1,92 @@
+/* ============================================================
+   MARIA BAG — Confort smartphone (chargé en dernier)
+   - Barre du bas : icônes + libellés lisibles
+   - Fenêtres et formulaires : boutons toujours accessibles
+   - Champs à 16 px (pas de zoom automatique sur iPhone)
+   - Zones sûres (encoche, barre d'accueil) et toucher sans délai
+   ============================================================ */
+
+/* Toucher : pas de délai de 300 ms, pas de zoom par double-tap sur les boutons */
+button,a,select,summary,label,.row,.rr,.nf,.dq,.chip{touch-action:manipulation;-webkit-tap-highlight-color:rgba(217,168,178,.35)}
+html{overscroll-behavior-y:none}
+
+@media (max-width:700px){
+  :root{--navh:calc(68px + env(safe-area-inset-bottom))}
+
+  /* Zones sûres : encoche en haut (application installée) et sur les côtés (paysage) */
+  header{padding-top:calc(8px + env(safe-area-inset-top));padding-left:calc(12px + env(safe-area-inset-left));padding-right:calc(12px + env(safe-area-inset-right))}
+  main{padding-left:calc(12px + env(safe-area-inset-left));padding-right:calc(12px + env(safe-area-inset-right))}
+  body{padding-bottom:calc(var(--navh) + 12px)}
+
+  /* Champs : 16 px partout (même ceux des modules qui fixaient 13 px) */
+  input,select,textarea,.at-fields input,.at-fields select,.at-fields textarea{font-size:16px!important}
+  input[type="date"],input[type="month"],input[type="time"]{min-height:44px}
+
+  /* Barre du bas : icône au-dessus du libellé */
+  nav{padding:4px calc(4px + env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) calc(4px + env(safe-area-inset-left))}
+  nav button{flex-direction:column;gap:2px;min-height:56px;padding:6px 1px;font-size:10.5px!important;font-weight:600;letter-spacing:0!important;line-height:1.1;overflow:visible}
+  nav button::before{display:block;font-size:19px;line-height:1;filter:grayscale(1) brightness(1.6);opacity:.8}
+  nav button.on::before{filter:none;opacity:1}
+  nav button[data-v="dash"]::before{content:"\1F3E0"}
+  nav button[data-v="list"]::before{content:"\1F465"}
+  nav button[data-v="ateliers"]::before{content:"\1F3ED"}
+  nav button[data-v="employes"]::before{content:"\1F9D1\200D\1F527"}
+  nav button[data-v="charges"]::before{content:"\1F4B8"}
+  nav button[data-v="production"]::before{content:"\1F4CB"}
+  nav button[data-v="produits"]::before{content:"\1F45C"}
+
+  /* Messages : au-dessus de la barre du bas (tous les modules) */
+  #toast,#toastA,#toastE,#toastC,#toastP,#toastD{left:12px;right:12px;bottom:calc(var(--navh) + 8px);max-width:none;transform:none;text-align:center;z-index:80}
+
+  /* Fenêtre contact : passe au-dessus de la barre du bas, boutons toujours visibles */
+  #m{z-index:60;padding:0;align-items:stretch}
+  #m .modal{margin:0;border-radius:0;min-height:100%;width:100%;max-width:none;padding:16px 14px 0}
+  #m .mb{position:sticky;bottom:0;z-index:2;background:#fff;margin:14px -14px 0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+         border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+  #m .mb .btn{flex:1 1 0;min-height:46px}
+  #bkBg{z-index:90}
+
+  /* Fenêtre « Sauvegarde » : plein écran défilable */
+  #bkBox{max-height:calc(100dvh - 20px)}
+
+  /* Chiffres : jamais coupés sur 3 lignes */
+  .at-stat{padding:12px}
+  .at-stat b{font-size:clamp(17px,5.2vw,22px)!important;overflow-wrap:anywhere}
+  .at-stat span{font-size:12.5px}
+
+  /* Formulaires : champs alignés par le bas quand un libellé passe à la ligne */
+  .pd-mo,.pr-calc{align-items:end}
+  .at-fields{gap:10px}
+  .at-fields label{font-size:13px}
+  .at-actions{display:flex;flex-wrap:wrap;gap:8px}
+  .at-actions .btn{flex:1 1 140px}
+  .at-form{padding:14px 12px}
+
+  /* Onglets internes (Ateliers…) : défilement horizontal au pouce */
+  .at-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:-12px;margin-right:-12px;padding:0 12px 4px}
+  .at-tabs::-webkit-scrollbar{display:none}
+  .at-tabs button{flex:none;min-height:44px}
+
+  /* Tableau de bord : cibles tactiles confortables */
+  .chip{min-height:40px;padding:6px 14px}
+  .dc{min-width:40px;min-height:40px;font-size:20px}
+  .ib{min-width:40px;height:40px}
+  .dq{min-height:44px}
+
+  /* Titres plus compacts */
+  .hello h2{font-size:22px}
+  .hello p{font-size:13px}
+}
+
+/* Petits écrans (≤ 360 px) */
+@media (max-width:360px){
+  nav button{font-size:9.5px!important}
+  nav button::before{font-size:17px}
+}
+
+/* Téléphone en mode paysage : barre du bas plus basse */
+@media (max-width:900px) and (orientation:landscape) and (max-height:480px){
+  nav button{min-height:44px;flex-direction:row;gap:4px}
+  nav button::before{font-size:15px}
+  :root{--navh:calc(54px + env(safe-area-inset-bottom))}
+}
