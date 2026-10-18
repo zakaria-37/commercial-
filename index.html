@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="css/produits.css">
 <link rel="stylesheet" href="css/stock.css">
 <link rel="stylesheet" href="css/pf.css">
+<link rel="stylesheet" href="css/simple.css">
 <link rel="stylesheet" href="css/dashboard.css">
 <link rel="stylesheet" href="css/mobile.css">
 <style>
@@ -65,6 +66,7 @@
     <button class="dq" type="button" data-q="charge"><b>+</b> Charge</button>
     <button class="dq" type="button" data-q="production"><b>+</b> Production</button>
     <button class="dq" type="button" data-q="commande"><b>+</b> Commande</button>
+    <button class="dq" type="button" data-q="stock"><b>+</b> Stock</button>
     <button class="dq" type="button" data-q="pointage">Pointage</button>
     <button class="dq" type="button" data-q="produits">Coût produit</button>
     <span class="dsp"></span>
@@ -276,10 +278,79 @@
 <section id="v-stock">
   <div class="hello"><span class="fl"></span><div><h2>Stock</h2><p>Matières et fournitures de production, et produits finis livrés aux clients : entrées, sorties, alertes, reliés à la production, aux commandes et au coût des produits.</p></div></div>
     <div class="at-tabs" id="st-tabs">
-    <button type="button" class="on" data-stp="mat">Matières et fournitures</button>
-    <button type="button" data-stp="pf">Produits finis</button>
+    <button type="button" class="on" data-stp="simple">Tout le stock</button>
+    <button type="button" data-stp="pf" title="Détail des modèles finis : prix de vente, seuils, livraisons, historique">Modèles finis</button>
+    <button type="button" data-stp="mat" title="Détail des éléments de production : prix d’achat, rouleaux, seuils, historique">Éléments</button>
   </div>
-  <div id="st-pane-mat">
+
+  <!-- ======================= STOCK SIMPLE : noms puis quantités ======================= -->
+  <div id="st-pane-simple">
+    <div class="card sp-hero">
+      <div class="sp-steps"><span><b>1</b> Ajoutez les noms, un par un</span><span><b>2</b> Entrez les quantités : elles vont directement dans le bon stock</span></div>
+      <div class="sp-big">
+        <button class="btn p" type="button" onclick="spNouveau('pf')">+ Nouveau modèle fini</button>
+        <button class="btn p" type="button" onclick="spNouveau('mat')">+ Nouvel élément de production</button>
+      </div>
+      <p class="pr-help" style="margin:10px 0 0"><b>Modèle fini</b> = ce que vous vendez (sac à dos, cabas…). <b>Élément de production</b> = ce qui sert à le fabriquer (tissu Kawi, doublure, sangle, curseur…).</p>
+    </div>
+
+    <form id="sp-nform" class="at-form">
+      <h2 id="sp-ntitle" style="margin-top:0">Nouveau nom</h2>
+      <div class="pr-type" id="sp-ntype">
+        <label class="pr-typ on"><input type="radio" name="sp-ntype" value="pf" checked> <b>Modèle fini</b><small>sac à dos, cabas, trousse…</small></label>
+        <label class="pr-typ"><input type="radio" name="sp-ntype" value="mat"> <b>Élément de production</b><small>tissu, doublure, sangle, curseur…</small></label>
+      </div>
+      <div class="at-fields">
+        <label id="sp-ncat-wrap">Catégorie<select id="sp-ncat"></select></label>
+        <label>Nom *<input id="sp-nnom" required maxlength="120" list="sp-nnoms" autocomplete="off" placeholder="Ex : Sac à dos Nike"></label>
+        <label id="sp-nunite-wrap">Se compte en<select id="sp-nunite"></select></label>
+        <label id="sp-ncond-wrap">Acheté en<select id="sp-ncond"><option value="">Pas de rouleau / paquet</option><option>rouleau</option><option>paquet</option><option>sachet</option><option>carton</option></select></label>
+        <label id="sp-ncqte-wrap"><span id="sp-ncqte-lbl">Contenu d’un rouleau</span><input id="sp-ncqte" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex : 45"></label>
+        <label><span id="sp-nprix-lbl">Prix (DA)</span><input id="sp-nprix" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Facultatif"></label>
+        <label><span id="sp-ninit-lbl">Quantité en stock</span><input id="sp-ninit" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Facultatif"></label>
+      </div>
+      <datalist id="sp-nnoms"></datalist>
+      <div id="sp-nhint" class="st-hint"></div>
+      <div class="at-actions"><button class="btn p" type="submit">Ajouter</button><button class="btn" type="button" onclick="spFermer()">Fermer</button></div>
+    </form>
+
+    <form id="sp-qform" class="at-form">
+      <h2 id="sp-qtitle" style="margin-top:0">Quantité</h2>
+      <div class="at-fields">
+        <label><span id="sp-qqte-lbl">Quantité *</span><input id="sp-qqte" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex : 100"></label>
+        <label id="sp-qunite-wrap">Unité<select id="sp-qunite"></select></label>
+        <label id="sp-qclient-wrap">Livré à<select id="sp-qclient"></select></label>
+        <label id="sp-qcmd-wrap">Commande<select id="sp-qcmd"></select></label>
+        <label id="sp-qprix-wrap"><span id="sp-qprix-lbl">Prix (DA)</span><input id="sp-qprix" type="number" min="0" step="0.01" inputmode="decimal"></label>
+        <label style="grid-column:1/-1">Note<input id="sp-qnote" maxlength="200" placeholder="Facultatif"></label>
+      </div>
+      <label id="sp-qded-wrap" class="st-check"><input id="sp-qded" type="checkbox" checked> <span id="sp-qded-lbl">Retirer du stock les éléments de production utilisés</span></label>
+      <div id="sp-qded-info" class="st-hint"></div>
+      <div id="sp-qhint" class="st-hint"></div>
+      <div class="at-actions"><button id="sp-qsubmit" class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="spFermer()">Fermer</button></div>
+    </form>
+
+    <form id="sp-cform" class="at-form">
+      <h2 id="sp-ctitle" style="margin-top:0">Composition</h2>
+      <p class="pr-help">Pour <b>une seule pièce</b> : les éléments utilisés et la quantité de chacun. Ensuite, à chaque fabrication entrée en stock, les éléments sont retirés tout seuls, et le coût de revient se calcule avec les prix du stock.</p>
+      <div id="sp-clignes"></div>
+      <div class="at-actions" style="margin-top:6px"><button class="btn s" type="button" id="sp-cadd">+ Ajouter un élément</button></div>
+      <div class="at-fields" style="margin-top:12px"><label>Finition extérieure payée à la pièce (DA) — facultatif<input id="sp-cfin" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex : 35"></label></div>
+      <label class="st-check"><input id="sp-csync" type="checkbox" checked> Mettre à jour le coût de revient de ce modèle (onglet Produits)</label>
+      <div id="sp-chint" class="st-hint"></div>
+      <div class="at-actions"><button class="btn p" type="submit">Enregistrer la composition</button><button class="btn" type="button" onclick="spFermer()">Fermer</button></div>
+    </form>
+
+    <div class="tools">
+      <input id="sp-q" type="search" placeholder="Rechercher un nom…">
+      <span class="sp-chips" id="sp-chips"></span>
+    </div>
+    <div id="sp-empty" class="card" style="display:none"></div>
+    <div class="card" id="sp-card"><div class="at-scroll"><table style="min-width:640px"><thead><tr><th>Nom</th><th>En stock</th><th>État</th><th>Actions</th></tr></thead><tbody id="sp-tbody"></tbody></table></div></div>
+    <p class="pr-help sp-links">Plus de détails : <a href="#" data-go-v="produits">coût de revient des produits</a> · <a href="#" data-go-v="production">fiche matières et bon de sortie</a> · onglets « Détail » ci-dessus (prix d’achat, seuils d’alerte, livraisons, historique).</p>
+  </div>
+
+  <div id="st-pane-mat" style="display:none">
 <div class="tools">
     <input id="st-q" type="search" placeholder="Rechercher : modèle, fournisseur, couleur…">
     <button class="btn" type="button" onclick="exportStock()">Exporter Excel</button>
@@ -411,6 +482,7 @@
   <div id="toastS"></div>
 </section>
 <section id="v-production">
+  <div class="back-stock"><button class="btn s" type="button" onclick="document.querySelector('nav button[data-v=stock]').click()">← Retour au Stock</button></div>
   <div class="hello"><span class="fl"></span><div><h2>Production : fiche matières</h2><p>Composition d’un produit, besoins pour la quantité à fabriquer et bon de sortie du dépôt vers l’atelier.</p></div></div>
   <div class="tools">
     <label style="display:flex;gap:8px;align-items:center;font-weight:600">Modèle <select id="pr-modele"></select></label>
@@ -478,6 +550,7 @@
   <div id="toastP"></div>
 </section>
 <section id="v-produits">
+  <div class="back-stock"><button class="btn s" type="button" onclick="document.querySelector('nav button[data-v=stock]').click()">← Retour au Stock</button></div>
   <div class="hello"><span class="fl"></span><div><h2>Produits : coût de revient d’une pièce</h2><p>Coût d’une unité avant de lancer la production : matière, doublure, sangle, curseur, emballage, autres outils et main d’œuvre.</p></div></div>
   <div class="tools">
     <label style="display:flex;gap:8px;align-items:center;font-weight:600">Produit <select id="pd-produit"></select></label>
@@ -606,6 +679,7 @@
 <script src="js/charges.js"></script>
 <script src="js/stock.js"></script>
 <script src="js/pf.js"></script>
+<script src="js/simple.js"></script>
 <script src="js/production.js"></script>
 <script src="js/produits.js"></script>
 <script src="js/dashboard.js"></script>

@@ -565,6 +565,13 @@ window.StockAPI = {
     await loadStock();
     return { error: null, articles: r.data || [], article: (r.data || [])[0] };
   },
+  /* Mouvement direct (écran « Stock simple ») : quantite en UNITÉ DE MESURE, positive = entrée, négative = sortie */
+  async mouvement(o) {
+    const r = await sb.from('stock_mouvements').insert([{ article_id: o.article_id, date_mvt: o.date || isoS(new Date()), type: o.type || (o.quantite < 0 ? 'sortie' : 'entree'),
+      quantite: r4(o.quantite), prix_achat: o.prix_achat > 0 ? o.prix_achat : null, fournisseur: o.fournisseur || '', reference: o.reference || '', note: o.note || '', source: o.source || 'manuel' }]);
+    if (!r.error) await loadStock();
+    return r;
+  },
   /* Met à jour le prix d'achat d'un article puis recharge (tous les coûts se recalculent) */
   async setPrix(id, prix) {
     const r = await sb.from('stock_articles').update({ prix_achat: prix }).eq('id', id);

@@ -557,18 +557,52 @@
     XLSX.writeFile(wb, 'MARIA-BAG_stock_produits_finis_' + iso(new Date()) + '.xlsx');
   }
 
-  /* ---------- Onglets Matières / Produits finis ---------- */
+  /* ---------- Saisie directe (écran « Stock simple ») ---------- */
+  async function creerClient(nom) {
+    nom = String(nom || '').trim(); if (!nom) return null;
+    const r = await sb.from('contacts').insert([{ nom, prenom: '', type: 'Client', statut: 'Confirmé' }]).select();
+    if (r.error || !r.data || !r.data[0]) { toast('Erreur : ' + errMsg(r.error || { message: 'création impossible' })); return null; }
+    const ct = await sb.from('contacts').select('*'); if (!ct.error) CONTACTS = ct.data || CONTACTS;
+    if (typeof loadContacts === 'function') loadContacts();
+    return r.data[0].id;
+  }
+  /* o : { type, produitId, quantite (pièces, positif), clientId, commandeId, prix, note, reference, date } */
+  async function saisir(o) {
+    const p = produitById(o.produitId); if (!p) return { error: { message: 'Produit introuvable' } };
+    const type = o.type, qIn = Math.round(Number(o.quantite) || 0), cur = qtyOf(p.id);
+    const delta = type === 'ajustement' ? qIn - cur : TYPES[type][2] * qIn;
+    if (!delta) return { error: { message: 'Quantité nulle' } };
+    const cmd = o.commandeId ? CMDS.find(c => String(c.id) === String(o.commandeId)) : null;
+    const liv = type === 'livraison', ret = type === 'retour';
+    const clientId = o.clientId || (cmd && cmd.contact_id) || null;
+    const row = { produit_id: p.id, date_mvt: o.date || iso(new Date()), type, quantite: delta, contact_id: clientId, client_nom: clientId ? clientNom(clientId) : '',
+      commande_id: cmd ? cmd.id : null, production_id: o.productionId || null, prix_vente: liv && o.prix > 0 ? o.prix : null,
+      reference: o.reference != null ? o.reference : (liv ? refDefaut() : ''), note: o.note || '' };
+    const r = await sb.from('pf_mouvements').insert([row]);
+    if (r.error) return { error: r.error };
+    if (liv && o.prix > 0 && !(Number(p.prix_vente) > 0)) await sb.from('produits').update({ prix_vente: o.prix }).eq('id', p.id);
+    if (cmd && (liv || ret)) await majCommande(cmd.id, liv ? qIn : -qIn);
+    await load(); await refreshAteliers();
+    return { ok: true, reference: row.reference, delta };
+  }
+
+  /* ---------- Onglets : Stock (simple) / Modèles finis (détail) / Éléments (détail) ---------- */
   function openPane(k) {
+    $('#st-pane-simple').style.display = k === 'simple' ? '' : 'none';
     $('#st-pane-mat').style.display = k === 'mat' ? '' : 'none';
     $('#st-pane-pf').style.display = k === 'pf' ? '' : 'none';
     document.querySelectorAll('#st-tabs button').forEach(b => b.classList.toggle('on', b.dataset.stp === k));
     try { sessionStorage.setItem('mariabag_stock_pane', k); } catch (e) {}
     if (k === 'pf') load();
+    document.dispatchEvent(new CustomEvent('mariabag:stockpane', { detail: k }));
   }
 
   /* ---------- API pour le Tableau de bord ---------- */
   window.PFAPI = {
-    load, list: () => PR, qty: qtyOf, open: () => openPane('pf'),
+    load, list: () => PR, qty: qtyOf, open: () => openPane('pf'), openPane, etat, saisir, creerClient, bonLivraison,
+    clients: () => clientsList().map(c => ({ id: c.id, nom: clientNom(c.id) })),
+    commandesOuvertes: (produitId, clientId) => CMDS.filter(c => cmdOuverte(c) && (!produitId || (produitDeCmd(c) && String(produitDeCmd(c).id) === String(produitId))) && (!clientId || String(c.contact_id) === String(clientId)))
+      .map(c => ({ id: c.id, numero: c.commande_numero || '—', reste: resteCmd(c), client: clientNom(c.contact_id) })),
     summary() {
       const q = p => Math.max(0, qtyOf(p.id));
       const cmds = CMDS.filter(cmdOuverte);
@@ -615,6 +649,6 @@
   document.addEventListener('mariabag:authenticated', () => load());
   // le stock de matières a changé : les capacités de production se recalculent
   document.addEventListener('mariabag:stock', () => { if (PR.length) { renderTable(); } });
-  try { if (sessionStorage.getItem('mariabag_stock_pane') === 'pf') openPane('pf'); } catch (e) {}
+  try { openPane(sessionStorage.getItem('mariabag_stock_pane') || 'simple'); } catch (e) { openPane('simple'); }
   if (!document.getElementById('app').classList.contains('hide')) load();
 })();

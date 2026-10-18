@@ -110,6 +110,7 @@
     charge: () => { go('charges'); if (typeof showFormCharge === 'function') showFormCharge(); },
     production: () => { goAtelier('productions-pane'); if (typeof showFormProduction === 'function') showFormProduction(); },
     commande: () => { goAtelier('suivi-pane'); if (typeof showFormCommande === 'function') showFormCommande(); },
+    stock: () => go('stock'),
     pointage: () => go('employes'),
     produits: () => go('produits')
   };

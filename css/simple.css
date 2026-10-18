@@ -1,0 +1,42 @@
+/* ============================================================
+   MARIA BAG — « Tout le stock » (écran simple) + mode simple
+   ============================================================ */
+/* Onglets masqués en mode simple (Production, Produits) */
+nav button[hidden]{display:none!important}
+.back-stock{display:none;margin:0 0 12px}
+body.mode-simple .back-stock{display:block}
+
+.sp-hero{margin:0 0 14px}
+.sp-steps{display:flex;gap:18px;flex-wrap:wrap;color:var(--tx);margin:0 0 12px}
+.sp-steps span{display:flex;align-items:center;gap:8px}
+.sp-steps b{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#000;color:#fff;flex:none}
+.sp-big{display:flex;gap:10px;flex-wrap:wrap}
+.sp-big .btn{padding:12px 20px;font-size:15px}
+#st-pane-simple .tools{align-items:center}
+.sp-chips{display:inline-flex;gap:6px;flex-wrap:wrap}
+.sp-links{margin:14px 2px 0}
+.sp-links a{color:var(--rose);font-weight:600}
+
+/* composition : une ligne = élément + quantité par pièce */
+.sp-cl{display:grid;grid-template-columns:minmax(180px,2fr) minmax(120px,1fr) 50px 40px;gap:8px;align-items:center;margin:0 0 8px}
+.sp-cl select,.sp-cl input{padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;background:#fff;min-height:42px}
+.sp-cl-u{color:var(--mut);font-weight:600}
+.sp-cl-old{grid-column:1/-1;color:var(--o);font-size:12.5px}
+
+@media (max-width:700px){
+  .sp-big .btn{flex:1 1 100%}
+  .sp-steps{flex-direction:column;gap:8px}
+  .sp-cl{grid-template-columns:1fr 1fr 40px}
+  .sp-cl select{grid-column:1/-1}
+  .sp-cl-u{display:none}
+  #sp-nform .at-fields,#sp-qform .at-fields{grid-template-columns:1fr 1fr!important;align-items:end}
+  #sp-nform .at-fields label:nth-child(1),#sp-nform .at-fields label:nth-child(2),#sp-qform .at-fields label:nth-child(3),#sp-qform .at-fields label:nth-child(4){grid-column:1/-1}
+  /* 6 onglets en mode simple : ils se partagent la largeur, sans défilement */
+  body.mode-simple nav button{flex:1 1 0!important;min-width:0!important;padding-left:2px!important;padding-right:2px!important}
+}
+
+/* onglets du Stock : une seule rangée, défilante au doigt si besoin */
+#st-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+#st-tabs::-webkit-scrollbar{display:none}
+#st-tabs button{flex:none;white-space:nowrap}
+@media (max-width:700px){#bMode{display:none}}
