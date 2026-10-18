@@ -24,3 +24,8 @@
   .ct-tbl th,.ct-tbl td{padding:8px 6px;font-size:13px}
   .ct-col-opt{display:none}
 }
+.ct-b{height:8px;border-radius:4px;min-width:2px}
+.ct-b.g{background:#3a9a55}.ct-b.o{background:#d9892b}
+.ct-tbl td .ct-b+small{display:block;margin-top:2px}
+tr.ct-det>td{background:#faf8f8;padding:6px 8px}
+tr.ct-det .ct-tbl{background:#fff}

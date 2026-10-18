@@ -82,7 +82,8 @@
 
   const depuis = () => {
     if (periode === 'all') return '';
-    const d = new Date(); d.setDate(d.getDate() - Number(periode));
+    const d = new Date();
+    if (periode === 'year') d.setMonth(0, 1); else if (periode === 'month') d.setDate(1); else d.setDate(d.getDate() - Number(periode));
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
   const dansPeriode = d => { const s = depuis(); return !s || String(d || '') >= s; };
@@ -238,6 +239,95 @@
     box.insertAdjacentHTML('beforeend', h);
   }
 
+  /* ----- Chiffre d'affaires : toutes les opérations avec l'atelier (achats fournisseurs + ventes clients) ----- */
+  let qui = 'tous', ouvert = '';
+  const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const moisLbl = k => MOIS[Number(k.slice(5, 7)) - 1] + ' ' + k.slice(0, 4);
+
+  function operations() {
+    const ops = [];
+    if (window.StockAPI) {
+      const arts = new Map(StockAPI.list().map(a => [String(a.id), a]));
+      StockAPI.mouvements().forEach(m => {
+        if (m.type !== 'entree' || !(Number(m.quantite) > 0) || !dansPeriode(m.date_mvt)) return;
+        const a = arts.get(String(m.article_id)); if (!a) return;
+        const k = cle(m, 'fournisseur', 'Fournisseur');
+        const pu = Number(m.prix_achat) || 0, unit = pu > 0 ? (StockAPI.aCond(a) ? pu / StockAPI.condQte(a) : pu) : 0;
+        ops.push({ sens: 'achat', date: String(m.date_mvt || ''), key: k.key, id: k.id, nom: k.nom || 'Fournisseur non indiqué', libelle: a.nom, qte: StockAPI.fmtQty(a, Number(m.quantite)).main, montant: unit * Number(m.quantite), ref: m.reference || '', sansPrix: !(pu > 0) });
+      });
+    }
+    if (window.PFAPI) {
+      const prods = new Map(PFAPI.produits().map(p => [String(p.id), p]));
+      PFAPI.mouvements().forEach(m => {
+        if ((m.type !== 'livraison' && m.type !== 'retour') || !dansPeriode(m.date_mvt)) return;
+        const p = prods.get(String(m.produit_id)), k = cle(m, 'client_nom', 'Client');
+        const n = -(Number(m.quantite) || 0), pv = m.prix_vente != null ? Number(m.prix_vente) : (p ? Number(p.prix_vente) || 0 : 0);
+        ops.push({ sens: 'vente', date: String(m.date_mvt || ''), key: k.key, id: k.id, nom: k.nom || 'Client non indiqué', libelle: (p ? p.nom : 'Produit') + (m.type === 'retour' ? ' (retour)' : ''), qte: num(Math.abs(n)) + ' pc', montant: n * pv, ref: m.reference || '', sansPrix: !(pv > 0) });
+      });
+    }
+    return ops;
+  }
+
+  function renderCA(box) {
+    const toutes = operations();
+    const ops = toutes.filter(o => qui === 'tous' || (qui === 'clients') === (o.sens === 'vente'));
+    const ventes = toutes.filter(o => o.sens === 'vente').reduce((s, o) => s + o.montant, 0);
+    const achats = toutes.filter(o => o.sens === 'achat').reduce((s, o) => s + o.montant, 0);
+    const bar = '<div class="ct-bar"><label>Période <select id="ct-per">' +
+      [['all', 'Depuis le début'], ['year', 'Cette année'], ['month', 'Ce mois-ci'], ['365', '12 derniers mois'], ['90', '3 derniers mois'], ['30', '30 derniers jours']].map(o => '<option value="' + o[0] + '"' + (periode === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' +
+      '<label>Afficher <select id="ct-qui">' + [['tous', 'Clients et fournisseurs'], ['clients', 'Clients seulement'], ['fournisseurs', 'Fournisseurs seulement']].map(o => '<option value="' + o[0] + '"' + (qui === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' +
+      '<button class="btn s" type="button" id="ct-xls">Exporter Excel</button></div>';
+    let h = bar + '<div class="ct-kpis">' +
+      '<div class="ct-kpi"><span>Ventes aux clients</span><b class="ct-neg">' + money(ventes) + '</b><small>livraisons moins retours</small></div>' +
+      '<div class="ct-kpi"><span>Achats aux fournisseurs</span><b class="ct-pos">' + money(achats) + '</b><small>entrées de stock avec prix</small></div>' +
+      '<div class="ct-kpi"><span>Ventes − achats</span><b>' + money(ventes - achats) + '</b><small>' + toutes.length + ' opération' + (toutes.length > 1 ? 's' : '') + '</small></div></div>';
+    if (!ops.length) { box.innerHTML = h + '<div class="card"><div class="ct-empty">Aucune opération sur cette période.<br>Les achats viennent de <b>Stock → + Entrer</b> (avec fournisseur et prix), les ventes de <b>Stock → Sortir</b> un modèle fini (avec client).</div></div>'; return; }
+
+    // Par mois
+    const mois = new Map();
+    ops.forEach(o => { const k = o.date.slice(0, 7); if (k.length < 7) return; const x = mois.get(k) || { v: 0, a: 0 }; if (o.sens === 'vente') x.v += o.montant; else x.a += o.montant; mois.set(k, x); });
+    const ks = [...mois.keys()].sort().reverse().slice(0, 12);
+    const max = Math.max(1, ...ks.map(k => Math.max(mois.get(k).v, mois.get(k).a)));
+    h += '<div class="card"><h2 style="margin-top:0">Par mois</h2><div class="tw"><table class="ct-tbl"><thead><tr><th>Mois</th><th>Ventes</th><th>Achats</th><th class="n">Ventes − achats</th></tr></thead><tbody>' +
+      ks.map(k => { const x = mois.get(k); return '<tr><td><b>' + moisLbl(k) + '</b></td>' +
+        '<td>' + (qui === 'fournisseurs' ? '—' : '<div class="ct-b g" style="width:' + Math.max(2, Math.round(x.v / max * 100)) + '%"></div><small>' + money(x.v) + '</small>') + '</td>' +
+        '<td>' + (qui === 'clients' ? '—' : '<div class="ct-b o" style="width:' + Math.max(2, Math.round(x.a / max * 100)) + '%"></div><small>' + money(x.a) + '</small>') + '</td>' +
+        '<td class="n"><span class="' + (x.v - x.a >= 0 ? 'ct-neg' : 'ct-pos') + '">' + money(x.v - x.a) + '</span></td></tr>'; }).join('') + '</tbody></table></div></div>';
+
+    // Par contact
+    const g = new Map();
+    ops.forEach(o => { const x = g.get(o.key + o.sens) || { key: o.key, id: o.id, nom: o.nom, sens: o.sens, nb: 0, total: 0, dernier: '', ops: [] }; x.nb++; x.total += o.montant; if (o.date > x.dernier) x.dernier = o.date; x.ops.push(o); g.set(o.key + o.sens, x); });
+    const liste = [...g.values()].sort((a, b) => b.total - a.total);
+    const totalSens = s => liste.filter(x => x.sens === s).reduce((t, x) => t + x.total, 0);
+    const cmds = window.PFAPI ? PFAPI.commandes() : [];
+    h += '<div class="card" style="margin-top:12px"><h2 style="margin-top:0">Par client et par fournisseur</h2><div class="tw"><table class="ct-tbl"><thead><tr><th>#</th><th>Contact</th><th class="n">Opérations</th><th class="n">Chiffre d’affaires</th><th class="n ct-col-opt">Part</th><th class="ct-col-opt">Dernière opération</th></tr></thead><tbody>' +
+      liste.map((x, i) => {
+        const part = totalSens(x.sens) > 0 ? Math.round(x.total / totalSens(x.sens) * 100) + ' %' : '—';
+        const cl = x.sens === 'vente' && x.id ? cmds.filter(c => String(c.contact_id) === String(x.id)) : [];
+        const cmdTxt = cl.length ? ' · ' + cl.length + ' commande' + (cl.length > 1 ? 's' : '') + ' (' + cl.reduce((s, c) => s + (Number(PFAPI.reste(c)) || 0), 0) + ' pc à livrer)' : '';
+        const id = x.key + x.sens, op = ouvert === id;
+        let r = '<tr class="row" data-ca="' + esc(id) + '"><td><span class="ct-rk">' + (i + 1) + '</span></td><td><b>' + esc(x.nom) + '</b><small><span class="ct-bdg ' + (x.sens === 'vente' ? 'g' : 'o') + '">' + (x.sens === 'vente' ? 'Client' : 'Fournisseur') + '</span>' + esc(cmdTxt) + '</small></td>' +
+          '<td class="n">' + x.nb + '</td><td class="n"><b>' + money(x.total) + '</b></td><td class="n ct-col-opt">' + part + '</td><td class="ct-col-opt">' + fd(x.dernier) + '</td></tr>';
+        if (op) r += '<tr class="ct-det"><td></td><td colspan="5"><table class="ct-tbl"><thead><tr><th>Date</th><th>' + (x.sens === 'vente' ? 'Produit' : 'Article') + '</th><th class="n">Qté</th><th class="n">Montant</th><th>Réf.</th></tr></thead><tbody>' +
+          x.ops.sort((a, b) => b.date.localeCompare(a.date)).map(o => '<tr><td>' + fd(o.date) + '</td><td>' + esc(o.libelle) + '</td><td class="n">' + esc(o.qte) + '</td><td class="n">' + (o.sansPrix ? '<small>sans prix</small>' : money(o.montant)) + '</td><td>' + esc(o.ref) + '</td></tr>').join('') + '</tbody></table></td></tr>';
+        return r;
+      }).join('') + '</tbody></table></div>' +
+      '<p class="ct-note">Chiffre d’affaires <b>réel</b>, calculé uniquement à partir des mouvements enregistrés : <b>clients</b> = livraisons (prix de vente) moins retours ; <b>fournisseurs</b> = entrées de stock (quantité × prix d’achat). Les achats saisis sans prix comptent 0 DA. Cliquez sur une ligne pour voir le détail des opérations.</p></div>';
+    box.innerHTML = h;
+    box._rows = liste;
+  }
+
+  function exporterCA() {
+    if (typeof XLSX === 'undefined') { say('Export indisponible.'); return; }
+    const ops = operations().filter(o => qui === 'tous' || (qui === 'clients') === (o.sens === 'vente'));
+    const wb = XLSX.utils.book_new();
+    const g = new Map();
+    ops.forEach(o => { const x = g.get(o.key + o.sens) || { Contact: o.nom, Type: o.sens === 'vente' ? 'Client' : 'Fournisseur', Opérations: 0, 'Chiffre d’affaires (DA)': 0 }; x.Opérations++; x['Chiffre d’affaires (DA)'] += Math.round(o.montant * 100) / 100; g.set(o.key + o.sens, x); });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([...g.values()].sort((a, b) => b['Chiffre d’affaires (DA)'] - a['Chiffre d’affaires (DA)'])), 'Par contact');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ops.sort((a, b) => b.date.localeCompare(a.date)).map(o => ({ Date: fd(o.date), Type: o.sens === 'vente' ? 'Vente' : 'Achat', Contact: o.nom, 'Produit / article': o.libelle, Quantité: o.qte, 'Montant (DA)': Math.round(o.montant * 100) / 100, Référence: o.ref }))), 'Opérations');
+    XLSX.writeFile(wb, 'chiffre-affaires-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  }
+
   function render() {
     const box = $('#ct-rank'); if (!box) return;
     const liste = tab === 'liste';
@@ -247,10 +337,11 @@
     if (tw) tw.style.display = liste ? '' : 'none';
     document.querySelectorAll('#ct-tabs [data-ctp]').forEach(b => b.classList.toggle('on', b.dataset.ctp === tab));
     if (liste) return;
+    if (tab === 'ca') { renderCA(box); return; }
     const four = tab === 'four';
     const tris = four ? [['prix', 'Meilleur prix'], ['vol', 'Plus gros achats'], ['nb', 'Plus d’achats']] : [['ca', 'Chiffre d’affaires'], ['marge', 'Marge'], ['pieces', 'Pièces livrées'], ['liv', 'Nombre de livraisons']];
     box.innerHTML = '<div class="ct-bar"><label>Période <select id="ct-per">' +
-      [['all', 'Depuis le début'], ['365', '12 derniers mois'], ['90', '3 derniers mois'], ['30', '30 derniers jours']].map(o => '<option value="' + o[0] + '"' + (periode === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' +
+      [['all', 'Depuis le début'], ['year', 'Cette année'], ['month', 'Ce mois-ci'], ['365', '12 derniers mois'], ['90', '3 derniers mois'], ['30', '30 derniers jours']].map(o => '<option value="' + o[0] + '"' + (periode === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' +
       '<label>Classer par <select id="ct-tri">' + tris.map(o => '<option value="' + o[0] + '"' + (tri[tab] === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label></div>';
     if (four) renderFournisseurs(box); else renderClients(box);
   }
@@ -258,11 +349,15 @@
   document.addEventListener('click', e => {
     const b = e.target.closest('#ct-tabs [data-ctp]');
     if (b) { tab = b.dataset.ctp; render(); return; }
+    if (e.target.closest('#ct-xls')) { exporterCA(); return; }
+    const ca = e.target.closest('#ct-rank tr[data-ca]');
+    if (ca) { ouvert = ouvert === ca.dataset.ca ? '' : ca.dataset.ca; render(); return; }
     const row = e.target.closest('#ct-rank tr[data-cid]');
     if (row && typeof edit === 'function') edit(row.dataset.cid);
   });
   document.addEventListener('change', e => {
     if (e.target.id === 'ct-per') { periode = e.target.value; render(); }
+    else if (e.target.id === 'ct-qui') { qui = e.target.value; render(); }
     else if (e.target.id === 'ct-tri') { tri[tab] = e.target.value; render(); }
   });
   ['mariabag:stock', 'mariabag:pf'].forEach(ev => document.addEventListener(ev, () => { if (tab !== 'liste' && $('#v-list').classList.contains('on')) render(); }));
