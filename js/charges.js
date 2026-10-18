@@ -29,6 +29,9 @@ const CATS = [
   { k: CAT_VARIABLE, cls: 'n' }
 ];
 const CATS_FIXES = ['Électricité', 'Loyer', 'Dîner des employés', 'Autre charge fixe'];
+// Une charge fixe s'applique « depuis toujours » sauf si on indique une date de début
+const DEBUT_TOUJOURS = '2000-01-01';
+const depuisToujours = d => !d || d <= '2001-01-01';
 const JOURS_C = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
 /* ---------- Utilitaires ---------- */
@@ -76,7 +79,12 @@ function fixeActifLe(f, date) {
 function fixesPour(date, pts) {
   const t = jourTravailleC(date, pts);
   const lignes = CHARGES_FIXES.filter(f => fixeActifLe(f, date) && (f.jours === 'tous' || t));
-  return { total: round2C(lignes.reduce((s, f) => s + Number(f.montant || 0), 0)), lignes, travaille: t };
+  // charges définies mais non applicables ce jour-là, avec la raison (pour l'expliquer à l'écran)
+  const exclues = CHARGES_FIXES.filter(f => !lignes.includes(f)).map(f => ({
+    f, raison: f.actif === false ? 'arrêtée' : (f.date_debut && date < f.date_debut) ? 'commence le ' + fdC(f.date_debut)
+      : (f.date_fin && date > f.date_fin) ? 'terminée le ' + fdC(f.date_fin) : 'jour non travaillé (aucun pointage)'
+  }));
+  return { total: round2C(lignes.reduce((s, f) => s + Number(f.montant || 0), 0)), lignes, exclues, travaille: t };
 }
 const fixesParJourC = f => round2C(CHARGES_FIXES.filter(x => x.actif !== false).reduce((s, x) => s + Number(x.montant || 0), 0));
 
@@ -156,7 +164,7 @@ function renderFixes() {
     '<td><span class="bd n">' + escC(f.categorie) + '</span></td>' +
     '<td><b>' + moneyC(f.montant) + '</b> / jour</td>' +
     '<td>' + (f.jours === 'tous' ? 'Tous les jours' : 'Jours travaillés') + (f.actif === false ? '<small>Arrêtée</small>' : '') + '</td>' +
-    '<td>depuis le ' + fdC(f.date_debut) + (f.date_fin ? '<small>jusqu’au ' + fdC(f.date_fin) + '</small>' : '') + '</td>' +
+    '<td>' + (depuisToujours(f.date_debut) ? 'depuis toujours' : 'depuis le ' + fdC(f.date_debut)) + (f.date_fin ? '<small>jusqu’au ' + fdC(f.date_fin) + '</small>' : '') + '</td>' +
     '<td class="emp-act"><button class="btn s" type="button" onclick="showFormFixe(\'' + escC(f.id) + '\')">Modifier</button> ' +
     '<button class="btn s d" type="button" onclick="removeFixe(\'' + escC(f.id) + '\')">Supprimer</button></td></tr>'
   ).join('') + '<tr class="pr-total"><td colspan="2">Total des charges fixes par jour (actives)</td><td colspan="4">' + moneyC(fixesParJourC()) + '</td></tr>'
@@ -310,7 +318,7 @@ function showFormFixe(id) {
   $c('#cf-cat').value = f ? f.categorie : CATS_FIXES[3];
   $c('#cf-montant').value = f ? f.montant : '';
   $c('#cf-jours').value = f ? f.jours : 'travailles';
-  $c('#cf-debut').value = f ? (f.date_debut || '') : isoC(new Date());
+  $c('#cf-debut').value = f && !depuisToujours(f.date_debut) ? f.date_debut : '';     // vide = depuis toujours
   $c('#cf-fin').value = f ? (f.date_fin || '') : '';
   $c('#cf-note').value = f ? (f.note || '') : '';
   $c('#cf-actif').checked = f ? f.actif !== false : true;
@@ -340,7 +348,7 @@ async function saveFixe() {
   if (!libelle) { toastC('Le nom de la charge fixe est obligatoire.'); return; }
   if (!(montant >= 0)) { toastC('Indiquez le montant par jour.'); return; }
   const payload = {
-    libelle, categorie: $c('#cf-cat').value, montant, jours: $c('#cf-jours').value, date_debut: $c('#cf-debut').value || isoC(new Date()),
+    libelle, categorie: $c('#cf-cat').value, montant, jours: $c('#cf-jours').value, date_debut: $c('#cf-debut').value || DEBUT_TOUJOURS,
     date_fin: $c('#cf-fin').value || null, actif: $c('#cf-actif').checked, note: $c('#cf-note').value.trim()
   };
   if (payload.date_fin && payload.date_fin < payload.date_debut) { toastC('La date de fin doit être après la date de début.'); return; }
@@ -361,7 +369,7 @@ async function saveFixesRapides() {
     ['Autre charge fixe', 'Autre charge fixe', parseFloat($c('#cq-autre').value) || 0]
   ].filter(l => l[2] > 0);
   if (!lignes.length) { toastC('Indiquez au moins un montant par jour.'); return; }
-  const debut = isoC(new Date());
+  const debut = DEBUT_TOUJOURS;       // les charges fixes habituelles s'appliquent aussi aux jours passés
   const res = await sb.from('charges_fixes').insert(lignes.map(l => ({ libelle: l[0], categorie: l[1], montant: l[2], jours: 'travailles', date_debut: debut, actif: true, note: '' }))).select();
   if (res.error) { toastC('Erreur : ' + errMsgC(res.error)); return; }
   toastC(lignes.length + ' charge(s) fixe(s) enregistrée(s) : elles s’appliquent automatiquement à chaque jour travaillé.');
@@ -394,7 +402,7 @@ function exportCharges() {
   }));
   const fixes = CHARGES_FIXES.map(f => ({
     Charge: f.libelle, 'Catégorie': f.categorie, 'Montant par jour (DA)': Number(f.montant || 0), "S'applique": f.jours === 'tous' ? 'Tous les jours' : 'Jours travaillés',
-    'Depuis le': fdC(f.date_debut), "Jusqu'au": fdC(f.date_fin), Active: f.actif === false ? 'Non' : 'Oui'
+    'Depuis le': depuisToujours(f.date_debut) ? 'depuis toujours' : fdC(f.date_debut), "Jusqu'au": fdC(f.date_fin), Active: f.actif === false ? 'Non' : 'Oui'
   }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parJour), 'Par jour ' + mois);
@@ -414,8 +422,10 @@ window.ChargesAPI = {
     await loadFixes();
     const r = await sb.from('pointages').select('*').eq('date_pointage', date);
     const f = fixesPour(date, r.error ? [] : (r.data || []));
-    return { total: f.total, lignes: f.lignes, travaille: f.travaille, installee: !fixesErr, nbDefinies: CHARGES_FIXES.length, erreur: fixesErr };
+    return { total: f.total, lignes: f.lignes, exclues: f.exclues, travaille: f.travaille, installee: !fixesErr, nbDefinies: CHARGES_FIXES.length, erreur: fixesErr };
   },
+  /* Empreinte des charges fixes : change dès qu'on en modifie une (pour recalculer la main d'œuvre) */
+  signature: () => CHARGES_FIXES.map(f => [f.id, f.montant, f.jours, f.date_debut, f.date_fin, f.actif].join(':')).join('|'),
   /* Total des charges fixes d'un mois (jusqu'à aujourd'hui) */
   async moisFixes(mois) {
     await loadFixes();

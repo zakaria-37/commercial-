@@ -200,13 +200,23 @@ function renderLignes() {
     : '<option value="">— Aucun modèle (onglet Production) —</option>';
 }
 
+let moAutoKey = '';       // produit + jour + charges fixes déjà calculés automatiquement
 function renderMoForm(p) {
-  $d('#pd-mo-date').value = p.mo_date || isoD(new Date());
+  // Calcul AUTOMATIQUE d'après le pointage et les charges fixes du jour de référence :
+  // produit pas encore calculé → champs remplis ; déjà enregistré → on signale seulement un écart.
+  // Le formulaire n'est réinitialisé que si le produit, le jour ou les charges fixes ont changé :
+  // un simple réaffichage ne doit pas effacer la saisie en cours ni l'explication.
+  const date = p.mo_date || isoD(new Date());
+  const key = p.id + '|' + date + '|' + (window.ChargesAPI ? ChargesAPI.signature() : '');
+  if (key === moAutoKey) { renderMoResultat(); return; }
+  moAutoKey = key;
+  $d('#pd-mo-date').value = date;
   $d('#pd-mo-sal').value = Number(p.mo_salaires) ? p.mo_salaires : '';
   $d('#pd-mo-ch').value = Number(p.mo_charges) ? p.mo_charges : '';
   $d('#pd-mo-pcs').value = Number(p.mo_pieces) ? p.mo_pieces : '';
   $d('#pd-mo-hint').textContent = '';
   renderMoResultat();
+  calculerMo(Number(p.mo_pieces) ? 'verif' : 'auto');
 }
 
 /* Résultat de la main d'œuvre d'après les champs (avant enregistrement) */
@@ -622,11 +632,15 @@ async function importerFiche() {
 /* Salaires du jour = gain de TOUS les employés pointés ce jour-là (comme l'onglet Employés).
    Charges fixes du jour = charges fixes de l'onglet Charges (dîner, loyer, électricité…) applicables à cette date.
    Les charges VARIABLES saisies ce jour-là n'entrent pas dans la main d'œuvre. */
-async function calculerMo() {
+/* mode : 'bouton' = clic sur « Calculer » (remplit, explique, passe aux pièces)
+           'auto'   = remplit les champs sans bouger (changement de jour, produit pas encore calculé)
+           'verif'  = ne change rien : signale seulement si les valeurs enregistrées diffèrent du calcul actuel */
+async function calculerMo(mode) {
+  mode = mode || 'bouton';
   const date = $d('#pd-mo-date').value;
-  if (!date) { toastD('Choisissez le jour de référence.'); return; }
+  if (!date) { if (mode === 'bouton') toastD('Choisissez le jour de référence.'); return; }
   const hint = $d('#pd-mo-hint');
-  hint.textContent = 'Calcul en cours…';
+  if (mode !== 'verif') hint.textContent = 'Calcul automatique en cours…';
 
   // 1) Salaires d'après le pointage
   let sal = null, nEmp = 0;
@@ -645,12 +659,11 @@ async function calculerMo() {
 
   // 2) Charges FIXES du jour (réglées une seule fois dans l'onglet Charges)
   const ch = await sb.from('charges').select('*').eq('date_charge', date);
-  const fx = window.ChargesAPI ? await ChargesAPI.fixesDuJour(date) : { total: 0, lignes: [], travaille: false, installee: false, nbDefinies: 0 };
+  const fx = window.ChargesAPI ? await ChargesAPI.fixesDuJour(date) : { total: 0, lignes: [], exclues: [], travaille: false, installee: false, nbDefinies: 0 };
   if ($d('#pd-mo-date').value !== date) return;      // la date a changé pendant le calcul
   const charges = ch.error ? [] : (ch.data || []);
   const paieSaisie = r2D(charges.filter(c => c.categorie === CAT_PAIE_D).reduce((s, c) => s + Number(c.montant || 0), 0));
   const variables = r2D(charges.filter(c => c.categorie !== CAT_PAIE_D).reduce((s, c) => s + Number(c.montant || 0), 0));   // information : non comptées
-  const autres = fx.lignes.map(f => ({ categorie: f.libelle, montant: f.montant }));
   const totAutres = r2D(fx.total);
 
   let srcSal;
@@ -658,18 +671,32 @@ async function calculerMo() {
   else if (paieSaisie > 0) { sal = paieSaisie; srcSal = 'salaires repris de la charge « Paie des employés » du jour'; }
   else { sal = 0; srcSal = 'aucun pointage ni paie enregistré ce jour-là : saisissez les salaires à la main'; }
 
+  // Explication des charges fixes : celles qui comptent, et celles qui ne s'appliquent pas (avec la raison)
+  const exclues = (fx.exclues || []).map(x => escD(x.f.libelle) + ' (' + escD(x.raison) + ')');
+  let detailCh;
+  if (fx.erreur) detailCh = 'charges fixes indisponibles (' + escD(fx.erreur) + ')';
+  else if (!fx.nbDefinies) detailCh = 'aucune charge fixe définie : saisissez-les une seule fois dans Charges › « Charges fixes de chaque jour »';
+  else {
+    detailCh = fx.lignes.length ? fx.lignes.map(f => escD(f.libelle) + ' ' + moneyD(f.montant)).join(', ') : 'aucune applicable ce jour-là';
+    if (exclues.length) detailCh += ' <span style="color:#b26a00">— non comptées : ' + exclues.join(', ') + (exclues.some(e => /commence le/.test(e)) ? '. Pour qu’elles s’appliquent aussi à ce jour, videz « À partir du » dans Charges › Modifier' : '') + '</span>';
+  }
+
+  const texte = fdD(date) + ' : ' + srcSal + ' → <b>' + moneyD(sal) + '</b> ; charges fixes : ' + detailCh + ' → <b>' + moneyD(totAutres) + '</b>' +
+    (variables > 0 ? ' <i>(charges variables de ' + moneyD(variables) + ' non comptées)</i>' : '');
+
+  if (mode === 'verif') {
+    const cur = moValeurs();
+    const diff = Math.abs(cur.sal - sal) > 0.01 || Math.abs(cur.ch - totAutres) > 0.01;
+    hint.innerHTML = diff
+      ? 'ℹ Calcul automatique actuel — ' + texte + '. <button type="button" class="btn s p" onclick="calculerMo(\'auto\')">Appliquer ces valeurs</button> (ensuite « Enregistrer »)'
+      : (exclues.length ? '⚠ ' : '✔ Valeurs à jour : ') + texte;
+    return;
+  }
   $d('#pd-mo-sal').value = sal || '';
   $d('#pd-mo-ch').value = totAutres || '';
-  let detailCh;
-  if (fx.erreur) detailCh = 'charges fixes indisponibles (' + fx.erreur + ')';
-  else if (!fx.nbDefinies) detailCh = 'aucune charge fixe définie : saisissez-les une seule fois dans Charges > « Charges fixes de chaque jour »';
-  else if (!autres.length) detailCh = fx.travaille ? 'aucune charge fixe active ce jour-là' : 'aucune (jour non travaillé : aucun pointage)';
-  else detailCh = autres.map(c => c.categorie + ' ' + moneyD(c.montant)).join(', ');
-  hint.textContent = fdD(date) + ' : ' + srcSal + ' → ' + moneyD(sal) + ' ; charges fixes : ' + detailCh + ' → ' + moneyD(totAutres) +
-    (variables > 0 ? ' (charges variables de ' + moneyD(variables) + ' non comptées)' : '') +
-    '. Indiquez les pièces fabriquées puis enregistrez.';
+  hint.innerHTML = (mode === 'auto' ? '⚙ Calculé automatiquement — ' : '') + texte + '. Indiquez les pièces fabriquées puis enregistrez.';
   renderMoResultat();
-  $d('#pd-mo-pcs').focus();
+  if (mode === 'bouton') $d('#pd-mo-pcs').focus();
 }
 
 async function saveMo() {
@@ -811,7 +838,7 @@ $d('#pd-lcat').addEventListener('change', () => { majExempleCat(true); fillNomsS
 ['#pd-lqte', '#pd-lprix', '#pd-lperte'].forEach(s => $d(s).addEventListener('input', majApercuLigne));
 $d('#pd-lunite').addEventListener('change', majApercuLigne);
 ['#pd-mo-sal', '#pd-mo-ch', '#pd-mo-pcs'].forEach(s => $d(s).addEventListener('input', renderMoResultat));
-$d('#pd-mo-date').addEventListener('change', () => { $d('#pd-mo-hint').textContent = ''; renderMoResultat(); });
+$d('#pd-mo-date').addEventListener('change', () => { $d('#pd-mo-hint').textContent = ''; renderMoResultat(); calculerMo('auto'); });   // nouveau jour : salaires et charges fixes se recalculent seuls
 $d('#pd-qte').addEventListener('input', () => { if (produitCourant()) renderCout(); });
 // Recharge à chaque ouverture de l'onglet (les prix des modèles / charges ont pu changer)
 document.querySelector('nav button[data-v="produits"]').addEventListener('click', loadProduits);
