@@ -167,7 +167,7 @@ function stockFiltre() {
   const q = ($s('#st-q').value || '').toLowerCase().trim();
   return STOCK_ARTICLES.filter(a =>
     (!stFiltreCat || a.categorie === stFiltreCat) && (!stAlertes || enAlerte(a)) &&
-    (!q || [a.nom, a.categorie, a.fournisseur, a.couleur, a.note].join(' ').toLowerCase().includes(q)));
+    (!q || [a.nom, a.categorie, a.marque, a.fournisseur, a.couleur, a.note].join(' ').toLowerCase().includes(q)));
 }
 
 function renderStock() {
@@ -243,7 +243,7 @@ function renderTable() {
         const prix = aCond(a)
           ? '<b>' + moneyS(a.prix_achat) + '</b> / ' + escS(a.cond_nom) + '<small>= ' + moneyS(unitPrice(a)) + ' / ' + escS(a.unite) + '</small>'
           : (a.cond_nom ? '<b>' + moneyS(a.prix_achat) + '</b><small style="color:var(--o)">⚠ indiquez les ' + escS(a.unite) + ' par ' + escS(a.cond_nom) + '</small>' : '<b>' + moneyS(a.prix_achat) + '</b> / ' + escS(a.unite));
-        return '<tr><td><b>' + escS(a.nom) + '</b>' + (a.fournisseur || a.couleur ? '<small>' + escS([a.couleur, a.fournisseur].filter(Boolean).join(' · ')) + '</small>' : '') + '</td>' +
+        return '<tr><td><b>' + escS(a.nom) + '</b>' + '<small>' + escS([a.marque || 'MARIA BAG', a.couleur, a.fournisseur].filter(Boolean).join(' · ')) + '</small>' + '</td>' +
           '<td><b>' + f.main + '</b>' + (f.sub ? '<small>' + f.sub + '</small>' : '') + '</td>' +
           '<td>' + prix + '</td>' +
           '<td>' + moneyS(Math.max(0, q) * unitPrice(a), 0) + '</td>' +
@@ -302,6 +302,7 @@ function showFormArticle(id) {
   $s('#st-aprix').value = a ? a.prix_achat : '';
   $s('#st-aseuil').value = a && Number(a.seuil_alerte) ? a.seuil_alerte : '';
   if (window.PartAPI) PartAPI.fill('#st-afour', { id: a && a.contact_id, nom: a && a.fournisseur });
+  $s('#st-amarque').value = a ? (a.marque || 'MARIA BAG') : 'MARIA BAG';
   $s('#st-acoul').value = a ? (a.couleur || '') : '';
   $s('#st-anote').value = a ? (a.note || '') : '';
   $s('#st-ainit').value = '';
@@ -361,7 +362,7 @@ async function saveArticle() {
     prixFinal = Math.round(prix * cond_qte * 100) / 100;
   const payload = {
     categorie, nom, unite, cond_nom, cond_qte, prix_achat: prixFinal, seuil_alerte: seuil,
-    ...(window.PartAPI ? PartAPI.read('#st-afour') : { fournisseur: '', contact_id: null }), couleur: $s('#st-acoul').value.trim(), note: $s('#st-anote').value.trim()
+    ...(window.PartAPI ? PartAPI.read('#st-afour') : { fournisseur: '', contact_id: null }), marque: $s('#st-amarque').value.trim() || 'MARIA BAG', couleur: $s('#st-acoul').value.trim(), note: $s('#st-anote').value.trim()
   };
   const res = curArticle
     ? await sb.from('stock_articles').update(payload).eq('id', curArticle).select()

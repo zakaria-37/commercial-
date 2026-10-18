@@ -22,3 +22,8 @@ where s.contact_id is null and coalesce(s.fournisseur,'') <> ''
   and lower(trim(s.fournisseur)) in (lower(trim(c.societe)), lower(trim(c.nom)), lower(trim(concat_ws(' ', c.prenom, c.nom))));
 
 notify pgrst, 'reload schema';
+
+-- Marque : tous les éléments de stock et produits finis sont « MARIA BAG » par défaut
+alter table public.stock_articles add column if not exists marque text not null default 'MARIA BAG';
+alter table public.produits       add column if not exists marque text not null default 'MARIA BAG';
+notify pgrst, 'reload schema';

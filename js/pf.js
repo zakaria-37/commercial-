@@ -228,7 +228,7 @@
     $('#pf-tbody').innerHTML = list.length ? list.map(p => {
       const st = qtyOf(p.id), e = etat(p), c = cout(p), pv = Number(p.prix_vente) || 0, cap = capacite(p), prod = enProduction(p), liv = aLivrer(p);
       const marge = c > 0 && pv > 0 ? pv - c : null;
-      return '<tr><td><b>' + esc(p.nom) + '</b>' + (p.description ? '<small>' + esc(p.description) + '</small>' : '') + '</td>' +
+      return '<tr><td><b>' + esc(p.nom) + '</b>' + '<small>' + esc([p.marque || 'MARIA BAG', p.description].filter(Boolean).join(' · ')) + '</small>' + '</td>' +
         '<td><b>' + num(st) + '</b> pcs' + (Number(p.seuil_pf) ? '<small>seuil ' + num(p.seuil_pf) + '</small>' : '') + '</td>' +
         '<td>' + (prod ? num(prod) + ' pcs' : '<small>—</small>') + '</td>' +
         '<td>' + (liv ? '<b>' + num(liv) + '</b> pcs' + (liv > st + prod ? '<small style="color:var(--r)">manque ' + num(liv - st - prod) + ' à lancer</small>' : '') : '<small>—</small>') + '</td>' +
