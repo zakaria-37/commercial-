@@ -151,7 +151,7 @@
     cur = { kind, id, op };
     const entree = op === 'entree';
     $('#sp-qqte').value = ''; $('#sp-qnote').value = '';
-    ['#sp-qunite-wrap', '#sp-qclient-wrap', '#sp-qcmd-wrap', '#sp-qprix-wrap', '#sp-qded-wrap'].forEach(s => { $(s).style.display = 'none'; });
+    ['#sp-qunite-wrap', '#sp-qclient-wrap', '#sp-qcmd-wrap', '#sp-qprix-wrap', '#sp-qded-wrap', '#sp-qfour-wrap'].forEach(s => { $(s).style.display = 'none'; });
     $('#sp-qded-info').textContent = '';
     if (kind === 'mat') {
       const a = StockAPI.byId(id); if (!a) return;
@@ -163,6 +163,7 @@
       if (entree) {
         $('#sp-qprix-wrap').style.display = ''; $('#sp-qprix-lbl').textContent = StockAPI.aCond(a) ? 'Prix d’achat d’un ' + a.cond_nom + ' (DA)' : 'Prix d’achat d’une unité (DA)';
         $('#sp-qprix').value = Number(a.prix_achat) > 0 ? a.prix_achat : '';
+        $('#sp-qfour-wrap').style.display = ''; if (window.PartAPI) PartAPI.fill('#sp-qfour', { id: a.contact_id, nom: a.fournisseur });
       }
     } else {
       const p = pOf(id); if (!p) return;
@@ -260,7 +261,7 @@
       const st = StockAPI.qty(a.id);
       if (!entree && st - base < 0 && !confirm('Stock insuffisant : il reste ' + StockAPI.fmtQty(a, st).main + '.\nLe stock deviendra négatif. Continuer ?')) return;
       const prix = parseFloat($('#sp-qprix').value) || 0;
-      const r = await StockAPI.mouvement({ article_id: a.id, type: entree ? 'entree' : 'sortie', quantite: entree ? base : -base, prix_achat: entree ? prix : 0, note });
+      const r = await StockAPI.mouvement({ article_id: a.id, type: entree ? 'entree' : 'sortie', quantite: entree ? base : -base, prix_achat: entree ? prix : 0, note, ...(entree && window.PartAPI ? PartAPI.read('#sp-qfour') : {}) });
       if (r.error) { say('Erreur : ' + r.error.message); return; }
       if (entree && prix > 0 && prix !== Number(a.prix_achat)) await StockAPI.setPrix(a.id, prix);
       say((entree ? 'Entré : +' : 'Sorti : −') + StockAPI.fmtQty(a, base).main + ' « ' + a.nom + ' ».');

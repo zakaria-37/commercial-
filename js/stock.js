@@ -301,7 +301,7 @@ function showFormArticle(id) {
   $s('#st-acqte').value = a && condQte(a) ? condQte(a) : '';
   $s('#st-aprix').value = a ? a.prix_achat : '';
   $s('#st-aseuil').value = a && Number(a.seuil_alerte) ? a.seuil_alerte : '';
-  $s('#st-afour').value = a ? (a.fournisseur || '') : '';
+  if (window.PartAPI) PartAPI.fill('#st-afour', { id: a && a.contact_id, nom: a && a.fournisseur });
   $s('#st-acoul').value = a ? (a.couleur || '') : '';
   $s('#st-anote').value = a ? (a.note || '') : '';
   $s('#st-ainit').value = '';
@@ -361,7 +361,7 @@ async function saveArticle() {
     prixFinal = Math.round(prix * cond_qte * 100) / 100;
   const payload = {
     categorie, nom, unite, cond_nom, cond_qte, prix_achat: prixFinal, seuil_alerte: seuil,
-    fournisseur: $s('#st-afour').value.trim(), couleur: $s('#st-acoul').value.trim(), note: $s('#st-anote').value.trim()
+    ...(window.PartAPI ? PartAPI.read('#st-afour') : { fournisseur: '', contact_id: null }), couleur: $s('#st-acoul').value.trim(), note: $s('#st-anote').value.trim()
   };
   const res = curArticle
     ? await sb.from('stock_articles').update(payload).eq('id', curArticle).select()
@@ -414,7 +414,7 @@ function showFormMvt(type, articleId) {
   renderSelects();
   if (articleId) $s('#st-marticle').value = articleId;
   $s('#st-mdate').value = isoS(new Date());
-  $s('#st-mqte').value = ''; $s('#st-mfour').value = ''; $s('#st-mref').value = ''; $s('#st-mnote').value = '';
+  $s('#st-mqte').value = ''; if (window.PartAPI) PartAPI.fill('#st-mfour', {}); $s('#st-mref').value = ''; $s('#st-mnote').value = '';
   $s('#st-mmaj').checked = true;
   onMvtArticle(true);
   $s('#st-aform').style.display = 'none';
@@ -432,7 +432,7 @@ function onMvtArticle(reset) {
   $s('#st-munite').innerHTML = opts.map(u => '<option>' + escS(u) + '</option>').join('');
   if (reset) {
     $s('#st-mprix').value = Number(a.prix_achat) || '';
-    $s('#st-mfour').value = mvtType === 'entree' ? (a.fournisseur || '') : '';
+    if (window.PartAPI) PartAPI.fill('#st-mfour', mvtType === 'entree' ? { id: a.contact_id, nom: a.fournisseur } : {});
   }
   majMvt();
 }
@@ -476,7 +476,7 @@ async function saveMvt() {
   const row = {
     article_id: a.id, date_mvt: $s('#st-mdate').value || isoS(new Date()), type: mvtType, quantite: delta,
     prix_achat: mvtType === 'entree' && prix > 0 ? prix : null,
-    fournisseur: mvtType === 'entree' ? $s('#st-mfour').value.trim() : '',
+    ...(mvtType === 'entree' && window.PartAPI ? PartAPI.read('#st-mfour') : { fournisseur: '', contact_id: null }),
     reference: $s('#st-mref').value.trim(), note: $s('#st-mnote').value.trim() || (mvtType === 'ajustement' ? 'Inventaire' : ''), source: 'manuel'
   };
   const r = await sb.from('stock_mouvements').insert([row]);
@@ -484,7 +484,7 @@ async function saveMvt() {
   // le prix d'achat de l'article suit le dernier achat (utilisé par les coûts de production)
   if (mvtType === 'entree' && prix > 0 && $s('#st-mmaj').checked) {
     const upd = { prix_achat: prix };
-    const four = $s('#st-mfour').value.trim(); if (four) upd.fournisseur = four;
+    const f = window.PartAPI ? PartAPI.read('#st-mfour') : {}; if (f.fournisseur) { upd.fournisseur = f.fournisseur; upd.contact_id = f.contact_id; }
     const ru = await sb.from('stock_articles').update(upd).eq('id', a.id);
     if (ru.error) toastS('Entrée enregistrée, mais prix non mis à jour : ' + errMsgS(ru.error));
   }
@@ -569,7 +569,7 @@ window.StockAPI = {
   /* Mouvement direct (écran « Stock simple ») : quantite en UNITÉ DE MESURE, positive = entrée, négative = sortie */
   async mouvement(o) {
     const r = await sb.from('stock_mouvements').insert([{ article_id: o.article_id, date_mvt: o.date || isoS(new Date()), type: o.type || (o.quantite < 0 ? 'sortie' : 'entree'),
-      quantite: r4(o.quantite), prix_achat: o.prix_achat > 0 ? o.prix_achat : null, fournisseur: o.fournisseur || '', reference: o.reference || '', note: o.note || '', source: o.source || 'manuel' }]);
+      quantite: r4(o.quantite), prix_achat: o.prix_achat > 0 ? o.prix_achat : null, fournisseur: o.fournisseur || '', contact_id: o.contact_id || null, reference: o.reference || '', note: o.note || '', source: o.source || 'manuel' }]);
     if (!r.error) await loadStock();
     return r;
   },
@@ -580,6 +580,7 @@ window.StockAPI = {
     return r;
   },
   /* Sorties déjà enregistrées avec cette référence (évite de valider deux fois le même bon) */
+  mouvements: () => STOCK_MVTS,
   dejaSorti(reference) { return reference ? STOCK_MVTS.filter(m => m.type === 'sortie' && m.reference === reference) : []; }
 };
 

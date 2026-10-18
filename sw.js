@@ -7,7 +7,7 @@
      hors ligne sont gérées par js/local-db.js)
    Changez CACHE_VERSION pour forcer la mise à jour chez tous les utilisateurs.
    ============================================================ */
-const CACHE_VERSION = 'mariabag-v14';
+const CACHE_VERSION = 'mariabag-v15';
 const SHELL = [
   './',
   './index.html',
@@ -18,6 +18,7 @@ const SHELL = [
   './css/stock.css',
   './css/pf.css',
   './css/simple.css',
+  './css/partenaires.css',
   './css/dashboard.css',
   './css/mobile.css',
   './lib/supabase.min.js',
@@ -34,6 +35,7 @@ const SHELL = [
   './js/charges.js',
   './js/stock.js',
   './js/pf.js',
+  './js/partenaires.js',
   './js/simple.js',
   './js/production.js',
   './js/produits.js',

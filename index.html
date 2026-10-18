@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="css/stock.css">
 <link rel="stylesheet" href="css/pf.css">
 <link rel="stylesheet" href="css/simple.css">
+<link rel="stylesheet" href="css/partenaires.css">
 <link rel="stylesheet" href="css/dashboard.css">
 <link rel="stylesheet" href="css/mobile.css">
 <style>
@@ -93,6 +94,12 @@
   </div>
 </section>
 <section id="v-list">
+  <div class="at-tabs ct-tabs" id="ct-tabs" role="tablist">
+    <button type="button" class="on" data-ctp="liste">Liste des contacts</button>
+    <button type="button" data-ctp="four">Meilleurs fournisseurs</button>
+    <button type="button" data-ctp="cli">Meilleurs clients</button>
+  </div>
+  <div id="ct-rank" hidden></div>
   <div class="tools">
     <input id="q" type="search" placeholder="Rechercher : nom, société, ville…">
     <select id="ft"><option value="">Tous les types</option><option>Client</option><option>Fournisseur</option></select>
@@ -321,6 +328,7 @@
         <label id="sp-qunite-wrap">Unité<select id="sp-qunite"></select></label>
         <label id="sp-qclient-wrap">Livré à<select id="sp-qclient"></select></label>
         <label id="sp-qcmd-wrap">Commande<select id="sp-qcmd"></select></label>
+        <label id="sp-qfour-wrap">Fournisseur<select id="sp-qfour"></select></label>
         <label id="sp-qprix-wrap"><span id="sp-qprix-lbl">Prix (DA)</span><input id="sp-qprix" type="number" min="0" step="0.01" inputmode="decimal"></label>
         <label style="grid-column:1/-1">Note<input id="sp-qnote" maxlength="200" placeholder="Facultatif"></label>
       </div>
@@ -370,7 +378,7 @@
       <label><span id="st-aprix-lbl">Prix d’achat (DA)</span><input id="st-aprix" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex : 12000"></label>
       <label><span id="st-aseuil-lbl">Alerte quand le stock est ≤</span><input id="st-aseuil" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Facultatif"></label>
       <label id="st-ainit-wrap"><span id="st-ainit-lbl">Stock de départ</span><input id="st-ainit" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Facultatif"></label>
-      <label>Fournisseur<input id="st-afour" maxlength="120"></label>
+      <label>Fournisseur<select id="st-afour"></select></label>
       <label>Couleur / référence<input id="st-acoul" maxlength="120"></label>
       <label style="grid-column:1/-1">Note<input id="st-anote" maxlength="200" placeholder="Facultatif"></label>
     </div>
@@ -389,7 +397,7 @@
       <label><span id="st-mqte-lbl">Quantité *</span><input id="st-mqte" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex : 10"></label>
       <label>Unité<select id="st-munite"></select></label>
       <label id="st-mprix-wrap"><span id="st-mprix-lbl">Prix d’achat (DA)</span><input id="st-mprix" type="number" min="0" step="0.01" inputmode="decimal"></label>
-      <label id="st-mfour-wrap">Fournisseur<input id="st-mfour" maxlength="120"></label>
+      <label id="st-mfour-wrap">Fournisseur<select id="st-mfour"></select></label>
       <label>Référence (facture, bon)<input id="st-mref" maxlength="80"></label>
       <label style="grid-column:1/-1">Note<input id="st-mnote" maxlength="200" placeholder="Facultatif"></label>
     </div>
@@ -679,6 +687,7 @@
 <script src="js/charges.js"></script>
 <script src="js/stock.js"></script>
 <script src="js/pf.js"></script>
+<script src="js/partenaires.js"></script>
 <script src="js/simple.js"></script>
 <script src="js/production.js"></script>
 <script src="js/produits.js"></script>

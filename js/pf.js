@@ -600,6 +600,7 @@
   /* ---------- API pour le Tableau de bord ---------- */
   window.PFAPI = {
     load, list: () => PR, qty: qtyOf, open: () => openPane('pf'), openPane, etat, saisir, creerClient, bonLivraison,
+    mouvements: () => MVTS, produits: () => PR, coutProduit: cout,
     clients: () => clientsList().map(c => ({ id: c.id, nom: clientNom(c.id) })),
     commandesOuvertes: (produitId, clientId) => CMDS.filter(c => cmdOuverte(c) && (!produitId || (produitDeCmd(c) && String(produitDeCmd(c).id) === String(produitId))) && (!clientId || String(c.contact_id) === String(clientId)))
       .map(c => ({ id: c.id, numero: c.commande_numero || '—', reste: resteCmd(c), client: clientNom(c.contact_id) })),

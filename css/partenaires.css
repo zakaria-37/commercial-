@@ -1,0 +1,26 @@
+/* Contacts : classement des fournisseurs et des clients */
+.ct-tabs{margin:0 0 12px}
+#ct-rank .ct-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 12px}
+#ct-rank .ct-bar select{padding:9px;border:1px solid #ccc;border-radius:8px;max-width:100%}
+#ct-rank .ct-bar .cnt{margin-left:auto;color:var(--mut);font-size:13px}
+.ct-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));gap:10px;margin:0 0 14px}
+.ct-kpi{background:#fff;border:1px solid var(--bd,#e5e5e5);border-radius:12px;padding:12px 14px;min-width:0}
+.ct-kpi span{display:block;font-size:12.5px;color:var(--mut)}
+.ct-kpi b{display:block;font-size:clamp(17px,2.2vw,22px);overflow-wrap:anywhere;margin-top:2px}
+.ct-kpi small{display:block;color:var(--mut);font-size:12px;margin-top:2px;overflow-wrap:anywhere}
+.ct-tbl{width:100%;border-collapse:collapse}
+.ct-tbl td small{display:block;color:var(--mut);font-size:12px}
+.ct-tbl td.n,.ct-tbl th.n{text-align:right;white-space:nowrap}
+.ct-tbl tr.row{cursor:pointer}
+.ct-rk{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#eee;font-weight:700;font-size:13px}
+.ct-rk.r1{background:#111;color:#fff}
+.ct-bdg{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600;margin:2px 4px 0 0;white-space:nowrap}
+.ct-bdg.g{background:#e4f5e8;color:#17632a}.ct-bdg.b{background:#e3eefb;color:#174a8a}.ct-bdg.o{background:#fdf0dc;color:#8a5a12}.ct-bdg.x{background:#eee;color:#555}
+.ct-neg{color:#17632a;font-weight:600}.ct-pos{color:#b3261e;font-weight:600}
+.ct-note{margin:12px 0 0;color:var(--mut);font-size:12.5px;line-height:1.5}
+.ct-empty{padding:24px 12px;text-align:center;color:var(--mut)}
+@media (max-width:700px){
+  #ct-rank .ct-bar .cnt{margin-left:0;width:100%}
+  .ct-tbl th,.ct-tbl td{padding:8px 6px;font-size:13px}
+  .ct-col-opt{display:none}
+}

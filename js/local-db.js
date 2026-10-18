@@ -38,8 +38,8 @@
     modeles: { description: '' },
     composants: { unite: 'pcs', quantite: 0, perte_pct: 0, note: '', ordre: 0, article_id: null, type: 'matiere', prix_unitaire: 0 },
     charges_fixes: { categorie: 'Autre charge fixe', montant: 0, jours: 'travailles', date_debut: null, date_fin: null, actif: true, note: '' },
-    stock_articles: { unite: 'm', cond_nom: '', cond_qte: 0, prix_achat: 0, seuil_alerte: 0, fournisseur: '', couleur: '', note: '' },
-    stock_mouvements: { date_mvt: null, type: 'entree', prix_achat: null, fournisseur: '', reference: '', note: '', source: 'manuel' },
+    stock_articles: { unite: 'm', cond_nom: '', cond_qte: 0, prix_achat: 0, seuil_alerte: 0, fournisseur: '', contact_id: null, couleur: '', note: '' },
+    stock_mouvements: { date_mvt: null, type: 'entree', prix_achat: null, fournisseur: '', contact_id: null, reference: '', note: '', source: 'manuel' },
     produits: { description: '', modele_id: null, mo_date: null, mo_salaires: 0, mo_charges: 0, mo_pieces: 0, prix_vente: 0, seuil_pf: 0 },
     pf_mouvements: { date_mvt: null, type: 'entree', contact_id: null, client_nom: '', commande_id: null, production_id: null, prix_vente: null, reference: '', note: '' },
     produit_lignes: { categorie: 'Autre outil', designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, perte_pct: 0, note: '', ordre: 0, article_id: null }
@@ -63,6 +63,7 @@
     ['contacts', 'pf_mouvements', 'contact_id', 'null'], ['commandes', 'pf_mouvements', 'commande_id', 'null'], ['productions', 'pf_mouvements', 'production_id', 'null'],
     ['ateliers', 'productions', 'atelier_id', 'cascade'], ['productions', 'commandes', 'production_id', 'cascade'],
     ['contacts', 'commandes', 'contact_id', 'null'],
+    ['contacts', 'stock_articles', 'contact_id', 'null'], ['contacts', 'stock_mouvements', 'contact_id', 'null'],
     ['employes', 'pointages', 'employe_id', 'cascade'], ['employes', 'acomptes', 'employe_id', 'cascade'],
     ['employes', 'charges', 'employe_id', 'null']
   ];
