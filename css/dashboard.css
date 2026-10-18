@@ -97,3 +97,6 @@
   .rr{flex-wrap:wrap}
   .rr .rn{flex:1 1 60%}
 }
+
+.pf-note{background:var(--nb);border-radius:8px;padding:8px 10px;margin:8px 0;font-size:13px}
+.pf-warn{background:var(--ob);color:var(--o)}

@@ -21,14 +21,14 @@
 
   // Ordre = parents d'abord (important pour envoyer les nouvelles lignes à Supabase)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants', 'productions', 'commandes',
-                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes'];
+                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements'];
 
   // Valeurs par défaut (les mêmes que dans les fichiers supabase/*.sql)
   var DEFAULTS = {
     contacts: { nom: '', prenom: '', poste: '', societe: '', type: 'Client', statut: 'En attente', tel: '', email: '', ville: '',
                 source: '', produits: '', notes: '', hist: [], derniere: null, relance: null },
     ateliers: { adresse: '', tel: '', email: '', responsable: '', capacite_journaliere: 0, statut: 'Actif', notes: '' },
-    productions: { quantite_lancee: 0, statut: 'En cours', notes: '', date_reception_reelle: null, delai_jours: null },
+    productions: { quantite_lancee: 0, statut: 'En cours', notes: '', date_reception_reelle: null, delai_jours: null, produit_id: null },
     commandes: { contact_id: null, commande_numero: null, quantite_commandee: 0, quantite_recue: 0, date_reception_prevue: null,
                  statut: 'En attente', notes: '' },
     employes: { prenom: '', poste: '', salaire_mensuel: 0, taux_horaire: 0, taux_heure_sup: 0, heure_fin_normale: '19:00', notes: '' },
@@ -40,7 +40,8 @@
     charges_fixes: { categorie: 'Autre charge fixe', montant: 0, jours: 'travailles', date_debut: null, date_fin: null, actif: true, note: '' },
     stock_articles: { unite: 'm', cond_nom: '', cond_qte: 0, prix_achat: 0, seuil_alerte: 0, fournisseur: '', couleur: '', note: '' },
     stock_mouvements: { date_mvt: null, type: 'entree', prix_achat: null, fournisseur: '', reference: '', note: '', source: 'manuel' },
-    produits: { description: '', modele_id: null, mo_date: null, mo_salaires: 0, mo_charges: 0, mo_pieces: 0 },
+    produits: { description: '', modele_id: null, mo_date: null, mo_salaires: 0, mo_charges: 0, mo_pieces: 0, prix_vente: 0, seuil_pf: 0 },
+    pf_mouvements: { date_mvt: null, type: 'entree', contact_id: null, client_nom: '', commande_id: null, production_id: null, prix_vente: null, reference: '', note: '' },
     produit_lignes: { categorie: 'Autre outil', designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, perte_pct: 0, note: '', ordre: 0, article_id: null }
   };
 
@@ -58,6 +59,8 @@
     ['produits', 'produit_lignes', 'produit_id', 'cascade'],
     ['stock_articles', 'stock_mouvements', 'article_id', 'cascade'], ['stock_articles', 'composants', 'article_id', 'null'],
     ['stock_articles', 'produit_lignes', 'article_id', 'null'],
+    ['produits', 'pf_mouvements', 'produit_id', 'cascade'], ['produits', 'productions', 'produit_id', 'null'],
+    ['contacts', 'pf_mouvements', 'contact_id', 'null'], ['commandes', 'pf_mouvements', 'commande_id', 'null'], ['productions', 'pf_mouvements', 'production_id', 'null'],
     ['ateliers', 'productions', 'atelier_id', 'cascade'], ['productions', 'commandes', 'production_id', 'cascade'],
     ['contacts', 'commandes', 'contact_id', 'null'],
     ['employes', 'pointages', 'employe_id', 'cascade'], ['employes', 'acomptes', 'employe_id', 'cascade'],
@@ -469,7 +472,7 @@
       var app = document.getElementById('app');
       if (!app || app.classList.contains('hide')) return;
       if (document.querySelector('#m.on, #m.show, #bkBg')) return;     // fenêtre ouverte : pas de rechargement sous les doigts
-      ['loadContacts', 'loadAteliers', 'loadProductions', 'loadCommandes', 'loadEmployes', 'loadCharges', 'loadProduction', 'loadProduits', 'loadStock']
+      ['loadContacts', 'loadAteliers', 'loadProductions', 'loadCommandes', 'loadEmployes', 'loadCharges', 'loadProduction', 'loadProduits', 'loadStock', 'loadPF']
         .forEach(function (f) { try { if (typeof window[f] === 'function') window[f](); } catch (e) {} });
     }, 300);
   }

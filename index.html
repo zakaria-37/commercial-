@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="css/production.css">
 <link rel="stylesheet" href="css/produits.css">
 <link rel="stylesheet" href="css/stock.css">
+<link rel="stylesheet" href="css/pf.css">
 <link rel="stylesheet" href="css/dashboard.css">
 <link rel="stylesheet" href="css/mobile.css">
 <style>
@@ -84,6 +85,7 @@
     <div class="dw card" data-w="charge" data-t="Charge des ateliers"><div class="dh"><h2>Charge des ateliers</h2></div><div class="db"><div id="dash-charge"></div></div></div>
     <div class="dw card" data-w="cmd" data-t="Commandes à suivre"><div class="dh"><h2>Commandes à suivre</h2></div><div class="db"><div id="dash-cmd"></div></div></div>
     <div class="dw card" data-w="stock" data-t="Alertes de stock"><div class="dh"><h2>Alertes de stock</h2></div><div class="db"><div id="d-stock"></div></div></div>
+    <div class="dw card" data-w="pf" data-t="Produits finis"><div class="dh"><h2>Produits finis</h2></div><div class="db"><div id="d-pf"></div></div></div>
     <div class="dw card" data-w="finance" data-t="Charges du mois"><div class="dh"><h2>Charges du mois</h2></div><div class="db"><div id="d-finance"></div></div></div>
     <div class="dw card" data-w="produits" data-t="Coût de revient des produits"><div class="dh"><h2>Coût de revient des produits</h2></div><div class="db"><div id="d-produits"></div></div></div>
   </div>
@@ -272,8 +274,13 @@
   <div id="toastC"></div>
 </section>
 <section id="v-stock">
-  <div class="hello"><span class="fl"></span><div><h2>Stock des matières</h2><p>Chaque matière et fourniture, modèle par modèle : stock en rouleaux et en mètres, prix d’achat, alertes. Relié à la production et au coût des produits.</p></div></div>
-  <div class="tools">
+  <div class="hello"><span class="fl"></span><div><h2>Stock</h2><p>Matières et fournitures de production, et produits finis livrés aux clients : entrées, sorties, alertes, reliés à la production, aux commandes et au coût des produits.</p></div></div>
+    <div class="at-tabs" id="st-tabs">
+    <button type="button" class="on" data-stp="mat">Matières et fournitures</button>
+    <button type="button" data-stp="pf">Produits finis</button>
+  </div>
+  <div id="st-pane-mat">
+<div class="tools">
     <input id="st-q" type="search" placeholder="Rechercher : modèle, fournisseur, couleur…">
     <button class="btn" type="button" onclick="exportStock()">Exporter Excel</button>
     <button class="btn" type="button" onclick="showFormMvt('sortie')">− Sortie</button>
@@ -334,6 +341,71 @@
     <div class="card" style="margin-top:16px" id="st-hist-card">
       <div class="at-actions" style="margin-top:0"><h2 id="st-hist-title" style="margin-right:auto">Derniers mouvements</h2><button id="st-hist-all" class="btn s" type="button" style="display:none">Voir tous les mouvements</button></div>
       <div class="at-scroll"><table style="min-width:760px"><thead><tr><th>Date</th><th>Article</th><th>Opération</th><th>Quantité</th><th>Prix d’achat</th><th>Détail</th><th>Actions</th></tr></thead><tbody id="st-hist-body"></tbody></table></div>
+    </div>
+  </div>
+  </div>
+
+  <!-- ======================= STOCK DES PRODUITS FINIS ======================= -->
+  <div id="st-pane-pf" style="display:none">
+    <div class="tools">
+      <input id="pf-q" type="search" placeholder="Rechercher : produit, client…">
+      <button class="btn" type="button" onclick="pfExport()">Exporter Excel</button>
+      <button class="btn" type="button" onclick="pfShowMvt('perte')">− Perte / casse</button>
+      <button class="btn p" type="button" onclick="pfShowMvt('livraison')">Livraison à un client</button>
+      <button class="btn p" type="button" onclick="pfShowMvt('entree')">+ Entrée en stock</button>
+    </div>
+
+    <form id="pf-pform" class="at-form">
+      <h2 id="pf-pform-title" style="margin-top:0">Produit fini</h2>
+      <div class="at-fields">
+        <label>Prix de vente d’une pièce (DA)<input id="pf-pprix" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex : 1500"></label>
+        <label>Alerte quand le stock est ≤ (pièces)<input id="pf-pseuil" type="number" min="0" step="1" inputmode="numeric" placeholder="Facultatif"></label>
+        <label>Modèle de la fiche matières (capacité de production)<select id="pf-pmodele"></select></label>
+      </div>
+      <div id="pf-phint" class="st-hint"></div>
+      <div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="pfCancelProduit()">Fermer</button></div>
+    </form>
+
+    <form id="pf-mform" class="at-form">
+      <h2 id="pf-mform-title" style="margin-top:0">Mouvement de stock</h2>
+      <div class="at-fields">
+        <label>Opération<select id="pf-mtype"><option value="entree">Entrée en stock (production terminée)</option><option value="livraison">Livraison à un client</option><option value="retour">Retour d’un client</option><option value="perte">Perte / casse / défaut</option><option value="ajustement">Inventaire (corriger le stock)</option></select></label>
+        <label style="grid-column:span 2">Produit *<select id="pf-mproduit"></select></label>
+        <label id="pf-mclient-wrap">Client<select id="pf-mclient"></select></label>
+        <label id="pf-mcmd-wrap">Commande liée<select id="pf-mcmd"></select></label>
+        <label id="pf-mprod-wrap">Production liée<select id="pf-mprod"></select></label>
+        <label>Date<input id="pf-mdate" type="date"></label>
+        <label><span id="pf-mqte-lbl">Quantité (pièces) *</span><input id="pf-mqte" type="number" min="0" step="1" inputmode="numeric" placeholder="Ex : 100"></label>
+        <label id="pf-mprix-wrap">Prix de vente d’une pièce (DA)<input id="pf-mprix" type="number" min="0" step="0.01" inputmode="decimal"></label>
+        <label id="pf-mref-wrap">Référence (bon de livraison)<input id="pf-mref" maxlength="60"></label>
+        <label style="grid-column:1/-1">Note<input id="pf-mnote" maxlength="200" placeholder="Facultatif"></label>
+      </div>
+      <div id="pf-mhint" class="st-hint"></div>
+      <div class="at-actions"><button id="pf-msubmit" class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="pfCancelMvt()">Fermer</button></div>
+    </form>
+
+    <div id="pf-empty" class="card" style="display:none"></div>
+    <div id="pf-stats" class="at-stats"></div>
+    <div id="pf-main">
+      <div class="card st-cmd" id="pf-assoc" style="display:none"></div>
+      <div class="card st-cmd" id="pf-prod-card" style="display:none;margin-top:16px"><h2>Productions terminées à entrer en stock</h2>
+        <p class="pr-help">Ces productions (Ateliers) sont terminées mais leurs pièces ne sont pas encore dans le stock des produits finis.</p>
+        <div class="at-scroll"><table style="min-width:760px"><thead><tr><th>Production</th><th>Produit fini</th><th>Pièces</th><th>Réception</th><th>Actions</th></tr></thead><tbody id="pf-prod-body"></tbody></table></div>
+      </div>
+      <div class="card" style="margin-top:16px" id="pf-cmd-card"><h2>Commandes clients à livrer</h2>
+        <p class="pr-help">Commandes en cours (Ateliers › Suivi & commandes) comparées au stock disponible. Une livraison met à jour la quantité reçue de la commande.</p>
+        <div class="at-scroll"><table style="min-width:860px"><thead><tr><th>Commande</th><th>Client</th><th>Produit</th><th>Reste à livrer</th><th>Stock disponible</th><th>Actions</th></tr></thead><tbody id="pf-cmd-body"></tbody></table></div>
+      </div>
+      <div class="card" style="margin-top:16px"><h2>Stock des produits finis</h2>
+        <div class="at-scroll"><table style="min-width:980px"><thead><tr><th>Produit</th><th>Stock (pièces)</th><th>En production</th><th>À livrer (commandes)</th><th>Coût de revient</th><th>Prix de vente</th><th>Capacité (matières)</th><th>État</th><th>Actions</th></tr></thead><tbody id="pf-tbody"></tbody></table></div>
+      </div>
+      <div class="card" style="margin-top:16px"><h2>Livraisons par client</h2>
+        <div class="at-scroll"><table style="min-width:640px"><thead><tr><th>Client</th><th>Pièces livrées</th><th>Produits</th><th>Valeur</th><th>Dernière livraison</th><th>Actions</th></tr></thead><tbody id="pf-cli-body"></tbody></table></div>
+      </div>
+      <div class="card" style="margin-top:16px" id="pf-hist-card">
+        <div class="at-actions" style="margin-top:0"><h2 id="pf-hist-title" style="margin-right:auto">Derniers mouvements</h2><button id="pf-hist-all" class="btn s" type="button" style="display:none">Voir tous les mouvements</button></div>
+        <div class="at-scroll"><table style="min-width:820px"><thead><tr><th>Date</th><th>Produit</th><th>Opération</th><th>Pièces</th><th>Client</th><th>Détail</th><th>Actions</th></tr></thead><tbody id="pf-hist-body"></tbody></table></div>
+      </div>
     </div>
   </div>
   <div id="toastS"></div>
@@ -533,6 +605,7 @@
 <script src="js/employes.js"></script>
 <script src="js/charges.js"></script>
 <script src="js/stock.js"></script>
+<script src="js/pf.js"></script>
 <script src="js/production.js"></script>
 <script src="js/produits.js"></script>
 <script src="js/dashboard.js"></script>

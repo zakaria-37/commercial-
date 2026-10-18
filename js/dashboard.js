@@ -35,15 +35,16 @@
     { id: 'charge',   t: 'Charge des ateliers' },
     { id: 'cmd',      t: 'Commandes à suivre', wide: true },
     { id: 'stock',    t: 'Alertes de stock' },
+    { id: 'pf',       t: 'Produits finis' },
     { id: 'finance',  t: 'Charges du mois' },
     { id: 'produits', t: 'Coût de revient des produits' }
   ];
   // Par défaut : l'essentiel en haut ; les chiffres détaillés sont masqués (réactivables)
   const DEFAULT_HIDDEN = ['contacts', 'ateliers'];
   const PRESETS = {
-    'Essentiel':  { show: ['apercu', 'notif', 'relances', 'prod', 'cmd', 'stock', 'finance'] },
+    'Essentiel':  { show: ['apercu', 'notif', 'relances', 'prod', 'cmd', 'stock', 'pf', 'finance'] },
     'Commercial': { show: ['apercu', 'notif', 'relances', 'contacts', 'statuts'] },
-    'Production': { show: ['apercu', 'notif', 'ateliers', 'prod', 'charge', 'cmd', 'stock', 'produits'] },
+    'Production': { show: ['apercu', 'notif', 'ateliers', 'prod', 'charge', 'cmd', 'stock', 'pf', 'produits'] },
     'Tout afficher': { show: WIDGETS.map(w => w.id) }
   };
 
@@ -130,6 +131,7 @@
       try { if (window.ChargesAPI) fixesMois = await ChargesAPI.moisFixes(mois); } catch (e) { fixesMois = { total: 0, jours: 0, parJour: 0 }; }
       const p = await sb.from('pointages').select('*').eq('date_pointage', today);
       try { if (window.StockAPI) await StockAPI.load(); } catch (e) { /* stock non installé */ }
+      try { if (window.PFAPI) await PFAPI.load(); } catch (e) { /* stock produits finis non installé */ }
       pointesAuj = p.error ? null : (p.data || []).filter(x => Number(x.heures) > 0 || (x.heure_debut && x.heure_fin)).length;
       dataErr = false;
     } catch (e) { dataErr = true; }
@@ -156,7 +158,7 @@
       kpi(prodLate ? 'u' : '', 'Productions en cours', prods.length, prodLate + ' en retard · ' + prods.reduce((n, p) => n + (Number(p.quantite_lancee) || 0), 0) + ' pièces', 'prod') +
       kpi(cmdLate ? 'u' : '', 'Commandes à livrer', cmds.length, cmdLate + ' en retard · ' + reste + ' pièces restantes', 'cmd') +
       kpi('', 'Charges du mois', totCh === null ? '—' : money(totCh), totCh === null ? 'Indisponible' : 'Aujourd’hui : ' + money(chAuj), 'charges') +
-      kpiStock() +
+      kpiStock() + kpiPF() +
       kpi('', 'Employés pointés aujourd’hui', pointesAuj === null ? '—' : pointesAuj + (nbEmp ? ' / ' + nbEmp : ''), 'Ouvrir le pointage', 'pointage');
   }
 
@@ -167,6 +169,26 @@
     const al = StockAPI.list().filter(StockAPI.enAlerte), rup = al.filter(a => StockAPI.etat(a).rank <= 1).length;
     return kpi(rup ? 'u' : '', 'Stock à surveiller', al.length, rup + ' en rupture · ' + (al.length - rup) + ' stock bas', 'stock');
   }
+  /* ---------- Produits finis ---------- */
+  function kpiPF() {
+    if (!window.PFAPI || !PFAPI.list().length) return kpi('', 'Produits finis', '—', 'Ouvrir le stock', 'pf');
+    const s = PFAPI.summary();
+    return kpi(s.manques || s.alertes.length ? 'u' : '', 'Produits finis en stock', num(s.pieces), s.aLivrer + ' pièces à livrer · ' + (s.manques ? s.manques + ' commande(s) sans stock' : 'stock suffisant'), 'pf');
+  }
+  const num = n => (Number(n) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 });
+  function renderPF() {
+    const box = $q('#d-pf'); if (!box) return;
+    if (!window.PFAPI || !PFAPI.list().length) { box.innerHTML = '<div class="empty" style="padding:22px">Aucun produit fini. <button type="button" class="more" data-dgo="pf">Ouvrir le stock →</button></div>'; return; }
+    const s = PFAPI.summary();
+    let h = '<div class="fbig"><b>' + num(s.pieces) + ' pièces</b><span>en stock · valeur ' + money(s.valeurCout) + ' au coût de revient</span></div>';
+    if (s.aEntrer.length) h += '<div class="pf-note">📥 ' + s.aEntrer.length + ' production(s) terminée(s) à entrer en stock : ' + esc(s.aEntrer.slice(0, 3).map(x => x.nom + ' (' + num(x.pieces) + ')').join(', ')) + '</div>';
+    if (s.manques) h += '<div class="pf-note pf-warn">⚠ ' + s.manques + ' commande(s) client dépassent le stock disponible</div>';
+    h += s.alertes.length ? '<table style="min-width:0"><tbody>' + s.alertes.slice(0, 4).map(a =>
+      '<tr class="row" data-dgo="pf"><td><b>' + esc(a.nom) + '</b></td><td>' + num(a.stock) + ' pcs</td><td><span class="bd ' + a.etat.c + '">' + a.etat.l + '</span></td></tr>').join('') + '</tbody></table>' : '';
+    if (s.derniers.length) h += '<p class="dhint" style="margin-top:8px">Dernières livraisons : ' + esc(s.derniers.slice(0, 3).map(d => (d.client || 'client') + ' ' + num(d.pieces) + ' ' + d.produit).join(' · ')) + '</p>';
+    box.innerHTML = h + '<button type="button" class="more" data-dgo="pf">Ouvrir les produits finis →</button>';
+  }
+
   function renderStock() {
     const box = $q('#d-stock'); if (!box) return;
     if (!window.StockAPI || !StockAPI.list().length) {
@@ -261,7 +283,7 @@
       hello();
       if (dash.classList.contains('on')) {
         await loadExtras();
-        renderApercu(); renderRelances(); renderFinance(); renderProduits(); renderStock();
+        renderApercu(); renderRelances(); renderFinance(); renderProduits(); renderStock(); renderPF();
       }
     }, 120);
   }
@@ -355,6 +377,7 @@
         if (k === 'pointage') return go('employes');
         if (k === 'produits') return go('produits');
         if (k === 'stock') return go('stock');
+        if (k === 'pf') { go('stock'); if (window.PFAPI) PFAPI.open(); return; }
       }
     }, true);   // phase de capture ; nos blocs utilisent data-dgo (les lignes ateliers gardent data-go, géré par ateliers.js)
 
@@ -366,6 +389,7 @@
     if (window.LocalDB) LocalDB.onChange(render);
     document.addEventListener('mariabag:authenticated', render);
     document.addEventListener('mariabag:charges', render);
+    document.addEventListener('mariabag:pf', () => { if ($q('#v-dash').classList.contains('on')) { renderApercu(); renderPF(); } });
     // Le stock a changé : rendu léger (sans recharger le stock, pour ne pas boucler)
     document.addEventListener('mariabag:stock', () => { if ($q('#v-dash').classList.contains('on')) { renderApercu(); renderProduits(); renderStock(); } });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); });

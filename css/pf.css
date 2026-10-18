@@ -1,0 +1,20 @@
+/* ============================================================
+   MARIA BAG — Stock des produits finis
+   ============================================================ */
+#st-tabs{margin:0 0 14px}
+#pf-empty{text-align:center;padding:28px 16px}
+#pf-empty p{color:var(--mut);margin:6px 0 14px}
+#pf-main select,#pf-prod-body input{padding:8px;border:1px solid #ccc;border-radius:8px;max-width:100%;background:#fff}
+#pf-cmd-body select{max-width:230px}
+@media (max-width:700px){
+  #pf-mform .at-fields,#pf-pform .at-fields{grid-template-columns:1fr 1fr!important;align-items:end}
+  #pf-mform .at-fields label:nth-child(1),#pf-mform .at-fields label:nth-child(2),#pf-mform .at-fields label:nth-child(3),
+  #pf-mform .at-fields label:nth-child(4),#pf-mform .at-fields label:nth-child(5){grid-column:1/-1}
+  #pf-pform .at-fields label{grid-column:1/-1}
+  #pf-prod-body input,#pf-prod-body select,#pf-cmd-body select{width:100%;max-width:none;min-height:42px;font-size:16px}
+}
+
+/* colonne d'actions : les boutons passent à la ligne au lieu d'être coupés */
+#pf-tbody td.emp-act,#pf-cmd-body td.emp-act,#pf-prod-body td.emp-act{white-space:normal;min-width:190px}
+#pf-tbody td.emp-act .btn{margin:2px 2px 2px 0}
+#pf-tbody td b{white-space:nowrap}
