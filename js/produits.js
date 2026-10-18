@@ -93,12 +93,12 @@ function prixLigne(l) {
 }
 /* Catégorie du Stock correspondant à une catégorie de coût (Broderie / Transport = prestations, pas de stock) */
 const CAT_PRODUIT_VERS_STOCK = { 'Matière': 'Tissu principal', 'Doublure': 'Doublure', 'Sangle': 'Sangle', 'Curseur': 'Curseur', 'Fermeture': 'Fermeture',
-  'Éponge': 'Éponge', 'Poignée': 'Poignée', 'Boucle': 'Boucle', 'Fil': 'Fil', 'Étiquette': 'Étiquette', 'Emballage': 'Emballage', 'Autre outil': 'Autre' };
+  'Éponge': 'Éponge', 'Poignée': 'Poignée', 'Boucle': 'Boucle', 'Fil': 'Fil', 'Étiquette': 'Étiquette', 'Emballage': 'Emballage', 'Autre outil': 'Accessoire' };
 let autoLie = false;     // la liaison au stock a été trouvée automatiquement d'après le nom saisi
 /* Nom affiché : celui de l'article du Stock (si on le renomme dans le Stock, il change partout) */
 function nomLigne(l) { const a = articleLigne(l); return a ? a.nom : l.designation; }
 const CAT_STOCK_VERS_PRODUIT = { 'Tissu principal': 'Matière', 'Doublure': 'Doublure', 'Sangle': 'Sangle', 'Curseur': 'Curseur', 'Fermeture': 'Fermeture', 'Éponge': 'Éponge',
-  'Poignée': 'Poignée', 'Boucle': 'Boucle', 'Fil': 'Fil', 'Étiquette': 'Étiquette', 'Emballage': 'Emballage' };
+  'Poignée': 'Poignée', 'Boucle': 'Boucle', 'Fil': 'Fil', 'Étiquette': 'Étiquette', 'Emballage': 'Emballage', 'Accessoire': 'Autre outil' };
 function coutLigne(l) { return qteReelle(l) * prixLigne(l); }
 function coutCat(list, k) { return list.filter(l => l.categorie === k).reduce((s, l) => s + coutLigne(l), 0); }
 function coutMatieres(list) { return list.reduce((s, l) => s + coutLigne(l), 0); }

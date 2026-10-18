@@ -37,9 +37,10 @@ const STK_CATS = [
   { k: 'Fil',             unite: 'bobine', cond: '',     noms: ['Fil standard'] },
   { k: 'Étiquette',       unite: 'pcs', cond: 'paquet',  noms: ['Étiquette standard'] },
   { k: 'Emballage',       unite: 'pcs', cond: 'paquet',  noms: ['Emballage standard'] },
+  { k: 'Accessoire',      unite: 'pcs', cond: '',        noms: [] },
   { k: 'Autre',           unite: 'pcs', cond: '',        noms: [] }
 ];
-const STK_CAT_CLASS = ['t0', 't1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9', 't10', 't11'];
+const STK_CAT_CLASS = ['t0', 't1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9', 't10', 't11', 't12'];
 
 /* ---------- Utilitaires ---------- */
 function escS(v) {

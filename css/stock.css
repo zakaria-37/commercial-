@@ -20,7 +20,7 @@ tr.st-cat td{background:var(--nb);padding:8px 12px;border-bottom:1px solid var(-
 .st-tag.t0{background:#efe6d6;color:#6b4e16}.st-tag.t1{background:#e7eefb;color:#23467a}.st-tag.t2{background:#e6f4ea;color:#1e6b34}
 .st-tag.t3{background:#f6e8f3;color:#7a2667}.st-tag.t4{background:#fdf0e1;color:#8a4b00}.st-tag.t5{background:#e3f4f4;color:#14606b}
 .st-tag.t6{background:#f1e7fb;color:#53307a}.st-tag.t7{background:#fbe9e7;color:#8a2f1f}.st-tag.t8{background:#eaf4e0;color:#4a6b14}
-.st-tag.t9{background:#e9eaf6;color:#2f3a7a}.st-tag.t10{background:#fbeee0;color:#7a4a1f}.st-tag.t11{background:#eee;color:#444}
+.st-tag.t9{background:#e9eaf6;color:#2f3a7a}.st-tag.t10{background:#fbeee0;color:#7a4a1f}.st-tag.t11{background:#e3f1f6;color:#1b5a70}.st-tag.t12{background:#eee;color:#444}
 .st-cmd{border-color:var(--o)}
 @media (max-width:700px){
   #st-aform .at-fields,#st-mform .at-fields{grid-template-columns:1fr 1fr!important;align-items:end}
