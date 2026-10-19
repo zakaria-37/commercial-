@@ -221,7 +221,8 @@
   function accueil() {
     const an = new Date().getFullYear();
     let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Inventaire</h2><p>Une photo complète de l’atelier à une date : stock, créances, dettes. Comparez d’une année à l’autre pour savoir si votre valeur nette augmente.</p></div></div>';
-    h += '<div class="card"><div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">Mes inventaires</h2><button class="btn p" type="button" id="inv-new">+ Nouvel inventaire</button></div>';
+    h += '<div class="card"><div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">Mes inventaires</h2><button class="btn" type="button" id="inv-fiche">Fiche de comptage (PDF)</button><button class="btn p" type="button" id="inv-new">+ Nouvel inventaire</button></div>' +
+      '<label class="st-check" style="margin:0 0 8px"><input id="inv-fshow" type="checkbox"> Afficher le stock actuel de la plateforme sur la fiche <small>(décoché = comptage à l’aveugle, plus fiable)</small></label>';
     h += '<form id="inv-nform" class="at-form" style="display:' + (nouveau ? 'block' : 'none') + '"><div class="at-fields">' +
       '<label>Nom *<input id="inv-nnom" maxlength="80" value="Inventaire ' + an + '"></label>' +
       '<label>Date de l’inventaire *<input id="inv-ndate" type="date" value="' + iso(new Date()) + '"></label>' +
@@ -327,7 +328,8 @@
       const passe = i.date_inventaire < iso(new Date());
       h += '<label class="st-check"><input id="inv-apply" type="checkbox"' + (passe ? '' : ' checked') + '> Ramener le stock de la plateforme aux quantités comptées (corrige les écarts)</label>' +
         (passe ? '<p class="iv-help iv-warn">L’inventaire est daté du passé : si des entrées ou sorties ont eu lieu depuis, laissez cette case décochée.</p>' : '') +
-        '<div class="at-actions"><button class="btn p" type="button" id="inv-close">Clôturer l’inventaire</button><button class="btn" type="button" id="inv-xls">Exporter Excel</button><button class="btn" type="button" id="inv-pdf">Rapport PDF</button></div>';
+        '<div class="at-actions"><button class="btn p" type="button" id="inv-close">Clôturer l’inventaire</button><button class="btn" type="button" id="inv-fiche">Fiche de comptage (PDF)</button><button class="btn" type="button" id="inv-xls">Exporter Excel</button><button class="btn" type="button" id="inv-pdf">Rapport PDF</button></div>' +
+        '<label class="st-check"><input id="inv-fshow" type="checkbox"> Afficher le stock de la plateforme sur la fiche de comptage <small>(décoché = comptage à l’aveugle)</small></label>';
     } else {
       h += '<p class="iv-help">Clôturé le ' + fd(String(i.cloture_le || '').slice(0, 10)) + (i.stock_applique ? ' · le stock a été corrigé d’après les quantités comptées.' : '.') + ' Les chiffres sont figés.</p>' +
         '<div class="at-actions"><button class="btn" type="button" id="inv-xls">Exporter Excel</button><button class="btn" type="button" id="inv-pdf">Rapport PDF</button><button class="btn" type="button" id="inv-reopen">Rouvrir pour corriger</button></div>';
@@ -492,6 +494,63 @@
     doc.save('inventaire-' + norm(i.nom).replace(/[^a-z0-9]+/g, '-') + '.pdf');
   }
 
+  /* ---------- Fiche de comptage (PDF à imprimer et remplir à la main dans l'atelier) ---------- */
+  function elementsFiche() {
+    const i = sel ? inv(sel) : null;
+    if (i) return linesOf(i.id).filter(l => STOCKS.includes(l.section)).map(l => ({ sec: l.section, cat: l.section === 'produit_fini' ? 'Produits finis' : l.detail || 'Autres', nom: l.libelle, unite: l.unite, cond_nom: l.cond_nom, cond_qte: Number(l.cond_qte) || 0, theo: l.quantite_theorique }));
+    const m = (window.StockAPI ? StockAPI.list() : []).map(a => { const c = StockAPI.aCond(a); return { sec: 'matiere', cat: a.categorie, nom: a.nom, unite: a.unite, cond_nom: c ? a.cond_nom : '', cond_qte: c ? StockAPI.condQte(a) : 0, theo: StockAPI.qty(a.id) }; });
+    const p = (window.PFAPI ? PFAPI.produits() : []).map(x => ({ sec: 'produit_fini', cat: 'Produits finis', nom: x.nom, unite: 'pcs', cond_nom: '', cond_qte: 0, theo: PFAPI.qty(x.id) }));
+    return m.concat(p);
+  }
+  function ficheComptage() {
+    if (!(window.jspdf && window.jspdf.jsPDF)) { say('Bibliothèque PDF non chargée.'); return; }
+    const items = elementsFiche();
+    if (!items.length) { say('Aucun élément ni produit à compter. Ajoutez-les d’abord dans le Stock.'); return; }
+    const montrer = !!($('#inv-fshow') && $('#inv-fshow').checked), i = sel ? inv(sel) : null;
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), M = 12, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(pdfT('FICHE DE COMPTAGE - INVENTAIRE'), M, 16);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+    doc.text(pdfT('MARIA BAG' + (i ? ' - ' + i.nom : '') + ' - imprimee le ' + fd(iso(new Date()))), M, 22);
+    doc.setTextColor(0); doc.setFontSize(10);
+    doc.text(pdfT('Compte par : ......................................'), M, 31); doc.text(pdfT('Date du comptage : ....... / ....... / ...........'), W / 2 + 4, 31);
+    doc.setFontSize(9); doc.setTextColor(90);
+    doc.text(pdfT('Comptez ce qui est reellement dans l\'atelier. Rouleau de tissu : rouleaux entiers + metres restants. Ecrivez 0 s\'il n\'y en a plus.'), M, 37);
+    doc.setTextColor(0);
+    let y = 47, n = 0;
+    const bloc = (titre, liste, pf) => {
+      if (!liste.length) return;
+      const cats = [...new Set(liste.map(x => x.cat))];
+      const body = [];
+      cats.forEach(c => {
+        if (!pf) body.push([{ content: pdfT(c.toUpperCase()), colSpan: montrer ? 7 : 6, styles: { fillColor: [235, 230, 230], fontStyle: 'bold', textColor: 40 } }]);
+        liste.filter(x => x.cat === c).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).forEach(x => {
+          n++;
+          const cond = x.cond_qte > 0 && x.cond_nom;
+          const how = pf ? 'pieces' : cond ? x.cond_nom + 's (= ' + nf(x.cond_qte, 2) + ' ' + x.unite + ') + reste en ' + x.unite : x.unite === 'pcs' ? 'pieces' : x.unite;
+          const row = pf ? [String(n), x.nom, ''] : [String(n), x.nom, how, cond ? '' : '-', ''];
+          if (montrer) row.push(x.theo == null ? '' : nf(x.theo, 2) + ' ' + (x.unite === 'pcs' ? 'pcs' : x.unite));
+          row.push('');
+          body.push(row.map(c2 => typeof c2 === 'string' ? pdfT(c2) : c2));
+        });
+      });
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(pdfT(titre), M, y);
+      const head = pf ? ['N°', 'Designation', 'Pieces comptees'] : ['N°', 'Designation', 'Comment compter', 'Rouleaux entiers', 'Metres / pieces']; if (montrer) head.push('Selon la plateforme'); head.push('Remarques');
+      doc.autoTable({
+        startY: y + 3, margin: { left: M, right: M, bottom: 14 }, head: [head.map(pdfT)], body,
+        theme: 'grid', styles: { font: 'helvetica', fontSize: 9, cellPadding: { top: 2.6, bottom: 2.6, left: 2, right: 2 }, textColor: 0, lineColor: 120, lineWidth: 0.15, minCellHeight: 9.5, valign: 'middle' },
+        headStyles: { fillColor: [0, 0, 0], textColor: 255, fontSize: 8.5 },
+        columnStyles: pf ? { 0: { cellWidth: 9 }, 2: { cellWidth: 34 }, 3: { cellWidth: montrer ? 34 : 'auto' } } : montrer ? { 0: { cellWidth: 9 }, 2: { cellWidth: 38 }, 3: { cellWidth: 22 }, 4: { cellWidth: 26 }, 5: { cellWidth: 24 } } : { 0: { cellWidth: 9 }, 2: { cellWidth: 40 }, 3: { cellWidth: 25 }, 4: { cellWidth: 28 } },
+        didParseCell: d => { if (d.section === 'body' && d.cell.raw === '-') { d.cell.text = ['']; d.cell.styles.fillColor = [225, 225, 225]; } }
+      });
+      y = doc.lastAutoTable.finalY + 10; if (y > H - 40) { doc.addPage(); y = 16; }
+    };
+    bloc('1. ELEMENTS DE PRODUCTION', items.filter(x => x.sec === 'matiere'), false);
+    bloc('2. PRODUITS FINIS', items.filter(x => x.sec === 'produit_fini'), true);
+    const pages = doc.internal.getNumberOfPages();
+    for (let k = 1; k <= pages; k++) { doc.setPage(k); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110); doc.text(pdfT('Fiche de comptage - MARIA BAG - page ' + k + ' / ' + pages), W / 2, H - 7, { align: 'center' }); }
+    doc.save('fiche-de-comptage-' + iso(new Date()) + '.pdf');
+  }
+
   /* ---------- Événements ---------- */
   document.addEventListener('click', async e => {
     const root = $('#inv-root'); if (!root || !root.contains(e.target)) return;
@@ -506,6 +565,7 @@
     if (t.closest('#inv-reopen')) { await rouvrir(); return; }
     if (t.closest('#inv-xls')) { exporter(); return; }
     if (t.closest('#inv-pdf')) { pdf(); return; }
+    if (t.closest('#inv-fiche')) { ficheComptage(); return; }
     const same = t.closest('[data-same]');
     if (same) { const l = ligne(same.dataset.same); if (l && l.quantite_theorique != null) { l.quantite = Math.max(0, l.quantite_theorique); recalc(l); dirty.add(String(l.id)); schedule(); render(); } return; }
     if (t.closest('#inv-same')) {
