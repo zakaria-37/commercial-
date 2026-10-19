@@ -140,6 +140,55 @@ async function loadProduits() {
   LIGNES = l.data || [];
   if (!PRODUITS.some(x => String(x.id) === String(selProduit))) selProduit = PRODUITS.length ? PRODUITS[0].id : null;
   renderProduits();
+  if (await produitsDepuisModeles()) return;      // des produits ont été créés : la liste est rechargée
+}
+
+/* Tout modèle de la fiche matières (onglet Production) apparaît aussi dans Produits : on crée le produit
+   et on y recopie les composants (avec les prix du Stock). Les produits existants ne sont jamais modifiés. */
+let pdAuto = false;
+const IGN_KEY = 'mariabag_pd_ignores';
+function ignores() { try { return JSON.parse(localStorage.getItem(IGN_KEY) || '[]'); } catch (e) { return []; } }
+function ignorerModele(p) { try { const l = ignores(); l.push(String(p.modele_id || ''), 'n:' + normD(p.nom)); localStorage.setItem(IGN_KEY, JSON.stringify(l.filter(Boolean))); } catch (e) {} }
+const normD = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+async function produitsDepuisModeles() {
+  if (pdAuto) return false;
+  pdAuto = true;
+  try {
+    const m = await sb.from('modeles').select('*'); if (m.error || !(m.data || []).length) return false;
+    const manquants = [];
+    for (const mod of m.data) {
+      if (PRODUITS.some(x => String(x.modele_id) === String(mod.id))) continue;
+      if (ignores().includes(String(mod.id)) || ignores().includes('n:' + normD(mod.nom))) continue;
+      const meme = PRODUITS.find(x => normD(x.nom) === normD(mod.nom));
+      if (meme) { if (!meme.modele_id) await sb.from('produits').update({ modele_id: mod.id }).eq('id', meme.id); continue; }
+      manquants.push(mod);
+    }
+    if (!manquants.length) return false;
+    let nb = 0;
+    for (const mod of manquants) {
+      const r = await sb.from('produits').insert([{ nom: mod.nom, description: mod.description || '', modele_id: mod.id }]).select();
+      if (r.error || !r.data || !r.data[0]) continue;
+      nb++;
+      const c = await sb.from('composants').select('*').eq('modele_id', mod.id).order('ordre', { ascending: true });
+      const rows = ligneDepuisComposants(r.data[0].id, c.data || [], []);
+      if (rows.length) await sb.from('produit_lignes').insert(rows);
+    }
+    if (nb) { toastD(nb + ' modèle(s) de la fiche matières ajouté(s) aux Produits (composants et prix du Stock repris).'); await loadProduits(); return true; }
+    return false;
+  } catch (e) { return false; } finally { setTimeout(() => { pdAuto = false; }, 4000); }
+}
+/* Lignes de coût d'un produit à partir des composants d'une fiche matières (hors ceux déjà présents) */
+function ligneDepuisComposants(produitId, comps, existants) {
+  let ordre = 0;
+  return comps.filter(x => !existants.includes(String(x.nom).trim().toLowerCase())).map(x => {
+    if (x.type === 'finition') return { produit_id: produitId, categorie: 'Finition', designation: x.nom, unite: 'pcs', quantite: x.quantite,
+      prix_unitaire: Number(x.prix_unitaire) || 0, perte_pct: 0, note: x.note || '', ordre: ++ordre, article_id: null };
+    const a = x.article_id && window.StockAPI ? StockAPI.byId(x.article_id) : null;
+    const prix = a ? StockAPI.priceFor(a, x.unite) : null;
+    return { produit_id: produitId, categorie: a ? (CAT_STOCK_VERS_PRODUIT[a.categorie] || 'Autre outil') : devinerCat(x.nom), designation: x.nom, unite: x.unite || 'pcs',
+      quantite: x.quantite, prix_unitaire: prix != null ? Math.round(prix * 10000) / 10000 : 0, perte_pct: x.perte_pct || 0, note: x.note || '', ordre: ++ordre,
+      article_id: a && prix != null ? a.id : null };
+  });
 }
 
 /* ---------- Affichage ---------- */
@@ -328,6 +377,7 @@ async function removeProduit() {
   if (!confirm('Supprimer le produit « ' + p.nom + ' » et ses ' + n + ' ligne(s) de coût ?')) return;
   const { error } = await sb.from('produits').delete().eq('id', p.id);
   if (error) { toastD('Erreur : ' + errMsgD(error)); return; }
+  ignorerModele(p);                                 // supprimé volontairement : ne pas le recréer depuis la fiche matières
   selProduit = null;
   toastD('Produit supprimé.');
   await loadProduits();
