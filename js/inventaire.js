@@ -1,0 +1,553 @@
+/* ============================================================
+   INVENTAIRE ANNUEL
+   Photo figée de l'atelier à une date : stock des éléments et des produits finis (comptés),
+   créances clients, avances aux employés, autres créances / trésorerie (ACTIFS)
+   moins dettes fournisseurs, sommes dues aux employés, autres dettes (PASSIFS)
+   = VALEUR NETTE. On compare la valeur nette et le chiffre d'affaires d'une année à l'autre.
+   Tables : inventaires, inventaire_lignes (supabase/inventaire.sql)
+   ============================================================ */
+(function () {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const r2 = x => Math.round((Number(x) + Number.EPSILON) * 100) / 100;
+  const r4 = x => Math.round((Number(x) + Number.EPSILON) * 10000) / 10000;
+  const nf = (n, d) => (Number(n) || 0).toLocaleString('fr-FR', { maximumFractionDigits: d == null ? 2 : d });
+  const money = n => nf(n, 2) + ' DA';
+  const fd = s => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '—';
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const num = v => { const x = parseFloat(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
+  const say = t => { if (typeof toast === 'function') toast(t); };
+
+  const SEC = {
+    matiere: { l: 'Éléments de production', actif: true },
+    produit_fini: { l: 'Produits finis', actif: true },
+    client: { l: 'Créances clients', actif: true },
+    employe_creance: { l: 'Avances aux employés', actif: true },
+    autre_actif: { l: 'Autres créances / trésorerie', actif: true },
+    fournisseur: { l: 'Dettes fournisseurs', actif: false },
+    employe_dette: { l: 'Sommes dues aux employés', actif: false },
+    autre_passif: { l: 'Autres dettes', actif: false }
+  };
+  const ORDRE = ['matiere', 'produit_fini', 'client', 'employe_creance', 'autre_actif', 'fournisseur', 'employe_dette', 'autre_passif'];
+  const STOCKS = ['matiere', 'produit_fini'];
+
+  let INV = [], LIG = [], err = '', sel = null, onglet = 'resume', nouveau = false;
+  let cmp = { a: '', b: '', sec: 'matiere' };
+  const dirty = new Set();
+  let timer = null, saveMsg = '';
+
+  const inv = id => INV.find(i => String(i.id) === String(id));
+  const linesOf = id => LIG.filter(l => String(l.inventaire_id) === String(id));
+  const ligne = id => LIG.find(l => String(l.id) === String(id));
+  const ro = i => !i || i.statut === 'cloture';
+
+  /* ---------- Calculs ---------- */
+  function recalc(l) {
+    if (STOCKS.includes(l.section)) l.montant = l.quantite == null ? 0 : r2(Number(l.quantite) * Number(l.prix_unitaire || 0));
+    else l.montant = r2(Math.max(0, Number(l.montant) || 0));
+  }
+  function totaux(lines) {
+    const par = {}; ORDRE.forEach(s => { par[s] = 0; });
+    lines.forEach(l => { par[l.section] = r2((par[l.section] || 0) + (Number(l.montant) || 0)); });
+    const actifs = r2(ORDRE.filter(s => SEC[s].actif).reduce((t, s) => t + par[s], 0));
+    const passifs = r2(ORDRE.filter(s => !SEC[s].actif).reduce((t, s) => t + par[s], 0));
+    return { par, actifs, passifs, net: r2(actifs - passifs) };
+  }
+  const nonComptes = lines => lines.filter(l => STOCKS.includes(l.section) && l.quantite == null);
+  const periode = i => ({ depuis: i.debut_periode || '', jusqua: i.date_inventaire });
+  function caPeriode(i) {
+    const ops = window.PartAPI ? PartAPI.ops(periode(i)) : [];
+    return { ventes: r2(ops.filter(o => o.sens === 'vente').reduce((s, o) => s + o.montant, 0)), achats: r2(ops.filter(o => o.sens === 'achat').reduce((s, o) => s + o.montant, 0)), ops };
+  }
+  function precedent(date, sauf) {
+    return INV.filter(i => i.statut === 'cloture' && i.date_inventaire < date && String(i.id) !== String(sauf)).sort((a, b) => b.date_inventaire.localeCompare(a.date_inventaire))[0] || null;
+  }
+
+  /* ---------- Chargement ---------- */
+  async function load(force) {
+    const root = $('#inv-root'); if (!root) return;
+    const a = document.activeElement;
+    if (!force && (dirty.size || (a && root.contains(a) && /INPUT|SELECT|TEXTAREA/.test(a.tagName)))) return;
+    const r = await sb.from('inventaires').select('*').order('date_inventaire', { ascending: false });
+    if (r.error) { err = /does not exist|relation|schema cache/i.test(r.error.message) ? 'Tables « inventaires » introuvables dans Supabase. Exécutez supabase/inventaire.sql dans SQL Editor, puis rechargez la page.' : r.error.message; INV = []; LIG = []; render(); return; }
+    const l = await sb.from('inventaire_lignes').select('*').order('ordre', { ascending: true });
+    err = ''; INV = r.data || []; LIG = l.data || [];
+    if (sel && !inv(sel)) sel = null;
+    render();
+  }
+
+  /* ---------- Sauvegarde automatique des lignes modifiées ---------- */
+  function schedule() { saveMsg = 'Modifications en cours…'; majMsg(); clearTimeout(timer); timer = setTimeout(flush, 700); }
+  async function flush() {
+    clearTimeout(timer);
+    const ids = [...dirty]; if (!ids.length) return true;
+    for (const id of ids) {
+      const l = ligne(id); if (!l) { dirty.delete(id); continue; }
+      const r = await sb.from('inventaire_lignes').update({ quantite: l.quantite, prix_unitaire: l.prix_unitaire, montant: l.montant, libelle: l.libelle, note: l.note || '' }).eq('id', id);
+      if (r.error) { saveMsg = '⚠ Erreur d’enregistrement : ' + r.error.message; majMsg(); return false; }
+      dirty.delete(id);
+    }
+    saveMsg = 'Enregistré ✓ ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); majMsg();
+    return true;
+  }
+  const majMsg = () => { const e = $('#inv-save'); if (e) e.textContent = saveMsg; };
+
+  /* ---------- Création d'un inventaire, prérempli depuis la plateforme ---------- */
+  async function creer() {
+    const nom = $('#inv-nnom').value.trim(), date = $('#inv-ndate').value, notes = $('#inv-nnotes').value.trim();
+    if (!nom) { say('Donnez un nom à l’inventaire (ex. Inventaire 2026).'); return; }
+    if (!date) { say('Indiquez la date de l’inventaire.'); return; }
+    if (INV.some(i => norm(i.nom) === norm(nom))) { say('Un inventaire porte déjà ce nom.'); return; }
+    const dernier = INV.filter(i => i.statut === 'cloture').sort((a, b) => b.date_inventaire.localeCompare(a.date_inventaire))[0];
+    if (dernier && date <= dernier.date_inventaire) { say('La date doit être après le dernier inventaire clôturé (' + fd(dernier.date_inventaire) + ').'); return; }
+    if (INV.some(i => i.statut === 'brouillon') && !confirm('Un autre inventaire est encore en cours (brouillon). Créer quand même celui-ci ?')) return;
+    const btn = $('#inv-ncreer'); btn.disabled = true; btn.textContent = 'Préparation…';
+    try {
+      if (window.StockAPI) await StockAPI.load();
+      if (window.PFAPI) await PFAPI.load();
+      if (typeof loadEmployes === 'function') await loadEmployes();
+      const prev = precedent(date);
+      const ri = await sb.from('inventaires').insert([{ nom, annee: Number(date.slice(0, 4)), date_inventaire: date, statut: 'brouillon', debut_periode: prev ? prev.date_inventaire : null, notes }]).select();
+      if (ri.error || !ri.data || !ri.data[0]) { say('Erreur : ' + ((ri.error && ri.error.message) || 'création impossible')); return; }
+      const id = ri.data[0].id, rows = []; let o = 0;
+      const add = x => rows.push(Object.assign({ inventaire_id: id, ordre: o++ }, x));
+      (window.StockAPI ? StockAPI.list() : []).slice().sort((a, b) => (a.categorie + a.nom).localeCompare(b.categorie + b.nom, 'fr')).forEach(a => {
+        const cond = StockAPI.aCond(a);
+        add({ section: 'matiere', ref_id: a.id, libelle: a.nom, detail: a.categorie, unite: a.unite, cond_nom: cond ? a.cond_nom : '', cond_qte: cond ? StockAPI.condQte(a) : 0,
+          quantite_theorique: StockAPI.qty(a.id), quantite: null, prix_unitaire: StockAPI.unitPrice(a), montant: 0 });
+      });
+      (window.PFAPI ? PFAPI.produits() : []).slice().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).forEach(p => {
+        add({ section: 'produit_fini', ref_id: p.id, libelle: p.nom, detail: p.marque || 'MARIA BAG', unite: 'pcs', quantite_theorique: PFAPI.qty(p.id), quantite: null,
+          prix_unitaire: PFAPI.coutProduit(p) || 0, prix_vente: Number(p.prix_vente) || 0, montant: 0 });
+      });
+      const all = window.PartAPI ? PartAPI.ops({}) : [];
+      const vus = new Set();
+      all.filter(x => x.sens === 'vente' && x.id).forEach(x => { if (vus.has('c' + x.id)) return; vus.add('c' + x.id); add({ section: 'client', ref_id: x.id, libelle: x.nom, detail: 'Client', montant: 0 }); });
+      all.filter(x => x.sens === 'achat' && x.id).forEach(x => { if (vus.has('f' + x.id)) return; vus.add('f' + x.id); add({ section: 'fournisseur', ref_id: x.id, libelle: x.nom, detail: 'Fournisseur', montant: 0 }); });
+      (typeof EMPLOYES !== 'undefined' ? EMPLOYES : []).forEach(e => {
+        const n = [e.prenom, e.nom].filter(Boolean).join(' ');
+        add({ section: 'employe_creance', ref_id: e.id, libelle: n, detail: e.poste || '', montant: 0 });
+        add({ section: 'employe_dette', ref_id: e.id, libelle: n, detail: e.poste || '', montant: 0 });
+      });
+      ['Caisse', 'Banque'].forEach(n => add({ section: 'autre_actif', libelle: n, detail: 'Trésorerie', montant: 0 }));
+      if (rows.length) {
+        const rl = await sb.from('inventaire_lignes').insert(rows).select();
+        if (rl.error) { await sb.from('inventaires').delete().eq('id', id); say('Erreur : ' + rl.error.message); return; }
+      }
+      nouveau = false; sel = id; onglet = 'resume';
+      await load(true);
+      say('Inventaire créé : ' + rows.filter(r => STOCKS.includes(r.section)).length + ' éléments et produits à compter.');
+    } finally { btn.disabled = false; btn.textContent = 'Créer l’inventaire'; }
+  }
+
+  async function addLigne(x) {
+    const i = inv(sel); if (ro(i)) return null;
+    const max = Math.max(-1, ...linesOf(sel).map(l => Number(l.ordre) || 0));
+    const r = await sb.from('inventaire_lignes').insert([Object.assign({ inventaire_id: sel, ordre: max + 1, montant: 0 }, x)]).select();
+    if (r.error || !r.data || !r.data[0]) { say('Erreur : ' + ((r.error && r.error.message) || 'ajout impossible')); return null; }
+    LIG.push(r.data[0]); return r.data[0];
+  }
+  async function supprLigne(id) {
+    const r = await sb.from('inventaire_lignes').delete().eq('id', id);
+    if (r.error) { say('Erreur : ' + r.error.message); return; }
+    dirty.delete(id); LIG = LIG.filter(l => String(l.id) !== String(id));
+  }
+
+  /* ---------- Clôture ---------- */
+  async function cloturer() {
+    const i = inv(sel); if (!i || ro(i)) return;
+    if (!(await flush())) { alert('Les dernières modifications n’ont pas pu être enregistrées. Réessayez.'); return; }
+    const lines = linesOf(i.id), pb = [];
+    const nc = nonComptes(lines);
+    if (nc.length) pb.push(nc.length + ' élément(s) ou produit(s) pas encore comptés (onglets Éléments et Produits finis).');
+    lines.filter(l => (l.section === 'autre_actif' || l.section === 'autre_passif') && Number(l.montant) > 0 && !String(l.libelle).trim()).forEach(() => pb.push('Une ligne « Autres » a un montant sans libellé.'));
+    if (!i.date_inventaire) pb.push('La date de l’inventaire est manquante.');
+    const tard = INV.filter(x => x.statut === 'cloture' && String(x.id) !== String(i.id) && x.date_inventaire >= i.date_inventaire);
+    if (tard.length) pb.push('Un inventaire clôturé existe à la même date ou après (' + fd(tard[0].date_inventaire) + ').');
+    if (pb.length) { alert('Impossible de clôturer :\n\n• ' + [...new Set(pb)].join('\n• ')); return; }
+    const t = totaux(lines), ca = caPeriode(i);
+    const apply = $('#inv-apply') && $('#inv-apply').checked;
+    const ecarts = apply ? lines.filter(l => STOCKS.includes(l.section) && l.ref_id).length : 0;
+    if (!confirm('Clôturer « ' + i.nom + ' » au ' + fd(i.date_inventaire) + ' ?\n\nActifs : ' + money(t.actifs) + '\nPassifs : ' + money(t.passifs) + '\nValeur nette : ' + money(t.net) +
+      '\nChiffre d’affaires de la période : ' + money(ca.ventes) + '\n\n' + (apply ? 'Le stock de la plateforme sera ramené exactement aux quantités comptées.\n' : 'Le stock de la plateforme ne sera pas modifié.\n') + 'Les chiffres seront figés (vous pourrez rouvrir en cas d’erreur).')) return;
+    if (apply) {
+      const echecs = [];
+      for (const l of lines.filter(x => x.section === 'matiere' && x.ref_id)) {
+        const a = StockAPI.byId(l.ref_id); if (!a) continue;
+        const delta = r4(Number(l.quantite) - StockAPI.qty(a.id)); if (delta === 0) continue;
+        const r = await StockAPI.mouvement({ article_id: a.id, type: 'ajustement', quantite: delta, date: i.date_inventaire, note: 'Inventaire : ' + i.nom });
+        if (r.error) echecs.push(l.libelle + ' : ' + r.error.message);
+      }
+      for (const l of lines.filter(x => x.section === 'produit_fini' && x.ref_id)) {
+        const cur = PFAPI.qty(l.ref_id); if (Math.round(Number(l.quantite)) === cur) continue;
+        const r = await PFAPI.saisir({ type: 'ajustement', produitId: l.ref_id, quantite: Math.round(Number(l.quantite)), date: i.date_inventaire, note: 'Inventaire : ' + i.nom });
+        if (r.error) echecs.push(l.libelle + ' : ' + r.error.message);
+      }
+      if (echecs.length) { alert('Le stock n’a pas pu être entièrement corrigé, l’inventaire n’est PAS clôturé :\n\n• ' + echecs.slice(0, 8).join('\n• ') + '\n\nCorrigez puis relancez la clôture (les corrections déjà faites ne seront pas refaites).'); return; }
+    }
+    const u = await sb.from('inventaires').update({ statut: 'cloture', ventes: ca.ventes, achats: ca.achats, valeur_nette: t.net, stock_applique: apply || !!i.stock_applique, cloture_le: new Date().toISOString() }).eq('id', i.id);
+    if (u.error) { alert('Erreur : ' + u.error.message); return; }
+    await load(true); say('Inventaire clôturé : valeur nette ' + money(t.net) + '.');
+  }
+  async function rouvrir() {
+    const i = inv(sel); if (!i || i.statut !== 'cloture') return;
+    const apres = INV.filter(x => x.debut_periode && x.debut_periode >= i.date_inventaire);
+    if (!confirm('Rouvrir « ' + i.nom + ' » pour corriger une erreur ?' + (apres.length ? '\n\nAttention : « ' + apres[0].nom + ' » part de cet inventaire ; pensez à le vérifier ensuite.' : '') + '\n\nLes comparaisons seront à nouveau calculées à la prochaine clôture.')) return;
+    const u = await sb.from('inventaires').update({ statut: 'brouillon', cloture_le: null }).eq('id', i.id);
+    if (u.error) { say('Erreur : ' + u.error.message); return; }
+    await load(true);
+  }
+  async function supprimer(id) {
+    const i = inv(id); if (!i) return;
+    if (i.statut === 'cloture') { say('Rouvrez d’abord cet inventaire pour pouvoir le supprimer.'); return; }
+    if (!confirm('Supprimer définitivement « ' + i.nom + ' » et toutes ses lignes ?')) return;
+    const r = await sb.from('inventaires').delete().eq('id', id);
+    if (r.error) { say('Erreur : ' + r.error.message); return; }
+    if (sel === id) sel = null; await load(true);
+  }
+
+  /* ---------- Affichage ---------- */
+  const badge = i => '<span class="iv-bdg ' + (i.statut === 'cloture' ? 'ok' : 'br') + '">' + (i.statut === 'cloture' ? 'Clôturé' : 'En cours') + '</span>';
+
+  function render() {
+    const root = $('#inv-root'); if (!root) return;
+    if (err) { root.innerHTML = '<div class="card"><div class="iv-err">' + esc(err) + '</div></div>'; return; }
+    const i = sel ? inv(sel) : null;
+    root.innerHTML = i ? editeur(i) : accueil();
+  }
+
+  function accueil() {
+    const an = new Date().getFullYear();
+    let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Inventaire</h2><p>Une photo complète de l’atelier à une date : stock, créances, dettes. Comparez d’une année à l’autre pour savoir si votre valeur nette augmente.</p></div></div>';
+    h += '<div class="card"><div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">Mes inventaires</h2><button class="btn p" type="button" id="inv-new">+ Nouvel inventaire</button></div>';
+    h += '<form id="inv-nform" class="at-form" style="display:' + (nouveau ? 'block' : 'none') + '"><div class="at-fields">' +
+      '<label>Nom *<input id="inv-nnom" maxlength="80" value="Inventaire ' + an + '"></label>' +
+      '<label>Date de l’inventaire *<input id="inv-ndate" type="date" value="' + iso(new Date()) + '"></label>' +
+      '<label style="grid-column:1/-1">Note<input id="inv-nnotes" maxlength="200" placeholder="Facultatif"></label></div>' +
+      '<p class="iv-help">La plateforme prépare la liste de <b>tous vos éléments, produits finis, clients, fournisseurs et employés</b> avec les quantités qu’elle connaît. Vous n’avez plus qu’à <b>compter ce qu’il y a réellement dans l’atelier</b> et à saisir les crédits.</p>' +
+      '<div class="at-actions"><button class="btn p" type="submit" id="inv-ncreer">Créer l’inventaire</button><button class="btn" type="button" id="inv-ncancel">Annuler</button></div></form>';
+    if (!INV.length) h += '<div class="iv-empty">Aucun inventaire pour l’instant.<br>Cliquez sur <b>+ Nouvel inventaire</b> pour faire l’inventaire de départ (ex. Inventaire ' + an + ').</div>';
+    else h += '<div class="tw"><table class="iv-tbl"><thead><tr><th>Inventaire</th><th>Date</th><th>Statut</th><th class="n">Valeur nette</th><th class="n iv-opt">Ventes de la période</th><th></th></tr></thead><tbody>' +
+      INV.map(x => { const t = totaux(linesOf(x.id)); return '<tr class="row" data-open="' + esc(x.id) + '"><td><b>' + esc(x.nom) + '</b>' + (x.notes ? '<small>' + esc(x.notes) + '</small>' : '') + '</td><td>' + fd(x.date_inventaire) + '</td><td>' + badge(x) + '</td>' +
+        '<td class="n"><b>' + money(x.statut === 'cloture' ? x.valeur_nette : t.net) + '</b></td><td class="n iv-opt">' + (x.statut === 'cloture' ? money(x.ventes) : '—') + '</td>' +
+        '<td class="n"><button class="btn s" type="button" data-open="' + esc(x.id) + '">Ouvrir</button>' + (x.statut === 'brouillon' ? ' <button class="btn s d" type="button" data-del="' + esc(x.id) + '">Supprimer</button>' : '') + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    h += '</div>' + comparaison();
+    return h;
+  }
+
+  /* ----- Comparaison entre deux inventaires clôturés ----- */
+  function comparaison() {
+    const clos = INV.filter(i => i.statut === 'cloture').sort((a, b) => a.date_inventaire.localeCompare(b.date_inventaire));
+    if (clos.length < 2) return '<div class="card" style="margin-top:12px"><h2 style="margin-top:0">Comparer deux années</h2><div class="iv-empty">Clôturez au moins <b>deux inventaires</b> (par exemple 2026 puis 2027) pour voir si votre valeur nette et votre chiffre d’affaires ont augmenté ou diminué.</div></div>';
+    if (!inv(cmp.a) || !inv(cmp.b) || cmp.a === cmp.b) { cmp.a = clos[clos.length - 2].id; cmp.b = clos[clos.length - 1].id; }
+    let A = inv(cmp.a), B = inv(cmp.b);
+    if (A.date_inventaire > B.date_inventaire) { const t = A; A = B; B = t; cmp.a = A.id; cmp.b = B.id; }
+    const ta = totaux(linesOf(A.id)), tb = totaux(linesOf(B.id));
+    const diff = r2(tb.net - ta.net), pc = ta.net !== 0 ? diff / Math.abs(ta.net) * 100 : null;
+    const dv = r2(B.ventes - A.ventes), pv = A.ventes !== 0 ? dv / Math.abs(A.ventes) * 100 : null;
+    const pct = x => x == null ? '' : ' (' + (x > 0 ? '+' : '') + nf(x, 1) + ' %)';
+    const fl = x => x > 0 ? '▲' : x < 0 ? '▼' : '=';
+    const cl = x => x > 0 ? 'iv-up' : x < 0 ? 'iv-down' : '';
+    const opts = sid => clos.map(i => '<option value="' + esc(i.id) + '"' + (i.id === sid ? ' selected' : '') + '>' + esc(i.nom) + ' (' + fd(i.date_inventaire) + ')</option>').join('');
+    let h = '<div class="card" style="margin-top:12px"><h2 style="margin-top:0">Comparer deux années</h2>' +
+      '<div class="iv-bar"><label>De <select id="iv-ca">' + opts(A.id) + '</select></label><label>à <select id="iv-cb">' + opts(B.id) + '</select></label></div>' +
+      '<div class="iv-verdict ' + cl(diff) + '"><b>' + fl(diff) + ' Valeur nette ' + (diff > 0 ? 'en hausse' : diff < 0 ? 'en baisse' : 'stable') + ' : ' + (diff > 0 ? '+' : '') + money(diff) + pct(pc) + '</b><br>' +
+      '<span>Chiffre d’affaires : ' + money(B.ventes) + ' contre ' + money(A.ventes) + ' → ' + (dv > 0 ? '+' : '') + money(dv) + pct(pv) + '</span></div>' +
+      '<div class="tw"><table class="iv-tbl"><thead><tr><th></th><th class="n">' + esc(A.nom) + '</th><th class="n">' + esc(B.nom) + '</th><th class="n">Écart</th></tr></thead><tbody>';
+    const ligneC = (lbl, a, b, fort) => { const d = r2(b - a); return '<tr' + (fort ? ' class="iv-tot"' : '') + '><td>' + lbl + '</td><td class="n">' + money(a) + '</td><td class="n">' + money(b) + '</td><td class="n ' + cl(d) + '">' + (d > 0 ? '+' : '') + money(d) + '</td></tr>'; };
+    ORDRE.filter(s => SEC[s].actif).forEach(s => { h += ligneC(SEC[s].l, ta.par[s], tb.par[s]); });
+    h += ligneC('Total des actifs', ta.actifs, tb.actifs, true);
+    ORDRE.filter(s => !SEC[s].actif).forEach(s => { h += ligneC(SEC[s].l, ta.par[s], tb.par[s]); });
+    h += ligneC('Total des passifs', ta.passifs, tb.passifs, true) + ligneC('VALEUR NETTE', ta.net, tb.net, true) +
+      ligneC('Ventes de la période', A.ventes, B.ventes) + ligneC('Achats de la période', A.achats, B.achats) + '</tbody></table></div>';
+    // détail ligne par ligne
+    h += '<h3 style="margin:16px 0 6px">Détail</h3><div class="iv-bar"><label>Section <select id="iv-csec">' + ORDRE.map(s => '<option value="' + s + '"' + (cmp.sec === s ? ' selected' : '') + '>' + SEC[s].l + '</option>').join('') + '</select></label></div>';
+    const stock = STOCKS.includes(cmp.sec), m = new Map();
+    const cle = l => l.ref_id ? 'r' + l.ref_id : 'n' + norm(l.libelle);
+    linesOf(A.id).filter(l => l.section === cmp.sec).forEach(l => m.set(cle(l), { nom: l.libelle, a: l, b: null }));
+    linesOf(B.id).filter(l => l.section === cmp.sec).forEach(l => { const x = m.get(cle(l)) || { nom: l.libelle, a: null, b: null }; x.b = l; m.set(cle(l), x); });
+    const rows = [...m.values()].filter(x => (x.a && (Number(x.a.montant) || Number(x.a.quantite))) || (x.b && (Number(x.b.montant) || Number(x.b.quantite)))).sort((x, y) => Math.abs((y.b ? y.b.montant : 0) - (y.a ? y.a.montant : 0)) - Math.abs((x.b ? x.b.montant : 0) - (x.a ? x.a.montant : 0)));
+    h += rows.length ? '<div class="tw"><table class="iv-tbl"><thead><tr><th>' + SEC[cmp.sec].l + '</th>' + (stock ? '<th class="n iv-opt">Qté ' + esc(A.nom) + '</th><th class="n iv-opt">Qté ' + esc(B.nom) + '</th>' : '') + '<th class="n">' + esc(A.nom) + '</th><th class="n">' + esc(B.nom) + '</th><th class="n">Écart</th></tr></thead><tbody>' +
+      rows.map(x => { const a = x.a ? Number(x.a.montant) || 0 : 0, b = x.b ? Number(x.b.montant) || 0 : 0, d = r2(b - a); return '<tr><td><b>' + esc(x.nom) + '</b></td>' +
+        (stock ? '<td class="n iv-opt">' + (x.a && x.a.quantite != null ? nf(x.a.quantite, 2) : '—') + '</td><td class="n iv-opt">' + (x.b && x.b.quantite != null ? nf(x.b.quantite, 2) : '—') + '</td>' : '') +
+        '<td class="n">' + money(a) + '</td><td class="n">' + money(b) + '</td><td class="n ' + cl(d) + '">' + (d > 0 ? '+' : '') + money(d) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<div class="iv-empty">Rien à comparer dans cette section.</div>';
+    h += '<p class="iv-help">Valeur nette = actifs − passifs. L’écart d’une année à l’autre ne tient pas compte des apports ou retraits d’argent du propriétaire, qui ne sont pas enregistrés dans la plateforme.</p></div>';
+    return h;
+  }
+
+  /* ----- Éditeur d'un inventaire ----- */
+  function editeur(i) {
+    const lines = linesOf(i.id), t = totaux(lines), clos = ro(i), nc = nonComptes(lines).length;
+    const ca = clos ? { ventes: Number(i.ventes), achats: Number(i.achats) } : caPeriode(i);
+    let h = '<div class="at-actions" style="margin:0 0 10px"><button class="btn" type="button" id="inv-back">← Tous les inventaires</button><span style="margin-left:auto" class="iv-save" id="inv-save">' + esc(saveMsg) + '</span></div>';
+    h += '<div class="card"><div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">' + esc(i.nom) + ' ' + badge(i) + '</h2></div>';
+    h += '<div class="at-fields iv-head"><label>Nom<input id="inv-hnom" maxlength="80" value="' + esc(i.nom) + '"' + (clos ? ' disabled' : '') + '></label>' +
+      '<label>Date de l’inventaire<input id="inv-hdate" type="date" value="' + esc(i.date_inventaire) + '"' + (clos ? ' disabled' : '') + '></label>' +
+      '<label>Période couverte<input value="' + (i.debut_periode ? 'du ' + fd(i.debut_periode) + ' (exclu) ' : 'depuis le début ') + 'au ' + fd(i.date_inventaire) + '" disabled></label>' +
+      '<label style="grid-column:1/-1">Note<input id="inv-hnotes" maxlength="200" value="' + esc(i.notes || '') + '"' + (clos ? ' disabled' : '') + '></label></div></div>';
+    h += '<div class="at-stats iv-sum" id="inv-sum">' + resume(t, ca, clos) + '</div>';
+    const cnt = s => lines.filter(l => l.section === s).length;
+    const tabs = [['resume', 'Résumé'], ['matiere', 'Éléments' + (nonComptes(lines).filter(l => l.section === 'matiere').length ? ' ⚠' : '')], ['produit_fini', 'Produits finis' + (nonComptes(lines).filter(l => l.section === 'produit_fini').length ? ' ⚠' : '')], ['client', 'Clients'], ['fournisseur', 'Fournisseurs'], ['employe', 'Employés'], ['autre', 'Autres']];
+    h += '<div class="at-tabs iv-tabs" id="inv-tabs">' + tabs.map(x => '<button type="button" data-tab="' + x[0] + '" class="' + (onglet === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>';
+    h += '<div class="card" id="inv-pane">' + pane(i, lines) + '</div>';
+    return h;
+  }
+
+  function resume(t, ca, clos) {
+    return '<div class="at-stat"><span>Actifs</span><b>' + money(t.actifs) + '</b><small>ce que vous possédez ou qu’on vous doit</small></div>' +
+      '<div class="at-stat"><span>Passifs</span><b>' + money(t.passifs) + '</b><small>ce que vous devez</small></div>' +
+      '<div class="at-stat pd-total"><span>Valeur nette</span><b>' + money(t.net) + '</b><small>actifs − passifs</small></div>' +
+      '<div class="at-stat"><span>Ventes de la période</span><b>' + money(ca.ventes) + '</b><small>achats : ' + money(ca.achats) + '</small></div>';
+  }
+
+  function pane(i, lines) {
+    const clos = ro(i), d = clos ? ' disabled' : '';
+    if (onglet === 'resume') return paneResume(i, lines);
+    if (onglet === 'matiere' || onglet === 'produit_fini') return paneStock(i, lines.filter(l => l.section === onglet), onglet, clos);
+    if (onglet === 'client' || onglet === 'fournisseur') return paneContacts(i, lines.filter(l => l.section === onglet), onglet, clos);
+    if (onglet === 'employe') return paneEmployes(i, lines, clos);
+    return paneAutres(i, lines, clos);
+  }
+
+  function paneResume(i, lines) {
+    const t = totaux(lines), clos = ro(i), nc = nonComptes(lines);
+    let h = '<h2 style="margin-top:0">Résumé détaillé</h2><div class="tw"><table class="iv-tbl"><thead><tr><th>Rubrique</th><th class="n">Lignes</th><th class="n">Montant</th></tr></thead><tbody>';
+    h += '<tr class="iv-sec"><td colspan="3">ACTIFS</td></tr>' + ORDRE.filter(s => SEC[s].actif).map(s => '<tr><td>' + SEC[s].l + '</td><td class="n">' + lines.filter(l => l.section === s).length + '</td><td class="n">' + money(t.par[s]) + '</td></tr>').join('') +
+      '<tr class="iv-tot"><td colspan="2">Total des actifs</td><td class="n">' + money(t.actifs) + '</td></tr>' +
+      '<tr class="iv-sec"><td colspan="3">PASSIFS</td></tr>' + ORDRE.filter(s => !SEC[s].actif).map(s => '<tr><td>' + SEC[s].l + '</td><td class="n">' + lines.filter(l => l.section === s).length + '</td><td class="n">' + money(t.par[s]) + '</td></tr>').join('') +
+      '<tr class="iv-tot"><td colspan="2">Total des passifs</td><td class="n">' + money(t.passifs) + '</td></tr>' +
+      '<tr class="iv-tot iv-net"><td colspan="2">VALEUR NETTE</td><td class="n">' + money(t.net) + '</td></tr></tbody></table></div>';
+    const ecart = lines.filter(l => STOCKS.includes(l.section) && l.quantite != null && l.quantite_theorique != null && r4(l.quantite) !== r4(l.quantite_theorique));
+    if (!clos) {
+      h += '<div class="iv-check"><b>Avant de clôturer :</b><ul>' +
+        '<li class="' + (nc.length ? 'ko' : 'ok') + '">' + (nc.length ? nc.length + ' élément(s) / produit(s) pas encore comptés' : 'Tout le stock est compté') + '</li>' +
+        '<li>' + ecart.length + ' écart(s) entre le stock compté et le stock de la plateforme</li></ul></div>';
+      const passe = i.date_inventaire < iso(new Date());
+      h += '<label class="st-check"><input id="inv-apply" type="checkbox"' + (passe ? '' : ' checked') + '> Ramener le stock de la plateforme aux quantités comptées (corrige les écarts)</label>' +
+        (passe ? '<p class="iv-help iv-warn">L’inventaire est daté du passé : si des entrées ou sorties ont eu lieu depuis, laissez cette case décochée.</p>' : '') +
+        '<div class="at-actions"><button class="btn p" type="button" id="inv-close">Clôturer l’inventaire</button><button class="btn" type="button" id="inv-xls">Exporter Excel</button><button class="btn" type="button" id="inv-pdf">Rapport PDF</button></div>';
+    } else {
+      h += '<p class="iv-help">Clôturé le ' + fd(String(i.cloture_le || '').slice(0, 10)) + (i.stock_applique ? ' · le stock a été corrigé d’après les quantités comptées.' : '.') + ' Les chiffres sont figés.</p>' +
+        '<div class="at-actions"><button class="btn" type="button" id="inv-xls">Exporter Excel</button><button class="btn" type="button" id="inv-pdf">Rapport PDF</button><button class="btn" type="button" id="inv-reopen">Rouvrir pour corriger</button></div>';
+    }
+    return h;
+  }
+
+  function paneStock(i, lines, sec, clos) {
+    const pf = sec === 'produit_fini', d = clos ? ' disabled' : '', nc = lines.filter(l => l.quantite == null).length;
+    let h = '<div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">' + (pf ? 'Produits finis en stock' : 'Éléments de production en stock') + '</h2>' +
+      (!clos && nc ? '<button class="btn s" type="button" id="inv-same">Compter comme le système (' + nc + ' ligne' + (nc > 1 ? 's' : '') + ' vide' + (nc > 1 ? 's' : '') + ')</button>' : '') + '</div>' +
+      '<p class="iv-help">' + (pf ? 'Comptez les pièces finies réellement présentes. Valorisation au <b>coût de revient</b> (modifiable).' : 'Comptez ce qui est réellement dans l’atelier. Pour un rouleau : nombre de rouleaux entiers + mètres restants. Valorisation au <b>prix d’achat</b> (modifiable).') + ' Une ligne <b>vide</b> = pas encore comptée ; tapez 0 s’il n’y en a plus.</p>';
+    if (!lines.length) return h + '<div class="iv-empty">Aucune ligne.</div>';
+    h += '<div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>' + (pf ? 'Produit' : 'Élément') + '</th><th class="n">Selon la plateforme</th><th>Compté</th><th class="n">Écart</th><th>' + (pf ? 'Coût / pièce' : 'Prix') + ' (DA)</th><th class="n">Valeur</th></tr></thead><tbody>';
+    let cat = null;
+    h += lines.map(l => {
+      const sep = !pf && l.detail !== cat ? (cat = l.detail, '<tr class="iv-sec"><td colspan="6">' + esc(l.detail) + '</td></tr>') : '';
+      return sep + ligneStock(l, clos);
+    }).join('') + '</tbody></table></div>';
+    return h;
+  }
+  function ligneStock(l, clos) {
+    const d = clos ? ' disabled' : '', cond = Number(l.cond_qte) > 0 && l.cond_nom, pf = l.section === 'produit_fini';
+    const q = l.quantite == null ? null : Number(l.quantite);
+    let cnt;
+    if (cond) {
+      const r = q == null ? '' : Math.floor(r4(q / l.cond_qte)), rest = q == null ? '' : r4(q - r * l.cond_qte);
+      cnt = '<span class="iv-pair"><input class="iv-q" data-f="r" type="number" min="0" step="1" inputmode="numeric" value="' + r + '" placeholder="0"' + d + '><i>' + esc(l.cond_nom) + '(s)</i> <input class="iv-q" data-f="m" type="number" min="0" step="any" inputmode="decimal" value="' + rest + '" placeholder="0"' + d + '><i>' + esc(l.unite) + '</i></span>';
+    } else cnt = '<span class="iv-pair"><input class="iv-q" data-f="q" type="number" min="0" step="' + (pf ? '1' : 'any') + '" inputmode="decimal" value="' + (q == null ? '' : q) + '" placeholder="à compter"' + d + '><i>' + esc(l.unite) + '</i></span>';
+    const prix = cond ? r2(Number(l.prix_unitaire) * Number(l.cond_qte)) : Number(l.prix_unitaire);
+    const th = l.quantite_theorique == null ? '—' : (cond ? nf(l.quantite_theorique, 2) + ' ' + esc(l.unite) + '<small>≈ ' + nf(l.quantite_theorique / l.cond_qte, 2) + ' ' + esc(l.cond_nom) + '</small>' : nf(l.quantite_theorique, 2) + ' ' + esc(l.unite));
+    return '<tr data-l="' + esc(l.id) + '"><td><b>' + esc(l.libelle) + '</b>' + (pf && Number(l.prix_vente) ? '<small>vente ' + money(l.prix_vente) + '</small>' : '') + '</td><td class="n">' + th + '</td><td>' + cnt + (clos ? '' : ' <button class="iv-eq" type="button" data-same="' + esc(l.id) + '" title="Compter comme le système">=</button>') + '</td>' +
+      '<td class="n iv-ecart">' + ecartTxt(l) + '</td>' +
+      '<td><input class="iv-p" data-f="' + (cond ? 'pc' : 'pu') + '" type="number" min="0" step="any" inputmode="decimal" value="' + (prix || '') + '" placeholder="0"' + d + '>' + (cond ? '<small>par ' + esc(l.cond_nom) + '</small>' : '') + '</td><td class="n iv-val">' + (l.quantite == null ? '<small>à compter</small>' : money(l.montant)) + '</td></tr>';
+  }
+  function ecartTxt(l) {
+    if (l.quantite == null || l.quantite_theorique == null) return '—';
+    const e = r4(Number(l.quantite) - Number(l.quantite_theorique));
+    return e === 0 ? '<span class="iv-ok">0</span>' : '<span class="' + (e > 0 ? 'iv-up' : 'iv-down') + '">' + (e > 0 ? '+' : '') + nf(e, 2) + '</span>';
+  }
+
+  function paneContacts(i, lines, sec, clos) {
+    const cl = sec === 'client', d = clos ? ' disabled' : '';
+    const ops = window.PartAPI ? PartAPI.ops(periode(i)).filter(o => o.sens === (cl ? 'vente' : 'achat')) : [];
+    const refP = id => r2(ops.filter(o => String(o.id) === String(id)).reduce((s, o) => s + o.montant, 0));
+    let h = '<h2 style="margin-top:0">' + (cl ? 'Crédits clients : ce que vos clients vous doivent encore' : 'Crédits fournisseurs : ce que vous devez encore à vos fournisseurs') + '</h2>' +
+      '<p class="iv-help">Saisissez, pour chacun, le <b>montant restant à ' + (cl ? 'encaisser' : 'payer') + '</b> à la date de l’inventaire (0 si tout est réglé). La colonne « ' + (cl ? 'Ventes' : 'Achats') + ' de la période » est là pour vous aider.</p>';
+    h += lines.length ? '<div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>' + (cl ? 'Client' : 'Fournisseur') + '</th><th class="n iv-opt">' + (cl ? 'Ventes' : 'Achats') + ' de la période</th><th>Montant restant (DA)</th><th></th></tr></thead><tbody>' +
+      lines.map(l => '<tr data-l="' + esc(l.id) + '"><td><b>' + esc(l.libelle) + '</b></td><td class="n iv-opt">' + (l.ref_id ? money(refP(l.ref_id)) : '—') + '</td><td><input class="iv-p" data-f="mt" type="number" min="0" step="any" inputmode="decimal" value="' + (Number(l.montant) || '') + '" placeholder="0"' + d + '></td><td class="n">' + (clos ? '' : '<button class="btn s" type="button" data-rm="' + esc(l.id) + '">Retirer</button>') + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="iv-empty">Aucun ' + (cl ? 'client' : 'fournisseur') + ' dans cette liste.</div>';
+    if (!clos) {
+      const dej = new Set(lines.map(l => String(l.ref_id)));
+      const cs = (typeof D !== 'undefined' ? D : []).filter(c => c.type === (cl ? 'Client' : 'Fournisseur') && !dej.has(String(c.id))).sort((a, b) => PartAPI.label(a).localeCompare(PartAPI.label(b), 'fr'));
+      h += '<div class="iv-bar"><label>Ajouter ' + (cl ? 'un client' : 'un fournisseur') + ' <select id="inv-addc" data-sec="' + sec + '"><option value="">— choisir —</option>' + cs.map(c => '<option value="' + esc(c.id) + '">' + esc(PartAPI.label(c)) + '</option>').join('') + '</select></label></div>';
+    }
+    return h;
+  }
+
+  function paneEmployes(i, lines, clos) {
+    const d = clos ? ' disabled' : '';
+    const refs = []; lines.filter(l => l.section === 'employe_creance' || l.section === 'employe_dette').forEach(l => { const k = String(l.ref_id || norm(l.libelle)); if (!refs.some(r => r.k === k)) refs.push({ k, ref: l.ref_id, nom: l.libelle }); });
+    const ac = (typeof ACOMPTES !== 'undefined' ? ACOMPTES : []);
+    const acP = id => r2(ac.filter(a => String(a.employe_id) === String(id) && String(a.date_acompte || '') > (i.debut_periode || '') && String(a.date_acompte || '') <= i.date_inventaire).reduce((s, a) => s + (Number(a.montant) || 0), 0));
+    let h = '<h2 style="margin-top:0">Crédits avec les employés (hors travail)</h2><p class="iv-help"><b>Il nous doit</b> : avance ou prêt non remboursé. <b>Nous lui devons</b> : salaire, prime ou autre somme impayée. Mettez 0 si rien.</p>';
+    h += refs.length ? '<div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>Employé</th><th class="n iv-opt">Acomptes de la période</th><th>Il nous doit (DA)</th><th>Nous lui devons (DA)</th></tr></thead><tbody>' +
+      refs.map(r => { const c = lines.find(l => l.section === 'employe_creance' && String(l.ref_id || norm(l.libelle)) === r.k), dt = lines.find(l => l.section === 'employe_dette' && String(l.ref_id || norm(l.libelle)) === r.k);
+        const cell = (l, sec) => l ? '<input class="iv-p" data-l="' + esc(l.id) + '" data-f="mt" type="number" min="0" step="any" inputmode="decimal" value="' + (Number(l.montant) || '') + '" placeholder="0"' + d + '>' : (clos ? '—' : '<button class="btn s" type="button" data-addemp="' + esc(r.ref || '') + '" data-sec="' + sec + '" data-nom="' + esc(r.nom) + '">Ajouter</button>');
+        return '<tr><td><b>' + esc(r.nom) + '</b></td><td class="n iv-opt">' + (r.ref ? money(acP(r.ref)) : '—') + '</td><td>' + cell(c, 'employe_creance') + '</td><td>' + cell(dt, 'employe_dette') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<div class="iv-empty">Aucun employé.</div>';
+    if (!clos) {
+      const dej = new Set(refs.map(r => String(r.ref)));
+      const es = (typeof EMPLOYES !== 'undefined' ? EMPLOYES : []).filter(e => !dej.has(String(e.id)));
+      if (es.length) h += '<div class="iv-bar"><label>Ajouter un employé <select id="inv-adde"><option value="">— choisir —</option>' + es.map(e => '<option value="' + esc(e.id) + '">' + esc([e.prenom, e.nom].filter(Boolean).join(' ')) + '</option>').join('') + '</select></label></div>';
+    }
+    return h;
+  }
+
+  function paneAutres(i, lines, clos) {
+    const d = clos ? ' disabled' : '';
+    const bloc = (sec, titre, aide) => { const ls = lines.filter(l => l.section === sec);
+      return '<h3 style="margin:14px 0 4px">' + titre + '</h3><p class="iv-help">' + aide + '</p>' + (ls.length ? '<div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>Libellé</th><th>Montant (DA)</th><th>Note</th><th></th></tr></thead><tbody>' +
+        ls.map(l => '<tr data-l="' + esc(l.id) + '"><td><input class="iv-t" data-f="lb" maxlength="120" value="' + esc(l.libelle) + '" placeholder="Libellé"' + d + '></td><td><input class="iv-p" data-f="mt" type="number" min="0" step="any" inputmode="decimal" value="' + (Number(l.montant) || '') + '" placeholder="0"' + d + '></td><td><input class="iv-t" data-f="nt" maxlength="200" value="' + esc(l.note || '') + '" placeholder="Facultatif"' + d + '></td><td class="n">' + (clos ? '' : '<button class="btn s" type="button" data-rm="' + esc(l.id) + '">Retirer</button>') + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="iv-empty">Aucune ligne.</div>') +
+        (clos ? '' : '<div class="at-actions"><button class="btn s" type="button" data-addo="' + sec + '">+ Ajouter une ligne</button></div>'); };
+    return '<h2 style="margin-top:0">Autres créances, trésorerie et dettes</h2>' +
+      bloc('autre_actif', 'À recevoir ou disponible', 'Caisse, banque, autres crédits qu’on vous doit, matériel de valeur, dépôts… (en positif).') +
+      bloc('autre_passif', 'À payer', 'Crédit bancaire, loyer ou charges impayés, dette de matériel, autres crédits que vous devez.');
+  }
+
+  /* ---------- Mises à jour légères (sans perdre le curseur) ---------- */
+  function majTotaux() {
+    const i = inv(sel); if (!i) return;
+    const t = totaux(linesOf(i.id)), ca = ro(i) ? { ventes: Number(i.ventes), achats: Number(i.achats) } : caPeriode(i);
+    const e = $('#inv-sum'); if (e) e.innerHTML = resume(t, ca, ro(i));
+  }
+  function onInput(e) {
+    const el = e.target, f = el.dataset.f, tr = el.closest('[data-l]'); if (!f || !tr && !el.dataset.l) return;
+    const id = (tr || el).dataset.l, l = ligne(id); if (!l || ro(inv(l.inventaire_id))) return;
+    if (f === 'q' || f === 'r' || f === 'm') {
+      let q;
+      if (f === 'q') q = el.value === '' ? null : num(el.value);
+      else { const r = tr.querySelector('[data-f=r]').value, m = tr.querySelector('[data-f=m]').value; q = r === '' && m === '' ? null : r4((num(r) || 0) * Number(l.cond_qte) + (num(m) || 0)); }
+      if (q != null && q < 0) q = 0;
+      l.quantite = q == null ? null : (l.section === 'produit_fini' ? Math.round(q) : r4(q));
+    } else if (f === 'pu' || f === 'pc') {
+      const v = Math.max(0, num(el.value) || 0); l.prix_unitaire = f === 'pc' ? v / Number(l.cond_qte) : v;
+    } else if (f === 'mt') l.montant = Math.max(0, num(el.value) || 0);
+    else if (f === 'lb') l.libelle = el.value;
+    else if (f === 'nt') l.note = el.value;
+    recalc(l);
+    if (STOCKS.includes(l.section) && tr) {
+      tr.querySelector('.iv-ecart').innerHTML = ecartTxt(l);
+      tr.querySelector('.iv-val').innerHTML = l.quantite == null ? '<small>à compter</small>' : money(l.montant);
+    }
+    dirty.add(String(id)); schedule(); majTotaux();
+  }
+
+  /* ---------- Exports ---------- */
+  function exporter() {
+    const i = inv(sel); if (!i) return;
+    if (typeof XLSX === 'undefined') { say('Export indisponible.'); return; }
+    const lines = linesOf(i.id), t = totaux(lines), wb = XLSX.utils.book_new();
+    const ca = ro(i) ? { ventes: Number(i.ventes), achats: Number(i.achats) } : caPeriode(i);
+    const res = [['Inventaire', i.nom], ['Date', fd(i.date_inventaire)], ['Statut', i.statut === 'cloture' ? 'Clôturé' : 'En cours'], [], ['Rubrique', 'Montant (DA)']]
+      .concat(ORDRE.filter(s => SEC[s].actif).map(s => [SEC[s].l, t.par[s]])).concat([['TOTAL ACTIFS', t.actifs]])
+      .concat(ORDRE.filter(s => !SEC[s].actif).map(s => [SEC[s].l, t.par[s]])).concat([['TOTAL PASSIFS', t.passifs], ['VALEUR NETTE', t.net], [], ['Ventes de la période', ca.ventes], ['Achats de la période', ca.achats]]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(res), 'Résumé');
+    const feuille = (sec, nom) => {
+      const ls = lines.filter(l => l.section === sec); if (!ls.length) return;
+      const rows = STOCKS.includes(sec) ? ls.map(l => ({ Libellé: l.libelle, Catégorie: l.detail, Unité: l.unite, 'Selon la plateforme': l.quantite_theorique, Compté: l.quantite, Écart: l.quantite == null || l.quantite_theorique == null ? '' : r4(l.quantite - l.quantite_theorique), 'Prix unitaire (DA)': r2(l.prix_unitaire), 'Valeur (DA)': l.montant }))
+        : ls.map(l => ({ Libellé: l.libelle, 'Montant (DA)': l.montant, Note: l.note || '' }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), nom);
+    };
+    feuille('matiere', 'Éléments'); feuille('produit_fini', 'Produits finis'); feuille('client', 'Clients'); feuille('fournisseur', 'Fournisseurs');
+    feuille('employe_creance', 'Employés (ils nous doivent)'); feuille('employe_dette', 'Employés (nous leur devons)'); feuille('autre_actif', 'Autres à recevoir'); feuille('autre_passif', 'Autres à payer');
+    XLSX.writeFile(wb, 'inventaire-' + norm(i.nom).replace(/[^a-z0-9]+/g, '-') + '.xlsx');
+  }
+  const pdfT = s => String(s ?? '').replace(/œ/g, 'oe').replace(/Œ/g, 'OE').replace(/[  ]/g, ' ');
+  function pdf() {
+    const i = inv(sel); if (!i) return;
+    if (!(window.jspdf && window.jspdf.jsPDF)) { say('Bibliothèque PDF non chargée.'); return; }
+    const lines = linesOf(i.id), t = totaux(lines), doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), M = 14, W = doc.internal.pageSize.getWidth();
+    const ca = ro(i) ? { ventes: Number(i.ventes), achats: Number(i.achats) } : caPeriode(i);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(pdfT('INVENTAIRE - ' + i.nom), M, 18);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90); doc.text(pdfT('MARIA BAG - au ' + fd(i.date_inventaire) + ' - ' + (i.statut === 'cloture' ? 'Cloture' : 'En cours (brouillon)')), M, 25);
+    doc.setTextColor(0);
+    const body = [['ACTIFS', '']].concat(ORDRE.filter(s => SEC[s].actif).map(s => [SEC[s].l, money(t.par[s])])).concat([['Total des actifs', money(t.actifs)], ['PASSIFS', '']])
+      .concat(ORDRE.filter(s => !SEC[s].actif).map(s => [SEC[s].l, money(t.par[s])])).concat([['Total des passifs', money(t.passifs)], ['VALEUR NETTE', money(t.net)], ['Ventes de la periode', money(ca.ventes)], ['Achats de la periode', money(ca.achats)]]);
+    doc.autoTable({ startY: 32, margin: { left: M, right: M }, head: [[pdfT('Rubrique'), pdfT('Montant')]], body: body.map(r => r.map(pdfT)), theme: 'grid', styles: { fontSize: 10, cellPadding: 2.5, textColor: 0, lineColor: 0, lineWidth: 0.2 }, headStyles: { fillColor: [0, 0, 0] }, columnStyles: { 1: { halign: 'right' } } });
+    [['matiere', 'Elements de production'], ['produit_fini', 'Produits finis']].forEach(([sec, titre]) => {
+      const ls = lines.filter(l => l.section === sec); if (!ls.length) return;
+      doc.addPage(); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(pdfT(titre), M, 16);
+      doc.autoTable({ startY: 20, margin: { left: M, right: M }, head: [['Libelle', 'Plateforme', 'Compte', 'Ecart', 'Prix', 'Valeur'].map(pdfT)],
+        body: ls.map(l => [l.libelle, l.quantite_theorique == null ? '' : nf(l.quantite_theorique, 2), l.quantite == null ? '' : nf(l.quantite, 2), l.quantite == null || l.quantite_theorique == null ? '' : nf(r4(l.quantite - l.quantite_theorique), 2), nf(l.prix_unitaire, 2), nf(l.montant, 2)].map(pdfT)),
+        theme: 'grid', styles: { fontSize: 8.5, cellPadding: 1.8, textColor: 0, lineColor: 120, lineWidth: 0.1 }, headStyles: { fillColor: [0, 0, 0] }, columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } } });
+    });
+    const autres = [['client', 'Credits clients'], ['fournisseur', 'Credits fournisseurs'], ['employe_creance', 'Employes : ils nous doivent'], ['employe_dette', 'Employes : nous leur devons'], ['autre_actif', 'Autres a recevoir / disponible'], ['autre_passif', 'Autres a payer']];
+    doc.addPage(); let y = 16;
+    autres.forEach(([sec, titre]) => {
+      const ls = lines.filter(l => l.section === sec && Number(l.montant) > 0); if (!ls.length) return;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(pdfT(titre), M, y);
+      doc.autoTable({ startY: y + 3, margin: { left: M, right: M }, head: [['Libelle', 'Montant'].map(pdfT)], body: ls.map(l => [l.libelle, money(l.montant)].map(pdfT)), theme: 'grid', styles: { fontSize: 9.5, cellPadding: 2, textColor: 0, lineColor: 120, lineWidth: 0.1 }, headStyles: { fillColor: [0, 0, 0] }, columnStyles: { 1: { halign: 'right' } } });
+      y = doc.lastAutoTable.finalY + 9; if (y > 265) { doc.addPage(); y = 16; }
+    });
+    doc.save('inventaire-' + norm(i.nom).replace(/[^a-z0-9]+/g, '-') + '.pdf');
+  }
+
+  /* ---------- Événements ---------- */
+  document.addEventListener('click', async e => {
+    const root = $('#inv-root'); if (!root || !root.contains(e.target)) return;
+    const t = e.target;
+    if (t.closest('#inv-new')) { nouveau = true; render(); const n = $('#inv-nnom'); if (n) n.focus(); return; }
+    if (t.closest('#inv-ncancel')) { nouveau = false; render(); return; }
+    const del = t.closest('[data-del]'); if (del) { await supprimer(del.dataset.del); return; }
+    const op = t.closest('[data-open]'); if (op) { sel = op.dataset.open; onglet = 'resume'; saveMsg = ''; render(); window.scrollTo(0, 0); return; }
+    if (t.closest('#inv-back')) { sel = null; render(); flush(); return; }
+    const tab = t.closest('#inv-tabs [data-tab]'); if (tab) { onglet = tab.dataset.tab; render(); flush(); return; }
+    if (t.closest('#inv-close')) { await cloturer(); return; }
+    if (t.closest('#inv-reopen')) { await rouvrir(); return; }
+    if (t.closest('#inv-xls')) { exporter(); return; }
+    if (t.closest('#inv-pdf')) { pdf(); return; }
+    const same = t.closest('[data-same]');
+    if (same) { const l = ligne(same.dataset.same); if (l && l.quantite_theorique != null) { l.quantite = Math.max(0, l.quantite_theorique); recalc(l); dirty.add(String(l.id)); schedule(); render(); } return; }
+    if (t.closest('#inv-same')) {
+      const ls = linesOf(sel).filter(l => l.section === onglet && l.quantite == null && l.quantite_theorique != null);
+      if (!ls.length || !confirm(ls.length + ' ligne(s) vide(s) seront comptées comme le stock de la plateforme.\nÀ n’utiliser que si vous avez bien vérifié ces lignes dans l’atelier. Continuer ?')) return;
+      ls.forEach(l => { l.quantite = Math.max(0, l.quantite_theorique); recalc(l); dirty.add(String(l.id)); }); schedule(); render(); return;
+    }
+    const rm = t.closest('[data-rm]'); if (rm) { await supprLigne(rm.dataset.rm); render(); return; }
+    const ao = t.closest('[data-addo]'); if (ao) { await addLigne({ section: ao.dataset.addo, libelle: '', detail: '' }); render(); const ins = document.querySelectorAll('[data-f=lb]'); if (ins.length) { /* focus la dernière ligne */ } return; }
+    const ae = t.closest('[data-addemp]');
+    if (ae) { await addLigne({ section: ae.dataset.sec, ref_id: ae.dataset.addemp || null, libelle: ae.dataset.nom, detail: '' }); render(); return; }
+  });
+  document.addEventListener('submit', e => { if (e.target.id === 'inv-nform') { e.preventDefault(); creer(); } });
+  document.addEventListener('input', e => { if ($('#inv-root') && $('#inv-root').contains(e.target)) onInput(e); });
+  document.addEventListener('change', async e => {
+    const t = e.target, root = $('#inv-root'); if (!root || !root.contains(t)) return;
+    if (t.id === 'iv-ca') { cmp.a = t.value; render(); return; }
+    if (t.id === 'iv-cb') { cmp.b = t.value; render(); return; }
+    if (t.id === 'iv-csec') { cmp.sec = t.value; render(); return; }
+    const i = sel ? inv(sel) : null;
+    if (i && !ro(i) && (t.id === 'inv-hnom' || t.id === 'inv-hdate' || t.id === 'inv-hnotes')) {
+      const patch = {};
+      if (t.id === 'inv-hnom') { const v = t.value.trim(); if (!v || INV.some(x => x.id !== i.id && norm(x.nom) === norm(v))) { say(v ? 'Un inventaire porte déjà ce nom.' : 'Le nom est obligatoire.'); t.value = i.nom; return; } patch.nom = v; }
+      if (t.id === 'inv-hdate') { if (!t.value) { t.value = i.date_inventaire; return; } const p = precedent(t.value, i.id); const tard = INV.some(x => x.statut === 'cloture' && x.id !== i.id && x.date_inventaire >= t.value);
+        if (tard) { say('La date doit être après le dernier inventaire clôturé.'); t.value = i.date_inventaire; return; } patch.date_inventaire = t.value; patch.annee = Number(t.value.slice(0, 4)); patch.debut_periode = p ? p.date_inventaire : null; }
+      if (t.id === 'inv-hnotes') patch.notes = t.value.trim();
+      const r = await sb.from('inventaires').update(patch).eq('id', i.id);
+      if (r.error) { say('Erreur : ' + r.error.message); return; }
+      Object.assign(i, patch); saveMsg = 'Enregistré ✓'; render(); return;
+    }
+    if (t.id === 'inv-addc' && t.value) {
+      const c = (typeof D !== 'undefined' ? D : []).find(x => String(x.id) === String(t.value)); if (!c) return;
+      await addLigne({ section: t.dataset.sec, ref_id: c.id, libelle: PartAPI.label(c), detail: t.dataset.sec === 'client' ? 'Client' : 'Fournisseur' }); render(); return;
+    }
+    if (t.id === 'inv-adde' && t.value) {
+      const em = (typeof EMPLOYES !== 'undefined' ? EMPLOYES : []).find(x => String(x.id) === String(t.value)); if (!em) return;
+      const n = [em.prenom, em.nom].filter(Boolean).join(' ');
+      await addLigne({ section: 'employe_creance', ref_id: em.id, libelle: n, detail: em.poste || '' }); await addLigne({ section: 'employe_dette', ref_id: em.id, libelle: n, detail: em.poste || '' }); render();
+    }
+  });
+  window.addEventListener('beforeunload', ev => { if (dirty.size) { flush(); ev.preventDefault(); ev.returnValue = ''; } });
+
+  window.loadInventaire = load;
+  document.addEventListener('mariabag:authenticated', () => load(true));
+})();

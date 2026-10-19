@@ -244,12 +244,13 @@
   const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
   const moisLbl = k => MOIS[Number(k.slice(5, 7)) - 1] + ' ' + k.slice(0, 4);
 
-  function operations() {
+  function operations(opts) {
     const ops = [];
+    const ok = opts ? (d => { d = String(d || ''); return (!opts.depuis || d > opts.depuis) && (!opts.jusqua || d <= opts.jusqua); }) : dansPeriode;
     if (window.StockAPI) {
       const arts = new Map(StockAPI.list().map(a => [String(a.id), a]));
       StockAPI.mouvements().forEach(m => {
-        if (m.type !== 'entree' || !(Number(m.quantite) > 0) || !dansPeriode(m.date_mvt)) return;
+        if (m.type !== 'entree' || !(Number(m.quantite) > 0) || !ok(m.date_mvt)) return;
         const a = arts.get(String(m.article_id)); if (!a) return;
         const k = cle(m, 'fournisseur', 'Fournisseur');
         const pu = Number(m.prix_achat) || 0, unit = pu > 0 ? (StockAPI.aCond(a) ? pu / StockAPI.condQte(a) : pu) : 0;
@@ -259,7 +260,7 @@
     if (window.PFAPI) {
       const prods = new Map(PFAPI.produits().map(p => [String(p.id), p]));
       PFAPI.mouvements().forEach(m => {
-        if ((m.type !== 'livraison' && m.type !== 'retour') || !dansPeriode(m.date_mvt)) return;
+        if ((m.type !== 'livraison' && m.type !== 'retour') || !ok(m.date_mvt)) return;
         const p = prods.get(String(m.produit_id)), k = cle(m, 'client_nom', 'Client');
         const n = -(Number(m.quantite) || 0), pv = m.prix_vente != null ? Number(m.prix_vente) : (p ? Number(p.prix_vente) || 0 : 0);
         ops.push({ sens: 'vente', date: String(m.date_mvt || ''), key: k.key, id: k.id, nom: k.nom || 'Client non indiqué', libelle: (p ? p.nom : 'Produit') + (m.type === 'retour' ? ' (retour)' : ''), qte: num(Math.abs(n)) + ' pc', montant: n * pv, ref: m.reference || '', sansPrix: !(pv > 0) });
@@ -362,5 +363,5 @@
   });
   ['mariabag:stock', 'mariabag:pf'].forEach(ev => document.addEventListener(ev, () => { if (tab !== 'liste' && $('#v-list').classList.contains('on')) render(); }));
 
-  window.PartAPI = { fill, read, creer, contacts, label, render };
+  window.PartAPI = { fill, read, creer, contacts, label, render, ops: operations };
 })();
