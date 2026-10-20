@@ -34,6 +34,29 @@
     salut();
   }
   horloge(); setInterval(() => { if (!$l('login').classList.contains('hide')) horloge(); }, 15000);
+  /* Message de motivation pour Khalida : un par jour, puis il change toutes les 9 secondes */
+  const MOTS = [
+    'Chaque pièce bien comptée, chaque client bien suivi fait grandir Maria Bag. Belle journée, Khalida !',
+    'Votre rigueur fait la différence : un stock juste, c’est un atelier serein. Merci pour votre travail.',
+    'Un grand projet se construit jour après jour, ligne après ligne. Vous êtes en train de le faire.',
+    'Les chiffres d’aujourd’hui préparent la réussite de demain. Continuez avec confiance.',
+    'Prendre soin des clients et des fournisseurs, c’est prendre soin de Maria Bag. Bravo pour votre énergie.',
+    'Chaque petite victoire compte : une relance faite, une commande livrée, un inventaire juste.',
+    'La constance bat le talent quand le talent n’est pas constant. Et vous avez les deux, Khalida.',
+    'Aujourd’hui encore, soyez fière de ce que vous bâtissez. Votre travail se voit et il compte.',
+    'Un sourire, un suivi soigné, un chiffre exact : voilà comment on transforme un atelier en marque.',
+    'Courage pour cette journée : tout ce qui est bien organisé devient plus facile.',
+    'Vous avancez chaque jour, même quand ça paraît lent. Maria Bag grandit grâce à vous.',
+    'Que cette journée vous apporte de belles commandes et de belles nouvelles. Bonne chance !'
+  ];
+  let im = (Math.floor(Date.now() / 86400000) + 3) % MOTS.length;
+  const affMot = () => { const p = $l('lmsg'); p.textContent = MOTS[im]; };
+  affMot();
+  setInterval(() => {
+    if ($l('login').classList.contains('hide')) return;
+    const p = $l('lmsg'); p.classList.add('out');
+    setTimeout(() => { im = (im + 1) % MOTS.length; affMot(); p.classList.remove('out'); }, 500);
+  }, 9000);
   const eye = $l('lpeye');
   const bascule = () => { const p = $l('lp'); const voir = p.type === 'password'; p.type = voir ? 'text' : 'password'; eye.style.opacity = voir ? '1' : ''; p.focus(); };
   eye.addEventListener('click', bascule);
@@ -50,7 +73,7 @@
     if (val === APP_PASSWORD) {
       sessionStorage.setItem(SESSION_KEY, '1');
       err.textContent = ''; essais = 0;
-      carte.classList.add('ok'); $l('lbtxt').textContent = 'Bienvenue Khalida ✓'; btn.disabled = true;
+      carte.classList.add('ok'); $l('lbtxt').textContent = 'Bienvenue Khalida, belle journée ✓'; btn.disabled = true;
       setTimeout(() => {
         document.getElementById('login').classList.add('leaving');
         showApp();
