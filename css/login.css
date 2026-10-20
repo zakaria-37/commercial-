@@ -11,7 +11,7 @@
 @keyframes ldrift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(6vmax,4vmax,0) scale(1.18)}}
 .lwrap{position:relative;z-index:1;display:grid;grid-template-columns:1.15fr 1fr;align-items:stretch;width:min(980px,94vw);min-height:min(560px,92vh);margin:auto;border-radius:22px;overflow:hidden;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 90px rgba(0,0,0,.6);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);animation:lrise .7s cubic-bezier(.2,.8,.2,1) both}
 @keyframes lrise{from{opacity:0;transform:translateY(22px) scale(.98)}to{opacity:1;transform:none}}
-#login{align-items:center}
+#login{align-items:flex-start;overflow-y:auto}
 .lbrand{padding:44px 40px;color:#fff;display:flex;flex-direction:column;justify-content:center;text-align:left}
 .llogobox{width:78px;height:78px;border-radius:20px;background:#fff;display:flex;align-items:center;justify-content:center;margin-bottom:20px;box-shadow:0 10px 30px rgba(0,0,0,.35);animation:lpop .9s .15s cubic-bezier(.2,1.3,.4,1) both}
 .llogobox .llogo{height:52px;width:auto;margin:0;max-width:64px;object-fit:contain}
@@ -64,3 +64,11 @@
   #login{align-items:flex-start;overflow-y:auto}
 }
 @media (prefers-reduced-motion:reduce){#login *{animation:none!important;transition:none!important}.lfeat li{opacity:1}}
+
+/* Fenêtres peu hautes : tout reste visible (défilement si besoin), rien n'est coupé */
+@media (min-width:801px) and (max-height:720px){
+  .lwrap{margin:16px auto;min-height:0}
+  .lbrand{padding:26px 34px}.llogobox{width:62px;height:62px;margin-bottom:12px}.llogobox .llogo{height:42px}
+  .lbrand h1{font-size:38px}.lbrand .ltag{margin-bottom:16px}.lfeat{gap:8px;margin-bottom:16px}.lmotiv{margin-bottom:16px}.lmotiv p{min-height:0}
+  #login .lcard{padding:28px 34px}
+}
