@@ -74,4 +74,8 @@ create policy "inventaire_lignes_update_all" on public.inventaire_lignes for upd
 drop policy if exists "inventaire_lignes_delete_all" on public.inventaire_lignes;
 create policy "inventaire_lignes_delete_all" on public.inventaire_lignes for delete using (true);
 
+-- Droits d'accès à l'API (obligatoires pour les nouvelles tables à partir du 30 octobre 2026)
+grant select, insert, update, delete on public.inventaires to anon, authenticated, service_role;
+grant select, insert, update, delete on public.inventaire_lignes to anon, authenticated, service_role;
+
 notify pgrst, 'reload schema';

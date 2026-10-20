@@ -59,4 +59,7 @@ create policy "charges_fixes_update_all" on public.charges_fixes for update usin
 drop policy if exists "charges_fixes_delete_all" on public.charges_fixes;
 create policy "charges_fixes_delete_all" on public.charges_fixes for delete using (true);
 
+-- Droits d'accès à l'API (obligatoires pour les nouvelles tables à partir du 30 octobre 2026)
+grant select, insert, update, delete on public.charges_fixes to anon, authenticated, service_role;
+
 notify pgrst, 'reload schema';

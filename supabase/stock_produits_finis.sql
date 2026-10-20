@@ -74,4 +74,7 @@ create policy "pf_mouvements_update_all" on public.pf_mouvements for update usin
 drop policy if exists "pf_mouvements_delete_all" on public.pf_mouvements;
 create policy "pf_mouvements_delete_all" on public.pf_mouvements for delete using (true);
 
+-- Droits d'accès à l'API (obligatoires pour les nouvelles tables à partir du 30 octobre 2026)
+grant select, insert, update, delete on public.pf_mouvements to anon, authenticated, service_role;
+
 notify pgrst, 'reload schema';

@@ -108,4 +108,8 @@ create policy "stock_mouvements_update_all" on public.stock_mouvements for updat
 drop policy if exists "stock_mouvements_delete_all" on public.stock_mouvements;
 create policy "stock_mouvements_delete_all" on public.stock_mouvements for delete using (true);
 
+-- Droits d'accès à l'API (obligatoires pour les nouvelles tables à partir du 30 octobre 2026)
+grant select, insert, update, delete on public.stock_articles to anon, authenticated, service_role;
+grant select, insert, update, delete on public.stock_mouvements to anon, authenticated, service_role;
+
 notify pgrst, 'reload schema';

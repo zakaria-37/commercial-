@@ -85,4 +85,8 @@ create policy "produit_lignes_update_all" on public.produit_lignes for update us
 drop policy if exists "produit_lignes_delete_all" on public.produit_lignes;
 create policy "produit_lignes_delete_all" on public.produit_lignes for delete using (true);
 
+-- Droits d'accès à l'API (obligatoires pour les nouvelles tables à partir du 30 octobre 2026)
+grant select, insert, update, delete on public.produits to anon, authenticated, service_role;
+grant select, insert, update, delete on public.produit_lignes to anon, authenticated, service_role;
+
 notify pgrst, 'reload schema';
