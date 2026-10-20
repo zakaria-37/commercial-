@@ -1,0 +1,59 @@
+/* ============================================================
+   MARIA BAG — Écran d'ouverture (connexion)
+   ============================================================ */
+#login{background:#07060a;overflow:hidden;padding:0;transition:opacity .5s ease,visibility .5s}
+#login.leaving{opacity:0;visibility:hidden}
+#login .lbg{position:absolute;inset:0;overflow:hidden}
+#login .lbg i{position:absolute;border-radius:50%;filter:blur(90px);opacity:.55;animation:ldrift 18s ease-in-out infinite alternate}
+#login .lbg i:nth-child(1){width:46vmax;height:46vmax;background:#9b5d6b;left:-12vmax;top:-14vmax}
+#login .lbg i:nth-child(2){width:38vmax;height:38vmax;background:#d9a8b2;right:-10vmax;bottom:-16vmax;animation-duration:23s;opacity:.38}
+#login .lbg i:nth-child(3){width:26vmax;height:26vmax;background:#4b2a35;left:40%;top:30%;animation-duration:27s;opacity:.6}
+@keyframes ldrift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(6vmax,4vmax,0) scale(1.18)}}
+.lwrap{position:relative;z-index:1;display:grid;grid-template-columns:1.15fr 1fr;align-items:stretch;width:min(980px,94vw);min-height:min(560px,92vh);margin:auto;border-radius:22px;overflow:hidden;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 90px rgba(0,0,0,.6);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);animation:lrise .7s cubic-bezier(.2,.8,.2,1) both}
+@keyframes lrise{from{opacity:0;transform:translateY(22px) scale(.98)}to{opacity:1;transform:none}}
+#login{align-items:center}
+.lbrand{padding:44px 40px;color:#fff;display:flex;flex-direction:column;justify-content:center;text-align:left}
+.llogobox{width:78px;height:78px;border-radius:20px;background:#fff;display:flex;align-items:center;justify-content:center;margin-bottom:20px;box-shadow:0 10px 30px rgba(0,0,0,.35);animation:lpop .9s .15s cubic-bezier(.2,1.3,.4,1) both}
+.llogobox .llogo{height:52px;width:auto;margin:0;max-width:64px;object-fit:contain}
+@keyframes lpop{from{opacity:0;transform:scale(.6) rotate(-8deg)}to{opacity:1;transform:none}}
+.lbrand h1{font:italic 400 44px "Brush Script MT","Segoe Script","Snell Roundhand",Georgia,cursive;margin:0 0 4px;letter-spacing:.02em;color:#fff}
+.lbrand .ltag{color:#d9c3c8;margin:0 0 26px;font-size:15px}
+.lfeat{list-style:none;margin:0 0 28px;padding:0;display:grid;gap:11px}
+.lfeat li{display:flex;align-items:center;gap:12px;color:#ece2e4;font-size:14px;opacity:0;animation:lslide .6s ease forwards}
+.lfeat li:nth-child(1){animation-delay:.35s}.lfeat li:nth-child(2){animation-delay:.5s}.lfeat li:nth-child(3){animation-delay:.65s}.lfeat li:nth-child(4){animation-delay:.8s}
+@keyframes lslide{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+.lfeat li b{width:30px;height:30px;border-radius:9px;background:rgba(217,168,178,.18);color:#d9a8b2;display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+.lclock{margin-top:auto;padding-top:10px;color:#bfa9af;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.lclock b{font-size:30px;color:#fff;font-weight:600;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.lclock span{font-size:13px;text-transform:capitalize}
+#login .lcard{background:#fff;border-radius:0;box-shadow:none;width:auto;max-width:none;padding:44px 38px;text-align:left;display:flex;flex-direction:column;justify-content:center}
+#login .lcard h2{font-size:26px;margin:0 0 6px;color:#111;font-weight:700}
+#login .lcard .lsub{margin:0 0 18px;color:var(--mut);font-size:14px}
+#login .lcard .lerr{min-height:20px;margin:0 0 6px;color:var(--r);font-size:13px;font-weight:600}
+.lfield{position:relative;margin-bottom:10px}
+#login .lcard .lfield input{width:100%;margin:0;padding:14px 46px 14px 16px;text-align:left;font-size:16px;border:1.5px solid #d9d5d6;border-radius:12px;background:#faf9f9;transition:border-color .2s,box-shadow .2s,background .2s}
+#login .lcard .lfield input:focus{outline:none;border-color:#9b5d6b;background:#fff;box-shadow:0 0 0 4px rgba(155,93,107,.15)}
+#lpeye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:38px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:10px;cursor:pointer;opacity:.55;user-select:none;font-size:18px}
+#lpeye:hover,#lpeye:focus{opacity:1;background:#f0eaec;outline:none}
+.lcaps{color:#b86e00;font-size:12.5px;margin:0 0 8px}
+#login .lcard #lbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:14px 16px;font-size:15.5px;border-radius:12px;background:linear-gradient(135deg,#111,#3a2a30);border:0;transition:transform .15s,box-shadow .2s,opacity .2s}
+#login .lcard #lbtn i{font-style:normal;transition:transform .2s}
+#login .lcard #lbtn:hover{box-shadow:0 10px 24px rgba(0,0,0,.28);transform:translateY(-1px);background:linear-gradient(135deg,#000,#4b3139)}
+#login .lcard #lbtn:hover i{transform:translateX(4px)}
+#login .lcard #lbtn:disabled{opacity:.7;cursor:default;transform:none}
+#login .lcard.ok #lbtn{background:#1f8a5b}
+.lfoot{margin-top:22px;color:var(--mut);font-size:12.5px;display:flex;align-items:center;gap:8px}
+.ldot{width:9px;height:9px;border-radius:50%;background:#3ecf8e;box-shadow:0 0 0 0 rgba(62,207,142,.6);animation:lpulse 2s infinite;flex:none}
+@keyframes lpulse{70%{box-shadow:0 0 0 9px rgba(62,207,142,0)}100%{box-shadow:0 0 0 0 rgba(62,207,142,0)}}
+.lcard.shake{animation:lshake .45s}
+@keyframes lshake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+@media (max-width:800px){
+  .lwrap{grid-template-columns:1fr;min-height:0;width:min(440px,94vw);margin:18px auto}
+  .lbrand{padding:26px 24px 8px;align-items:center;text-align:center}
+  .llogobox{width:62px;height:62px;border-radius:16px;margin-bottom:10px}.llogobox .llogo{height:42px}
+  .lbrand h1{font-size:36px}.lbrand .ltag{margin-bottom:8px;font-size:14px}
+  .lfeat,.lclock span{display:none}.lclock{padding:0;margin:0}.lclock b{font-size:22px}
+  #login .lcard{padding:24px 24px 26px;border-radius:20px 20px 0 0;margin-top:10px}
+  #login{align-items:flex-start;overflow-y:auto}
+}
+@media (prefers-reduced-motion:reduce){#login *{animation:none!important;transition:none!important}.lfeat li{opacity:1}}
