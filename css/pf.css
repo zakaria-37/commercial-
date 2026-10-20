@@ -18,3 +18,13 @@
 #pf-tbody td.emp-act,#pf-cmd-body td.emp-act,#pf-prod-body td.emp-act{white-space:normal;min-width:190px}
 #pf-tbody td.emp-act .btn{margin:2px 2px 2px 0}
 #pf-tbody td b{white-space:nowrap}
+
+/* Tableau « Stock des produits finis » : tient dans la largeur d'un PC, sans glisser */
+#pf-table{min-width:0}
+#pf-table th{white-space:normal;padding:9px 8px;line-height:1.25;cursor:default}
+#pf-table td{padding:9px 8px;font-size:13.5px;line-height:1.35}
+#pf-table td small{font-size:12px}
+#pf-table .pf-l{color:var(--mut);font-size:12px}
+#pf-tbody td.emp-act{min-width:0;width:172px}
+#pf-tbody td.emp-act .btn{width:calc(50% - 3px);margin:0 0 4px;padding:6px 4px;font-size:12.5px;white-space:nowrap}
+@media (max-width:1060px){#pf-table{min-width:900px}}

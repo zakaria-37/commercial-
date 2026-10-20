@@ -230,8 +230,7 @@
       const marge = c > 0 && pv > 0 ? pv - c : null;
       return '<tr><td><b>' + esc(p.nom) + '</b>' + '<small>' + esc([p.marque || 'MARIA BAG', p.description].filter(Boolean).join(' · ')) + '</small>' + '</td>' +
         '<td><b>' + num(st) + '</b> pcs' + (Number(p.seuil_pf) ? '<small>seuil ' + num(p.seuil_pf) + '</small>' : '') + '</td>' +
-        '<td>' + (prod ? num(prod) + ' pcs' : '<small>—</small>') + '</td>' +
-        '<td>' + (liv ? '<b>' + num(liv) + '</b> pcs' + (liv > st + prod ? '<small style="color:var(--r)">manque ' + num(liv - st - prod) + ' à lancer</small>' : '') : '<small>—</small>') + '</td>' +
+        '<td>' + (prod || liv ? (prod ? '<span class="pf-l">En prod. :</span> ' + num(prod) + ' pcs' : '') + (prod && liv ? '<br>' : '') + (liv ? '<span class="pf-l">À livrer :</span> <b>' + num(liv) + '</b> pcs' + (liv > st + prod ? '<small style="color:var(--r)">manque ' + num(liv - st - prod) + ' à lancer</small>' : '') : '') : '<small>—</small>') + '</td>' +
         '<td>' + (c > 0 ? '<b>' + money(c, 2) + '</b>' : '<small>à calculer (Produits)</small>') + '</td>' +
         '<td>' + (pv ? '<b>' + money(pv, 2) + '</b>' + (marge != null ? '<small style="color:' + (marge >= 0 ? 'var(--g)' : 'var(--r)') + '">marge ' + money(marge, 2) + ' (' + num(pv ? marge / pv * 100 : 0, 1) + ' %)</small>' : '') : '<small>à renseigner</small>') + '</td>' +
         '<td>' + (cap.cap != null ? '<b>≈ ' + num(cap.cap) + '</b> pcs' + '<small>limité par ' + esc(cap.limit) + (cap.nonLies ? ' · ' + cap.nonLies + ' non lié(s)' : '') + '</small>' : '<small>' + esc(cap.why) + '</small>') + '</td>' +
@@ -240,7 +239,7 @@
         '<button class="btn s" type="button" onclick="pfShowMvt(\'livraison\',\'' + esc(p.id) + '\')">Livrer</button> ' +
         '<button class="btn s" type="button" onclick="pfShowProduit(\'' + esc(p.id) + '\')">Prix / seuil</button> ' +
         '<button class="btn s" type="button" onclick="pfVoirHist(\'' + esc(p.id) + '\')">Historique</button></td></tr>';
-    }).join('') : '<tr><td colspan="9" class="at-empty">Aucun produit ne correspond.</td></tr>';
+    }).join('') : '<tr><td colspan="8" class="at-empty">Aucun produit ne correspond.</td></tr>';
   }
 
   /* Livraisons par client */
