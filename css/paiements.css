@@ -1,0 +1,9 @@
+/* Paiements et soldes */
+.py-due{color:#b3261e;font-weight:700}
+.py-pay{color:#b86e00;font-weight:700}
+.py-av{color:#17632a;font-weight:700}
+.py-bdg{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.py-bdg.ok{background:#e4f5e8;color:#17632a}
+.py-form{margin-bottom:12px}
+.py-sub button{padding:8px 14px}
+#ct-rank .ct-tbl td small{display:block;color:var(--mut);font-size:12px}

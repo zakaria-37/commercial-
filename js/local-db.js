@@ -21,7 +21,7 @@
 
   // Ordre = parents d'abord (important pour envoyer les nouvelles lignes à Supabase)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants', 'productions', 'commandes',
-                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes'];
+                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'paiements'];
 
   // Valeurs par défaut (les mêmes que dans les fichiers supabase/*.sql)
   var DEFAULTS = {
@@ -42,6 +42,7 @@
     stock_mouvements: { date_mvt: null, type: 'entree', prix_achat: null, fournisseur: '', contact_id: null, reference: '', note: '', source: 'manuel' },
     produits: { description: '', modele_id: null, mo_date: null, mo_salaires: 0, mo_charges: 0, mo_pieces: 0, prix_vente: 0, seuil_pf: 0, marque: 'MARIA BAG' },
     pf_mouvements: { date_mvt: null, type: 'entree', contact_id: null, client_nom: '', commande_id: null, production_id: null, prix_vente: null, reference: '', note: '' },
+    paiements: { date_paiement: null, contact_id: null, contact_nom: '', mode: 'especes', reference: '', note: '' },
     inventaires: { annee: 0, date_inventaire: null, statut: 'brouillon', debut_periode: null, ventes: 0, achats: 0, valeur_nette: 0, stock_applique: false, notes: '', cloture_le: null },
     inventaire_lignes: { ref_id: null, libelle: '', detail: '', unite: '', quantite_theorique: null, quantite: null, prix_unitaire: 0, cond_nom: '', cond_qte: 0, prix_vente: 0, montant: 0, note: '', ordre: 0 },
     produit_lignes: { categorie: 'Autre outil', designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, perte_pct: 0, note: '', ordre: 0, article_id: null }
@@ -68,7 +69,8 @@
     ['contacts', 'stock_articles', 'contact_id', 'null'], ['contacts', 'stock_mouvements', 'contact_id', 'null'],
     ['employes', 'pointages', 'employe_id', 'cascade'], ['employes', 'acomptes', 'employe_id', 'cascade'],
     ['employes', 'charges', 'employe_id', 'null'],
-    ['inventaires', 'inventaire_lignes', 'inventaire_id', 'cascade']
+    ['inventaires', 'inventaire_lignes', 'inventaire_id', 'cascade'],
+    ['contacts', 'paiements', 'contact_id', 'null']
   ];
 
   /* ---------- État ---------- */
@@ -476,7 +478,7 @@
       var app = document.getElementById('app');
       if (!app || app.classList.contains('hide')) return;
       if (document.querySelector('#m.on, #m.show, #bkBg')) return;     // fenêtre ouverte : pas de rechargement sous les doigts
-      ['loadContacts', 'loadAteliers', 'loadProductions', 'loadCommandes', 'loadEmployes', 'loadCharges', 'loadProduction', 'loadProduits', 'loadStock', 'loadPF', 'loadInventaire']
+      ['loadContacts', 'loadAteliers', 'loadProductions', 'loadCommandes', 'loadEmployes', 'loadCharges', 'loadProduction', 'loadProduits', 'loadStock', 'loadPF', 'loadInventaire', 'loadPaiements']
         .forEach(function (f) { try { if (typeof window[f] === 'function') window[f](); } catch (e) {} });
     }, 300);
   }

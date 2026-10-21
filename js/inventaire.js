@@ -124,6 +124,11 @@
       });
       const all = window.PartAPI ? PartAPI.ops({}) : [];
       const vus = new Set();
+      if (window.PayAPI) {            // soldes calculés (ventes/achats + soldes de départ − paiements) : reportés tels quels
+        if (PayAPI.load) await PayAPI.load();
+        PayAPI.soldes('client').filter(x => x.id).forEach(x => { vus.add('c' + x.id); add({ section: 'client', ref_id: x.id, libelle: x.nom, detail: 'Client', montant: r2(Math.max(0, x.solde)), note: x.solde > 0.004 ? 'Solde calculé par la plateforme' : '' }); });
+        PayAPI.soldes('fournisseur').filter(x => x.id).forEach(x => { vus.add('f' + x.id); add({ section: 'fournisseur', ref_id: x.id, libelle: x.nom, detail: 'Fournisseur', montant: r2(Math.max(0, x.solde)), note: x.solde > 0.004 ? 'Solde calculé par la plateforme' : '' }); });
+      }
       all.filter(x => x.sens === 'vente' && x.id).forEach(x => { if (vus.has('c' + x.id)) return; vus.add('c' + x.id); add({ section: 'client', ref_id: x.id, libelle: x.nom, detail: 'Client', montant: 0 }); });
       all.filter(x => x.sens === 'achat' && x.id).forEach(x => { if (vus.has('f' + x.id)) return; vus.add('f' + x.id); add({ section: 'fournisseur', ref_id: x.id, libelle: x.nom, detail: 'Fournisseur', montant: 0 }); });
       (typeof EMPLOYES !== 'undefined' ? EMPLOYES : []).forEach(e => {
@@ -376,7 +381,7 @@
     const ops = window.PartAPI ? PartAPI.ops(periode(i)).filter(o => o.sens === (cl ? 'vente' : 'achat')) : [];
     const refP = id => r2(ops.filter(o => String(o.id) === String(id)).reduce((s, o) => s + o.montant, 0));
     let h = '<h2 style="margin-top:0">' + (cl ? 'Crédits clients : ce que vos clients vous doivent encore' : 'Crédits fournisseurs : ce que vous devez encore à vos fournisseurs') + '</h2>' +
-      '<p class="iv-help">Saisissez, pour chacun, le <b>montant restant à ' + (cl ? 'encaisser' : 'payer') + '</b> à la date de l’inventaire (0 si tout est réglé). La colonne « ' + (cl ? 'Ventes' : 'Achats') + ' de la période » est là pour vous aider.</p>';
+      '<p class="iv-help">Saisissez, pour chacun, le <b>montant restant à ' + (cl ? 'encaisser' : 'payer') + '</b> à la date de l’inventaire (0 si tout est réglé). Le montant est <b>prérempli avec le solde calculé</b> d’après vos ventes, achats et paiements (Contacts › Paiements et soldes) : vérifiez-le et corrigez si besoin.</p>';
     h += lines.length ? '<div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>' + (cl ? 'Client' : 'Fournisseur') + '</th><th class="n iv-opt">' + (cl ? 'Ventes' : 'Achats') + ' de la période</th><th>Montant restant (DA)</th><th></th></tr></thead><tbody>' +
       lines.map(l => '<tr data-l="' + esc(l.id) + '"><td><b>' + esc(l.libelle) + '</b></td><td class="n iv-opt">' + (l.ref_id ? money(refP(l.ref_id)) : '—') + '</td><td><input class="iv-p" data-f="mt" type="number" min="0" step="any" inputmode="decimal" value="' + (Number(l.montant) || '') + '" placeholder="0"' + d + '></td><td class="n">' + (clos ? '' : '<button class="btn s" type="button" data-rm="' + esc(l.id) + '">Retirer</button>') + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="iv-empty">Aucun ' + (cl ? 'client' : 'fournisseur') + ' dans cette liste.</div>';
     if (!clos) {

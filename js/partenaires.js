@@ -339,6 +339,7 @@
     document.querySelectorAll('#ct-tabs [data-ctp]').forEach(b => b.classList.toggle('on', b.dataset.ctp === tab));
     if (liste) return;
     if (tab === 'ca') { renderCA(box); return; }
+    if (tab === 'pay') { if (window.PayAPI) PayAPI.render(box); return; }
     const four = tab === 'four';
     const tris = four ? [['prix', 'Meilleur prix'], ['vol', 'Plus gros achats'], ['nb', 'Plus d’achats']] : [['ca', 'Chiffre d’affaires'], ['marge', 'Marge'], ['pieces', 'Pièces livrées'], ['liv', 'Nombre de livraisons']];
     box.innerHTML = '<div class="ct-bar"><label>Période <select id="ct-per">' +
