@@ -201,6 +201,7 @@
     <label style="display:flex;gap:8px;align-items:center;font-weight:600">Mois <input id="emp-mois" type="month"></label>
     <input id="emp-q" type="search" placeholder="Rechercher : nom, prénom, poste…">
     <button class="btn" type="button" onclick="exportEmployes()">Exporter Excel</button>
+    <button class="btn" type="button" onclick="fichesPaieTous()" title="Une fiche par employé, pour la période choisie dans le panneau Pointage (par défaut le mois affiché)">Fiches de paie (tous)</button>
     <button class="btn p" type="button" onclick="showFormEmploye()">+ Nouvel employé</button>
   </div>
   <div id="emp-stats" class="at-stats"></div>
@@ -225,6 +226,12 @@
     <div id="ac-resume" class="at-stats"></div>
 
     <h2>Pointage du mois (heure de début et heure de fin)</h2>
+    <div class="at-actions" style="margin:0 0 10px;align-items:center;padding:10px;border:1px solid var(--bd,#e3d6d0);border-radius:10px;background:var(--nb)">
+      <b>Fiche de paie</b>
+      <label style="display:flex;gap:6px;align-items:center;font-weight:600">Du <input id="fp-du" type="date"></label>
+      <label style="display:flex;gap:6px;align-items:center;font-weight:600">Au <input id="fp-au" type="date"></label>
+      <button class="btn p" type="button" onclick="fichePaie()">Imprimer la fiche de paie (PDF)</button>
+    </div>
     <div class="at-actions" style="margin:0 0 10px;align-items:center">
       <label style="display:flex;gap:6px;align-items:center;font-weight:600">Début habituel <input id="pt-debut" type="time" value="08:00"></label>
       <label style="display:flex;gap:6px;align-items:center;font-weight:600">Fin habituelle <input id="pt-fin" type="time" value="19:00"></label>
@@ -721,6 +728,7 @@
 <script src="js/app.js"></script>
 <script src="js/ateliers.js"></script>
 <script src="js/employes.js"></script>
+<script src="js/fiche_paie.js"></script>
 <script src="js/charges.js"></script>
 <script src="js/stock.js"></script>
 <script src="js/pf.js"></script>
