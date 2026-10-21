@@ -72,3 +72,15 @@
   .lbrand h1{font-size:38px}.lbrand .ltag{margin-bottom:16px}.lfeat{gap:8px;margin-bottom:16px}.lmotiv{margin-bottom:16px}.lmotiv p{min-height:0}
   #login .lcard{padding:28px 34px}
 }
+
+/* Comptes : onglets et liens */
+.ltabs{display:flex;gap:6px;margin:0 0 14px;background:#f1eeef;border-radius:12px;padding:4px}
+.ltabs button{flex:1;border:0;background:transparent;padding:9px 10px;border-radius:9px;font-weight:600;color:#6b7385;cursor:pointer;font-size:14px}
+.ltabs button.on{background:#fff;color:#111;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+#login .lcard .ltabs button{width:auto;flex:1;margin:0;border:0;background:transparent;color:#6b7385}
+#login .lcard .ltabs button.on{background:#fff;color:#111}
+#login .lcard .ltabs button:hover{background:rgba(255,255,255,.6)}
+.lfield+.lfield{margin-top:0}
+.llinks{display:flex;flex-direction:column;gap:6px;margin-top:14px;font-size:13px}
+.llinks a{color:#6b4a55;text-decoration:none;cursor:pointer}
+.llinks a:hover{text-decoration:underline}

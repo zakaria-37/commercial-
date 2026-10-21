@@ -357,6 +357,10 @@
     }
     OUTBOX.push({ op: op, t: t, id: id });
   }
+  // Barrière d'accès : tant qu'aucun compte n'est connecté (mode « compte obligatoire »), on n'envoie ni ne télécharge rien.
+  // Sans cela, une lecture sans compte renverrait des listes vides et effacerait les données locales.
+  var gate = null;
+  async function allowed() { if (!gate) return true; try { return !!(await gate()); } catch (e) { return false; } }
   var flushTimer = null;
   function scheduleFlush() { clearTimeout(flushTimer); flushTimer = setTimeout(function () { sync(false); }, 1500); }
 
@@ -364,6 +368,7 @@
   async function flush() {
     if (!remote || flushing || !OUTBOX.length) return;
     if (!navigator.onLine) { lastError = ''; return; }
+    if (!(await allowed())) return;
     flushing = true; status();
     var blocked = {}, stop = false;
     try {
@@ -415,6 +420,7 @@
   // Récupère toutes les données de Supabase (les autres appareils)
   async function pull(first) {
     if (!remote || pulling || !navigator.onLine) return false;
+    if (!(await allowed())) return false;
     pulling = true; status();
     var changedAny = false;
     try {
@@ -511,6 +517,8 @@
 
   window.LocalDB = {
     createClient: createClient,
+    remote: function () { return remote; },
+    setGate: function (f) { gate = f; },
     ready: ready,
     tables: TABLES,
     sync: function () { return sync(true); },

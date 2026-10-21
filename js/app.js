@@ -110,6 +110,7 @@ function show(v) {
   else if (v === 'ateliers') { if (typeof refreshAtelierViews === 'function') refreshAtelierViews(); }
   else if (v === 'employes') { if (typeof renderEmployes === 'function') renderEmployes(); }
   else if (v === 'inventaire') { if (typeof loadInventaire === 'function') loadInventaire(true); }
+  else if (v === 'equipe') { if (typeof loadEquipe === 'function') loadEquipe(); }
   else list();
 }
 

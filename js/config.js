@@ -13,3 +13,7 @@
 const SUPABASE_URL = "https://xvpqaewnpcspndyhwfit.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uEyHuADSVkq-rpBGRw4Ztg_QpoEgbcs";
 const APP_PASSWORD = "mariabag2026";
+
+/* Comptes utilisateurs (Supabase Auth). false = l'ancien mot de passe reste possible en secours ;
+   true  = connexion par compte OBLIGATOIRE (à activer après avoir lancé supabase/securiser.sql). */
+const AUTH_REQUIRED = false;
