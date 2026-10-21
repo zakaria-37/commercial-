@@ -63,8 +63,8 @@
     if (doc.statut === 'annulee') return { l: 'Annulée', c: 'x' };
     const t = totaux(doc, lignesDe(doc.id)), p = payeDoc(doc), reste = r2(t.ttc - p);
     if (t.ttc > 0 && reste <= 0.004) return { l: 'Payée', c: 'g', reste: 0, p };
-    if (doc.echeance && doc.echeance < today() && reste > 0.004) return { l: 'En retard', c: 'r', reste, p };
-    return { l: p > 0 ? 'Partiellement payée' : 'Non payée', c: p > 0 ? 'b' : 'o', reste, p };
+    if (p > 0) return { l: 'Partiellement payée', c: 'b', reste, p };
+    return { l: doc.paiement === 'terme' ? 'À terme' : 'Non payée', c: 'o', reste, p };
   }
   function etatBC(doc) {
     const ls = lignesDe(doc.id).filter(l => num(l.quantite) > 0);
@@ -127,8 +127,8 @@
     let h = '';
     if (type === 'facture') {
       const fac = tousType.filter(d => d.statut !== 'annulee'), tot = fac.reduce((s, d) => s + totaux(d, lignesDe(d.id)).ttc, 0), pay = fac.reduce((s, d) => s + payeDoc(d), 0);
-      const retard = fac.filter(d => (etatFacture(d).l === 'En retard')).length;
-      h += '<div class="ct-kpis"><div class="ct-kpi"><span>Total facturé</span><b>' + money(tot) + '</b><small>' + fac.length + ' facture(s)</small></div><div class="ct-kpi"><span>Encaissé sur factures</span><b class="py-av">' + money(pay) + '</b><small>paiements rattachés</small></div><div class="ct-kpi"><span>Reste à encaisser</span><b class="py-due">' + money(tot - pay) + '</b><small>' + retard + ' en retard</small></div></div>';
+      const retard = fac.filter(d => etatFacture(d).l === 'À terme').length;
+      h += '<div class="ct-kpis"><div class="ct-kpi"><span>Total facturé</span><b>' + money(tot) + '</b><small>' + fac.length + ' facture(s)</small></div><div class="ct-kpi"><span>Encaissé sur factures</span><b class="py-av">' + money(pay) + '</b><small>paiements rattachés</small></div><div class="ct-kpi"><span>Reste à encaisser</span><b class="py-due">' + money(tot - pay) + '</b><small>' + retard + ' facture(s) à terme</small></div></div>';
     }
     if (type === 'bon_commande') {
       const bc = tousType, tot = bc.reduce((s, d) => s + totaux(d, lignesDe(d.id)).ttc, 0);
@@ -176,7 +176,7 @@
   /* ---------- Éditeur ---------- */
   function nouveauDoc(type, base) {
     const date = today(), ech = new Date(); ech.setDate(ech.getDate() + (type === 'devis' ? 30 : type === 'facture' ? 30 : 15));
-    ed = { doc: Object.assign({ id: null, type, numero: nextNumero(type, date), date_doc: date, echeance: iso(ech), contact_id: null, contact_nom: '', statut: type === 'facture' ? 'emise' : 'brouillon', source_id: null, commande_id: null, tva_taux: Number(ENT.tva_defaut) || 0, remise: 0, notes: '' }, base || {}), lignes: [], supprimes: [] };
+    ed = { doc: Object.assign({ id: null, type, numero: nextNumero(type, date), date_doc: date, echeance: type === 'facture' ? null : iso(ech), paiement: 'terme', contact_id: null, contact_nom: '', statut: type === 'facture' ? 'emise' : 'brouillon', source_id: null, commande_id: null, tva_taux: Number(ENT.tva_defaut) || 0, remise: 0, notes: '' }, base || {}), lignes: [], supprimes: [] };
   }
   const ligneVide = () => ({ id: null, produit_id: null, article_id: null, designation: '', unite: 'pcs', quantite: 1, prix_unitaire: 0, quantite_recue: 0 });
 
@@ -197,7 +197,8 @@
     h += '<div class="card"><div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">' + T.l + ' ' + esc(doc.numero) + (nouveau ? ' <span class="cm-bdg o">nouveau</span>' : fac ? ' <span class="cm-bdg ' + etatFacture(doc).c + '">' + etatFacture(doc).l + '</span>' : bc ? ' <span class="cm-bdg ' + etatBC(doc).c + '">' + etatBC(doc).l + '</span>' : '') + '</h2></div>';
     h += '<div class="at-fields"><label>' + T.cible + ' *<select id="cm-contact"><option value="">— choisir —</option>' + cs.map(c => '<option value="' + esc(c.id) + '"' + (String(c.id) === String(doc.contact_id) ? ' selected' : '') + '>' + esc(lbl(c)) + '</option>').join('') + '</select></label>' +
       '<label>Numéro<input id="cm-num" value="' + esc(doc.numero) + '" maxlength="30"></label><label>Date<input id="cm-date" type="date" value="' + esc(doc.date_doc) + '"></label>' +
-      '<label>' + (doc.type === 'devis' ? 'Valable jusqu’au' : fac ? 'Échéance de paiement' : 'Livraison prévue') + '<input id="cm-ech" type="date" value="' + esc(doc.echeance || '') + '"></label>' +
+      (fac ? '' : '<label>' + (doc.type === 'devis' ? 'Valable jusqu’au' : 'Livraison prévue') + '<input id="cm-ech" type="date" value="' + esc(doc.echeance || '') + '"></label>') +
+      (fac || bc ? '<label>Paiement<select id="cm-paie">' + [['cash', 'Cash (payé comptant)'], ['terme', 'À terme (paiement plus tard)'], ['versement', 'Versement (par tranches)']].map(o => '<option value="' + o[0] + '"' + ((doc.paiement || 'terme') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' : '') +
       '<label>TVA<select id="cm-tva">' + [0, 9, 19].map(v => '<option value="' + v + '"' + (Number(doc.tva_taux) === v ? ' selected' : '') + '>' + (v ? v + ' %' : 'Sans TVA') + '</option>').join('') + '</select></label>' +
       '<label>Remise (DA)<input id="cm-remise" type="number" min="0" step="any" inputmode="decimal" value="' + (Number(doc.remise) || '') + '" placeholder="0"></label>' +
       (doc.type === 'devis' ? '<label>Statut<select id="cm-statut">' + Object.keys(STATUTS_DEVIS).map(k => '<option value="' + k + '"' + (doc.statut === k ? ' selected' : '') + '>' + STATUTS_DEVIS[k] + '</option>').join('') + '</select></label>' : '') +
@@ -210,13 +211,15 @@
       '<div class="at-actions"><button class="btn s" type="button" id="cm-addl">+ Ajouter une ligne</button></div>' +
       (bc ? '' : '<p class="iv-help">« En stock » = pièces finies réellement disponibles. <b>À l’enregistrement, la facture sort automatiquement les pièces du stock</b> (livraison au client, historique et commande mis à jour). Si vous modifiez, annulez ou supprimez la facture, le stock revient comme avant. « Livré » = pièces déjà sorties.</p>') +
       '<div class="cm-tot" id="cm-tot">' + totHtml(t, doc) + '</div></div>';
-    // paiements rattachés (factures et bons de commande)
+    // paiement (factures et bons de commande) : cash, à terme ou versements
     if (!nouveau && (fac || bc)) {
-      const ps = pays().filter(p => String(p.document_id) === String(doc.id)), paye = payeDoc(doc), reste = r2(t.ttc - paye);
-      h += '<div class="card" style="margin-top:12px"><h3 style="margin-top:0">' + (fac ? 'Encaissements' : 'Règlements') + '</h3>' +
-        '<p>Total TTC <b>' + money(t.ttc) + '</b> · ' + (fac ? 'encaissé' : 'réglé') + ' <b class="py-av">' + money(paye) + '</b> · reste <b class="' + (reste > 0.004 ? 'py-due' : 'py-av') + '">' + money(Math.max(0, reste)) + '</b></p>' +
-        (ps.length ? '<div class="tw"><table class="iv-tbl"><tbody>' + ps.map(p => '<tr><td>' + fd(p.date_paiement) + '</td><td>' + esc(({ especes: 'Espèces', cheque: 'Chèque', virement: 'Virement', autre: 'Autre' })[p.mode] || '') + '</td><td class="n"><b>' + money(p.montant) + '</b></td><td>' + esc(p.reference || '') + '</td></tr>').join('') + '</tbody></table></div>' : '') +
-        (payForm ? formPaiement(doc, reste) : (reste > 0.004 ? '<div class="at-actions"><button class="btn p" type="button" id="cm-pay">' + (fac ? 'Encaisser' : 'Régler') + '</button></div>' : '')) + '</div>';
+      const ps = pays().filter(p => String(p.document_id) === String(doc.id)), paye = payeDoc(doc), reste = r2(t.ttc - paye), mode = doc.paiement || 'terme';
+      const nomMode = { cash: 'Cash', terme: 'À terme', versement: 'Versement' }[mode];
+      h += '<div class="card" style="margin-top:12px"><h3 style="margin-top:0">Paiement : ' + nomMode + '</h3>' +
+        (mode === 'cash' ? '<p>Payé comptant : <b class="py-av">' + money(paye) + '</b> <small>(enregistré automatiquement avec ' + (fac ? 'la facture' : 'le bon') + ')</small></p>'
+          : '<p>Total TTC <b>' + money(t.ttc) + '</b> · ' + (fac ? 'encaissé' : 'réglé') + ' <b class="py-av">' + money(paye) + '</b> · reste <b class="' + (reste > 0.004 ? 'py-due' : 'py-av') + '">' + money(Math.max(0, reste)) + '</b></p>') +
+        (ps.length ? '<div class="tw"><table class="iv-tbl"><tbody>' + ps.map(p => '<tr><td>' + fd(p.date_paiement) + '</td><td>' + esc(({ especes: 'Espèces', cheque: 'Chèque', virement: 'Virement', autre: 'Autre' })[p.mode] || '') + '</td><td class="n"><b>' + money(p.montant) + '</b></td><td>' + esc(p.reference || '') + '</td>' + (mode === 'cash' ? '' : '<td class="n"><button class="btn s d" type="button" data-pdel="' + esc(p.id) + '">Supprimer</button></td>') + '</tr>').join('') + '</tbody></table></div>' : '') +
+        (mode === 'cash' ? '' : (payForm ? formPaiement(doc, reste) : (reste > 0.004 ? '<div class="at-actions"><button class="btn p" type="button" id="cm-pay">' + (mode === 'versement' ? 'Ajouter un versement' : (fac ? 'Enregistrer le paiement' : 'Enregistrer le règlement')) + '</button></div>' : ''))) + '</div>';
     }
     if (!nouveau && bc && recForm) h += formReception(doc);
     // actions
@@ -256,7 +259,7 @@
     if (!ed || !$('#cm-contact')) return;
     const d = ed.doc, c = cById($('#cm-contact').value);
     d.contact_id = c ? c.id : null; d.contact_nom = c ? lbl(c) : '';
-    d.numero = $('#cm-num').value.trim(); d.date_doc = $('#cm-date').value; d.echeance = $('#cm-ech').value || null;
+    d.numero = $('#cm-num').value.trim(); d.date_doc = $('#cm-date').value; if ($('#cm-ech')) d.echeance = $('#cm-ech').value || null; if ($('#cm-paie')) d.paiement = $('#cm-paie').value;
     d.tva_taux = num($('#cm-tva').value); d.remise = Math.max(0, num($('#cm-remise').value)); d.notes = $('#cm-notes').value.trim();
     if ($('#cm-statut')) d.statut = $('#cm-statut').value;
   }
@@ -281,6 +284,18 @@
     return { sorti, rendu, echecs };
   }
 
+  /* Paiement « Cash » : l'encaissement (ou le règlement) du total est enregistré automatiquement et suit le montant de la facture */
+  async function synchroniserCash() {
+    const d = ed.doc; if ((d.type !== 'facture' && d.type !== 'bon_commande') || d.paiement !== 'cash' || d.statut === 'annulee') return;
+    const ttc = totaux(d, ed.lignes).ttc, liees = pays().filter(p => String(p.document_id) === String(d.id)), paye = r2(liees.reduce((s, p) => s + Number(p.montant), 0));
+    if (Math.abs(ttc - paye) < 0.005) return;
+    const c = cById(d.contact_id), fac = d.type === 'facture';
+    if (paye > ttc) for (const p of liees) await sb.from('paiements').delete().eq('id', p.id);
+    const du = paye > ttc ? ttc : r2(ttc - paye);
+    if (du > 0) await sb.from('paiements').insert([{ date_paiement: d.date_doc || today(), sens: fac ? 'encaissement' : 'reglement', contact_id: d.contact_id, contact_nom: c ? lbl(c) : d.contact_nom, montant: du, mode: 'especes', reference: d.numero, note: (fac ? 'Facture ' : 'Bon de commande ') + d.numero + ' : paiement comptant', document_id: d.id }]);
+    if (window.PayAPI) await PayAPI.load();
+  }
+
   async function enregistrer(silencieux) {
     lireEntete();
     const d = ed.doc;
@@ -290,7 +305,7 @@
     const ls = ed.lignes.filter(l => String(l.designation).trim() || num(l.quantite) > 0);
     if (!ls.length) { say('Ajoutez au moins une ligne.'); return false; }
     if (ls.some(l => !String(l.designation).trim())) { say('Chaque ligne doit avoir une désignation.'); return false; }
-    const row = { type: d.type, numero: d.numero, date_doc: d.date_doc, echeance: d.echeance, contact_id: d.contact_id, contact_nom: d.contact_nom, statut: d.statut, source_id: d.source_id, commande_id: d.commande_id, tva_taux: d.tva_taux, remise: r2(d.remise), notes: d.notes };
+    const row = { type: d.type, numero: d.numero, date_doc: d.date_doc, echeance: d.echeance, paiement: d.paiement || 'terme', contact_id: d.contact_id, contact_nom: d.contact_nom, statut: d.statut, source_id: d.source_id, commande_id: d.commande_id, tva_taux: d.tva_taux, remise: r2(d.remise), notes: d.notes };
     let id = d.id;
     if (id) { const u = await sb.from('documents').update(row).eq('id', id); if (u.error) { say('Erreur : ' + u.error.message); return false; } }
     else { const i = await sb.from('documents').insert([row]).select(); if (i.error || !i.data || !i.data[0]) { say('Erreur : ' + ((i.error && i.error.message) || 'enregistrement impossible')); return false; } id = i.data[0].id; d.id = id; }
@@ -303,6 +318,7 @@
     }
     ed.lignes = ls;
     const st = await synchroniserStock(infoSuppr);
+    await synchroniserCash();
     await load(true); ed = { doc: Object.assign({}, docById(id)), lignes: lignesDe(id).map(x => Object.assign({}, x)), supprimes: [] };
     if (!silencieux) say(TYPES[d.type].l + ' enregistré' + (d.type === 'facture' ? 'e' : '') + ' : ' + d.numero + (st && (st.sorti || st.rendu) ? ' · stock : ' + (st.sorti ? '−' + st.sorti + ' pcs sorties' : '') + (st.sorti && st.rendu ? ', ' : '') + (st.rendu ? '+' + st.rendu + ' pcs remises' : '') : '') + (st && st.echecs && st.echecs.length ? ' · ⚠ ' + st.echecs.join(' ; ') : '') + (st && st.passe ? ' · stock non modifié' : ''));
     render(); return true;
@@ -450,6 +466,7 @@
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(pdfT(T.l.toUpperCase()), W - M, 17, { align: 'right' });
     doc.setFontSize(11); doc.text(pdfT('N° ' + d.numero), W - M, 24, { align: 'right' });
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.text(pdfT('Date : ' + fd(d.date_doc)), W - M, 30, { align: 'right' });
+    if (fac || d.type === 'bon_commande') doc.text(pdfT('Paiement : ' + ({ cash: 'Cash', terme: 'A terme', versement: 'Versement' })[d.paiement || 'terme']), W - M, d.echeance ? 40 : 35, { align: 'right' });
     if (d.echeance) doc.text(pdfT((d.type === 'devis' ? 'Valable jusqu\'au : ' : fac ? 'Echeance : ' : 'Livraison prevue : ') + fd(d.echeance)), W - M, 35, { align: 'right' });
     doc.setDrawColor(0); doc.setLineWidth(0.6); doc.line(M, 44, W - M, 44);
     doc.setFontSize(8.5); doc.setTextColor(90); doc.text(pdfT(T.cible === 'Client' ? 'FACTURE A / CLIENT' : 'FOURNISSEUR'), M, 50);
@@ -486,6 +503,7 @@
     if (t.closest('#cm-save')) { await enregistrer(); return; }
     if (t.closest('#cm-addl')) { lireEntete(); ed.lignes.push(ligneVide()); render(); return; }
     const rm = t.closest('[data-rm]'); if (rm) { lireEntete(); const l = ed.lignes[Number(rm.dataset.rm)]; if (l && l.id) { if (ed.doc.type === 'bon_commande' && num(l.quantite_recue) > 0) { say('Cette ligne a déjà été reçue : impossible de la supprimer.'); return; } ed.supprimes.push(l.id); if (ed.doc.type === 'facture' && l.produit_id && num(l.quantite_recue) > 0) (ed.supprInfo = ed.supprInfo || []).push({ produit_id: l.produit_id, q: num(l.quantite_recue) }); } ed.lignes.splice(Number(rm.dataset.rm), 1); render(); return; }
+    const pdl = t.closest('[data-pdel]'); if (pdl) { if (confirm('Supprimer ce paiement ?')) { const r = await sb.from('paiements').delete().eq('id', pdl.dataset.pdel); if (r.error) say('Erreur : ' + r.error.message); if (window.PayAPI) await PayAPI.load(); render(); } return; }
     if (t.closest('#cm-pdf')) { pdf(); return; }
     if (t.closest('#cm-livrer')) { await livrerFacture(); return; }
     if (t.closest('#cm-tofac')) { await devisEnFacture(); return; }
@@ -496,7 +514,8 @@
     if (t.closest('#cm-annul')) {
       const p = payeDoc(ed.doc);
       const d0 = ed.doc, mf0 = window.PFAPI ? PFAPI.mouvements().filter(m => m.reference === d0.numero && String(m.note || '').startsWith('Facture ' + d0.numero)) : [];
-      if (!confirm('Annuler la facture ' + ed.doc.numero + ' ?' + (mf0.length ? '\n\nLes pièces sorties par cette facture reviennent en stock (livraisons annulées).' : '') + (p > 0 ? '\n\nElle a déjà ' + money(p) + ' d’encaissements : ils restent enregistrés (supprimez-les dans Paiements et soldes si besoin).' : ''))) return;
+      if (!confirm('Annuler la facture ' + ed.doc.numero + ' ?' + (mf0.length ? '\n\nLes pièces sorties par cette facture reviennent en stock (livraisons annulées).' : '') + (p > 0 ? '\n\nLes paiements rattachés (' + money(p) + ') seront aussi supprimés : le solde du client est recalculé.' : ''))) return;
+      if (p > 0) { for (const x of pays().filter(y => String(y.document_id) === String(d0.id))) await sb.from('paiements').delete().eq('id', x.id); if (window.PayAPI) await PayAPI.load(); }
       if (mf0.length) {
         const net = {}; mf0.forEach(m => { net[m.produit_id] = (net[m.produit_id] || 0) - (Number(m.quantite) || 0); });
         const r = await PFAPI.annulerPar(m => m.reference === d0.numero && String(m.note || '').startsWith('Facture ' + d0.numero)); if (r.error) { say('Erreur stock : ' + r.error.message); return; }
@@ -506,12 +525,13 @@
       await load(true); ouvrir(ed.doc.id); return;
     }
     if (t.closest('#cm-del')) {
-      const d = ed.doc, p = d.type !== 'devis' ? payeDoc(d) : 0;
-      if (p > 0) { say('Ce document a des paiements rattachés : supprimez-les d’abord (Paiements et soldes).'); return; }
+      const d = ed.doc, lp = d.type !== 'devis' ? pays().filter(x => String(x.document_id) === String(d.id)) : [], p = payeDoc(d);
       const mf = d.type === 'facture' && window.PFAPI ? PFAPI.mouvements().filter(m => m.reference === d.numero && String(m.note || '').startsWith('Facture ' + d.numero)) : [];
       const mr = d.type === 'bon_commande' && window.StockAPI ? StockAPI.mouvements().filter(m => m.note === 'Réception ' + d.numero) : [];
       const net = mf.reduce((s, m) => s - (Number(m.quantite) || 0), 0);
-      if (!confirm('Supprimer définitivement ' + TYPES[d.type].l.toLowerCase() + ' ' + d.numero + ' ?' + (mf.length ? '\n\nLe stock revient comme avant : ' + nf(net, 0) + ' pièce(s) remises en stock et livraison(s) annulée(s).' : '') + (mr.length ? '\n\nLes ' + mr.length + ' réception(s) en stock seront annulées : le stock revient comme avant.' : ''))) return;
+      if (!confirm('Supprimer définitivement ' + TYPES[d.type].l.toLowerCase() + ' ' + d.numero + ' ?' + (mf.length ? '\n\nLe stock revient comme avant : ' + nf(net, 0) + ' pièce(s) remises en stock et livraison(s) annulée(s).' : '') + (mr.length ? '\n\nLes ' + mr.length + ' réception(s) en stock seront annulées : le stock revient comme avant.' : '') + (lp.length ? '\n\nLes ' + lp.length + ' paiement(s) rattaché(s) (' + money(p) + ') seront aussi supprimés : le solde du contact est recalculé.' : ''))) return;
+      for (const x of lp) { const r = await sb.from('paiements').delete().eq('id', x.id); if (r.error) { say('Erreur paiement : ' + r.error.message); return; } }
+      if (lp.length && window.PayAPI) await PayAPI.load();
       if (mf.length) { const r = await PFAPI.annulerPar(m => m.reference === d.numero && String(m.note || '').startsWith('Facture ' + d.numero)); if (r.error) { say('Erreur stock : ' + r.error.message); return; } }
       if (mr.length) { const r = await StockAPI.annulerPar(m => m.note === 'Réception ' + d.numero); if (r.error) { say('Erreur stock : ' + r.error.message); return; } }
       const x = await sb.from('documents').delete().eq('id', d.id); if (x.error) { say('Erreur : ' + x.error.message); return; }

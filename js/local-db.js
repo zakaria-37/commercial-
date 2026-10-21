@@ -43,7 +43,7 @@
     produits: { description: '', modele_id: null, mo_date: null, mo_salaires: 0, mo_charges: 0, mo_pieces: 0, prix_vente: 0, seuil_pf: 0, marque: 'MARIA BAG' },
     pf_mouvements: { date_mvt: null, type: 'entree', contact_id: null, client_nom: '', commande_id: null, production_id: null, prix_vente: null, reference: '', note: '' },
     paiements: { date_paiement: null, contact_id: null, contact_nom: '', mode: 'especes', reference: '', note: '', document_id: null },
-    documents: { date_doc: null, echeance: null, contact_id: null, contact_nom: '', statut: 'brouillon', source_id: null, commande_id: null, tva_taux: 0, remise: 0, notes: '' },
+    documents: { date_doc: null, echeance: null, paiement: 'terme', contact_id: null, contact_nom: '', statut: 'brouillon', source_id: null, commande_id: null, tva_taux: 0, remise: 0, notes: '' },
     document_lignes: { produit_id: null, article_id: null, designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, quantite_recue: 0, ordre: 0 },
     parametres: { valeur: {} },
     inventaires: { annee: 0, date_inventaire: null, statut: 'brouillon', debut_periode: null, ventes: 0, achats: 0, valeur_nette: 0, stock_applique: false, notes: '', cloture_le: null },

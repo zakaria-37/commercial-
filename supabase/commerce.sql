@@ -24,6 +24,7 @@ create table if not exists public.documents (
   commande_id uuid references public.commandes(id) on delete set null,
   tva_taux numeric(5,2) not null default 0 check (tva_taux >= 0),
   remise numeric(14,2) not null default 0 check (remise >= 0),
+  paiement text not null default 'terme' check (paiement in ('cash', 'terme', 'versement')),   -- cash = payé comptant, terme = plus tard, versement = par tranches
   notes text default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -48,6 +49,7 @@ create table if not exists public.document_lignes (
 );
 create index if not exists document_lignes_doc_idx on public.document_lignes (document_id);
 
+alter table public.documents add column if not exists paiement text not null default 'terme' check (paiement in ('cash', 'terme', 'versement'));
 alter table public.paiements add column if not exists document_id uuid references public.documents(id) on delete set null;
 create index if not exists paiements_document_idx on public.paiements (document_id);
 
