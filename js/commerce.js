@@ -160,6 +160,19 @@
       '<div class="at-actions"><button class="btn p" type="submit">Préparer la facture</button><button class="btn" type="button" id="cm-livno">Annuler</button></div></form>';
   }
 
+  /* Stock actuel du produit (ou de l'élément) visé par la ligne : repère à chaque opération */
+  function stockTxt(type, l) {
+    if (type === 'bon_commande') {
+      const a = l.article_id && window.StockAPI ? StockAPI.byId(l.article_id) : null; if (!a) return '<small>—</small>';
+      const f = StockAPI.fmtQty(a, StockAPI.qty(a.id));
+      return '<b>' + esc(f.main) + '</b>' + (f.sub ? '<small>' + esc(f.sub) + '</small>' : '');
+    }
+    if (!l.produit_id || !window.PFAPI) return '<small>—</small>';
+    const st = PFAPI.qty(l.produit_id), demande = ed.lignes.filter(x => String(x.produit_id) === String(l.produit_id)).reduce((s, x) => s + num(x.quantite), 0), reste = st - demande;
+    return '<b>' + nf(st, 0) + '</b> pcs<small class="' + (reste < 0 ? 'cm-neg' : '') + '">' + (reste < 0 ? 'manque ' + nf(-reste, 0) : 'reste ' + nf(reste, 0) + ' après') + '</small>';
+  }
+  function majStocks() { document.querySelectorAll('#cm-lignes tr[data-i]').forEach(tr => { const l = ed.lignes[Number(tr.dataset.i)], c = tr.querySelector('.cm-st'); if (l && c) c.innerHTML = stockTxt(ed.doc.type, l); }); }
+
   /* ---------- Éditeur ---------- */
   function nouveauDoc(type, base) {
     const date = today(), ech = new Date(); ech.setDate(ech.getDate() + (type === 'devis' ? 30 : type === 'facture' ? 30 : 15));
@@ -189,12 +202,13 @@
       '<label>Remise (DA)<input id="cm-remise" type="number" min="0" step="any" inputmode="decimal" value="' + (Number(doc.remise) || '') + '" placeholder="0"></label>' +
       (doc.type === 'devis' ? '<label>Statut<select id="cm-statut">' + Object.keys(STATUTS_DEVIS).map(k => '<option value="' + k + '"' + (doc.statut === k ? ' selected' : '') + '>' + STATUTS_DEVIS[k] + '</option>').join('') + '</select></label>' : '') +
       '<label style="grid-column:1/-1">Note<input id="cm-notes" maxlength="300" value="' + esc(doc.notes || '') + '" placeholder="Facultatif : conditions, délai…"></label></div></div>';
-    h += '<div class="card" style="margin-top:12px"><h3 style="margin-top:0">Lignes</h3><div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>' + (bc ? 'Élément' : 'Produit') + '</th><th>Désignation</th><th>' + (bc ? 'Unité' : 'Qté') + '</th><th>' + (bc ? 'Qté' : 'Prix (DA)') + '</th>' + (bc ? '<th>Prix (DA)</th>' : '') + '<th class="n">Montant</th>' + (bc ? '<th class="n iv-opt">Reçu</th>' : '') + '<th></th></tr></thead><tbody id="cm-lignes">' +
+    h += '<div class="card" style="margin-top:12px"><h3 style="margin-top:0">Lignes</h3><div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>' + (bc ? 'Élément' : 'Produit') + '</th><th>Désignation</th><th>' + (bc ? 'Unité' : 'Qté') + '</th><th>' + (bc ? 'Qté' : 'Prix (DA)') + '</th>' + (bc ? '<th>Prix (DA)</th>' : '') + '<th class="n">En stock</th><th class="n">Montant</th>' + (bc ? '<th class="n iv-opt">Reçu</th>' : '') + '<th></th></tr></thead><tbody id="cm-lignes">' +
       ed.lignes.map((l, i) => '<tr data-i="' + i + '"><td><select data-f="ref">' + optsRef(doc.type, l) + '</select></td><td><input class="iv-t" data-f="des" maxlength="200" value="' + esc(l.designation) + '" placeholder="Désignation"></td>' +
         (bc ? '<td><input class="iv-t" data-f="uni" maxlength="20" style="width:90px" value="' + esc(l.unite) + '"></td><td><input class="iv-q" data-f="qte" type="number" min="0" step="any" inputmode="decimal" value="' + (l.quantite || '') + '"></td><td><input class="iv-p" data-f="pu" type="number" min="0" step="any" inputmode="decimal" value="' + (l.prix_unitaire || '') + '"></td>'
           : '<td><input class="iv-q" data-f="qte" type="number" min="0" step="any" inputmode="decimal" value="' + (l.quantite || '') + '"></td><td><input class="iv-p" data-f="pu" type="number" min="0" step="any" inputmode="decimal" value="' + (l.prix_unitaire || '') + '"></td>') +
-        '<td class="n cm-mt">' + money(r2(num(l.quantite) * num(l.prix_unitaire))) + '</td>' + (bc ? '<td class="n iv-opt">' + nf(l.quantite_recue || 0, 2) + '</td>' : '') + '<td class="n"><button class="btn s d" type="button" data-rm="' + i + '">×</button></td></tr>').join('') + '</tbody></table></div>' +
+        '<td class="n cm-st">' + stockTxt(doc.type, l) + '</td><td class="n cm-mt">' + money(r2(num(l.quantite) * num(l.prix_unitaire))) + '</td>' + (bc ? '<td class="n iv-opt">' + nf(l.quantite_recue || 0, 2) + '</td>' : '') + '<td class="n"><button class="btn s d" type="button" data-rm="' + i + '">×</button></td></tr>').join('') + '</tbody></table></div>' +
       '<div class="at-actions"><button class="btn s" type="button" id="cm-addl">+ Ajouter une ligne</button></div>' +
+      (bc ? '' : '<p class="iv-help">« En stock » = pièces finies disponibles dans le Stock. La facture ne modifie pas le stock : enregistrez la livraison dans <b>Stock → Sortir</b> (client + commande).</p>') +
       '<div class="cm-tot" id="cm-tot">' + totHtml(t, doc) + '</div></div>';
     // paiements rattachés (factures et bons de commande)
     if (!nouveau && (fac || bc)) {
@@ -298,7 +312,7 @@
     else if (f === 'qte') l.quantite = Math.max(0, num(el.value));
     else if (f === 'pu') l.prix_unitaire = Math.max(0, num(el.value));
     tr.querySelector('.cm-mt').textContent = money(r2(num(l.quantite) * num(l.prix_unitaire)));
-    majTotaux();
+    majStocks(); majTotaux();
   }
 
   /* ---------- Création depuis une commande, des livraisons, un devis ---------- */
