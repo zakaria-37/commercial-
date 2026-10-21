@@ -208,7 +208,7 @@
           : '<td><input class="iv-q" data-f="qte" type="number" min="0" step="any" inputmode="decimal" value="' + (l.quantite || '') + '"></td><td><input class="iv-p" data-f="pu" type="number" min="0" step="any" inputmode="decimal" value="' + (l.prix_unitaire || '') + '"></td>') +
         '<td class="n cm-st">' + stockTxt(doc.type, l) + '</td>' + (bc ? '' : '<td class="n cm-lv">' + (l.produit_id ? nf(l.quantite_recue || 0, 0) + ' / ' + nf(l.quantite || 0, 0) : '—') + '</td>') + '<td class="n cm-mt">' + money(r2(num(l.quantite) * num(l.prix_unitaire))) + '</td>' + (bc ? '<td class="n iv-opt">' + nf(l.quantite_recue || 0, 2) + '</td>' : '') + '<td class="n"><button class="btn s d" type="button" data-rm="' + i + '">×</button></td></tr>').join('') + '</tbody></table></div>' +
       '<div class="at-actions"><button class="btn s" type="button" id="cm-addl">+ Ajouter une ligne</button></div>' +
-      (bc ? '' : '<p class="iv-help">« En stock » = pièces finies réellement disponibles. Après enregistrement, le bouton <b>« Sortir du stock »</b> crée la livraison au client (stock réduit, historique et commande mis à jour) ; « Livré » indique ce qui est déjà sorti.</p>') +
+      (bc ? '' : '<p class="iv-help">« En stock » = pièces finies réellement disponibles. <b>À l’enregistrement, la facture sort automatiquement les pièces du stock</b> (livraison au client, historique et commande mis à jour). Si vous modifiez, annulez ou supprimez la facture, le stock revient comme avant. « Livré » = pièces déjà sorties.</p>') +
       '<div class="cm-tot" id="cm-tot">' + totHtml(t, doc) + '</div></div>';
     // paiements rattachés (factures et bons de commande)
     if (!nouveau && (fac || bc)) {
@@ -260,6 +260,27 @@
     d.tva_taux = num($('#cm-tva').value); d.remise = Math.max(0, num($('#cm-remise').value)); d.notes = $('#cm-notes').value.trim();
     if ($('#cm-statut')) d.statut = $('#cm-statut').value;
   }
+  /* Facture : le stock des produits finis suit toujours la facture (sortie à l'enregistrement, retour si on diminue ou supprime une ligne) */
+  async function synchroniserStock(infoSuppr) {
+    const d = ed.doc; if (d.type !== 'facture' || d.statut === 'annulee' || !window.PFAPI) return null;
+    const ops = [];
+    ed.lignes.forEach(l => { if (!l.produit_id || !l.id) return; const delta = Math.round(num(l.quantite)) - Math.round(num(l.quantite_recue)); if (delta !== 0) ops.push({ l, produitId: l.produit_id, delta }); });
+    (infoSuppr || []).forEach(x => { if (Math.round(x.q) > 0) ops.push({ l: null, produitId: x.produit_id, delta: -Math.round(x.q) }); });
+    if (!ops.length) return null;
+    const besoin = {}; ops.filter(o => o.delta > 0).forEach(o => { besoin[o.produitId] = (besoin[o.produitId] || 0) + o.delta; });
+    const nom = pid => { const p = PFAPI.produits().find(x => String(x.id) === String(pid)); return p ? p.nom : 'Produit'; };
+    const manques = Object.keys(besoin).filter(pid => PFAPI.qty(pid) < besoin[pid]);
+    if (manques.length && !confirm('Stock insuffisant pour : ' + manques.map(pid => nom(pid) + ' (stock ' + nf(PFAPI.qty(pid), 0) + ', demandé ' + nf(besoin[pid], 0) + ')').join(', ') + '.\n\nSortir quand même du stock (il deviendra négatif) ?\nAnnuler = la facture est enregistrée sans toucher au stock.')) return { passe: true };
+    let sorti = 0, rendu = 0; const echecs = [];
+    for (const o of ops) {
+      const r = await PFAPI.saisir({ type: o.delta > 0 ? 'livraison' : 'retour', produitId: o.produitId, quantite: Math.abs(o.delta), clientId: d.contact_id, commandeId: d.commande_id || null, prix: o.l ? num(o.l.prix_unitaire) : 0, reference: d.numero, date: today(), note: 'Facture ' + d.numero + (o.delta < 0 ? ' : correction' : '') });
+      if (r.error) { echecs.push(nom(o.produitId) + ' : ' + r.error.message); continue; }
+      if (o.delta > 0) sorti += o.delta; else rendu += -o.delta;
+      if (o.l) { o.l.quantite_recue = Math.round(num(o.l.quantite)); await sb.from('document_lignes').update({ quantite_recue: o.l.quantite_recue }).eq('id', o.l.id); }
+    }
+    return { sorti, rendu, echecs };
+  }
+
   async function enregistrer(silencieux) {
     lireEntete();
     const d = ed.doc;
@@ -274,15 +295,16 @@
     if (id) { const u = await sb.from('documents').update(row).eq('id', id); if (u.error) { say('Erreur : ' + u.error.message); return false; } }
     else { const i = await sb.from('documents').insert([row]).select(); if (i.error || !i.data || !i.data[0]) { say('Erreur : ' + ((i.error && i.error.message) || 'enregistrement impossible')); return false; } id = i.data[0].id; d.id = id; }
     for (const sid of ed.supprimes) await sb.from('document_lignes').delete().eq('id', sid);
-    ed.supprimes = [];
+    const infoSuppr = ed.supprInfo || []; ed.supprimes = []; ed.supprInfo = [];
     for (let k = 0; k < ls.length; k++) {
       const l = ls[k], lr = { document_id: id, produit_id: l.produit_id || null, article_id: l.article_id || null, designation: String(l.designation).trim(), unite: l.unite || 'pcs', quantite: r4(num(l.quantite)), prix_unitaire: r4(num(l.prix_unitaire)), ordre: k };
       if (l.id) { const u = await sb.from('document_lignes').update(lr).eq('id', l.id); if (u.error) { say('Erreur ligne : ' + u.error.message); return false; } }
       else { lr.quantite_recue = r4(num(l.quantite_recue)); const i = await sb.from('document_lignes').insert([lr]).select(); if (i.error || !i.data) { say('Erreur ligne : ' + ((i.error && i.error.message) || '')); return false; } l.id = i.data[0].id; }
     }
     ed.lignes = ls;
+    const st = await synchroniserStock(infoSuppr);
     await load(true); ed = { doc: Object.assign({}, docById(id)), lignes: lignesDe(id).map(x => Object.assign({}, x)), supprimes: [] };
-    if (!silencieux) say(TYPES[d.type].l + ' enregistré' + (d.type === 'facture' ? 'e' : '') + ' : ' + d.numero);
+    if (!silencieux) say(TYPES[d.type].l + ' enregistré' + (d.type === 'facture' ? 'e' : '') + ' : ' + d.numero + (st && (st.sorti || st.rendu) ? ' · stock : ' + (st.sorti ? '−' + st.sorti + ' pcs sorties' : '') + (st.sorti && st.rendu ? ', ' : '') + (st.rendu ? '+' + st.rendu + ' pcs remises' : '') : '') + (st && st.echecs && st.echecs.length ? ' · ⚠ ' + st.echecs.join(' ; ') : '') + (st && st.passe ? ' · stock non modifié' : ''));
     render(); return true;
   }
 
@@ -463,7 +485,7 @@
     if (t.closest('#cm-back')) { ed = null; payForm = recForm = null; await load(true); return; }
     if (t.closest('#cm-save')) { await enregistrer(); return; }
     if (t.closest('#cm-addl')) { lireEntete(); ed.lignes.push(ligneVide()); render(); return; }
-    const rm = t.closest('[data-rm]'); if (rm) { lireEntete(); const l = ed.lignes[Number(rm.dataset.rm)]; if (l && l.id) { if (num(l.quantite_recue) > 0) { say('Cette ligne a déjà été reçue : impossible de la supprimer.'); return; } ed.supprimes.push(l.id); } ed.lignes.splice(Number(rm.dataset.rm), 1); render(); return; }
+    const rm = t.closest('[data-rm]'); if (rm) { lireEntete(); const l = ed.lignes[Number(rm.dataset.rm)]; if (l && l.id) { if (ed.doc.type === 'bon_commande' && num(l.quantite_recue) > 0) { say('Cette ligne a déjà été reçue : impossible de la supprimer.'); return; } ed.supprimes.push(l.id); if (ed.doc.type === 'facture' && l.produit_id && num(l.quantite_recue) > 0) (ed.supprInfo = ed.supprInfo || []).push({ produit_id: l.produit_id, q: num(l.quantite_recue) }); } ed.lignes.splice(Number(rm.dataset.rm), 1); render(); return; }
     if (t.closest('#cm-pdf')) { pdf(); return; }
     if (t.closest('#cm-livrer')) { await livrerFacture(); return; }
     if (t.closest('#cm-tofac')) { await devisEnFacture(); return; }
@@ -473,17 +495,27 @@
     if (t.closest('#cm-rno')) { recForm = null; render(); return; }
     if (t.closest('#cm-annul')) {
       const p = payeDoc(ed.doc);
-      if (!confirm('Annuler la facture ' + ed.doc.numero + ' ?' + (p > 0 ? '\n\nElle a déjà ' + money(p) + ' d’encaissements : ils restent enregistrés (supprimez-les dans Paiements et soldes si besoin).' : ''))) return;
+      const d0 = ed.doc, mf0 = window.PFAPI ? PFAPI.mouvements().filter(m => m.reference === d0.numero && String(m.note || '').startsWith('Facture ' + d0.numero)) : [];
+      if (!confirm('Annuler la facture ' + ed.doc.numero + ' ?' + (mf0.length ? '\n\nLes pièces sorties par cette facture reviennent en stock (livraisons annulées).' : '') + (p > 0 ? '\n\nElle a déjà ' + money(p) + ' d’encaissements : ils restent enregistrés (supprimez-les dans Paiements et soldes si besoin).' : ''))) return;
+      if (mf0.length) {
+        const net = {}; mf0.forEach(m => { net[m.produit_id] = (net[m.produit_id] || 0) - (Number(m.quantite) || 0); });
+        const r = await PFAPI.annulerPar(m => m.reference === d0.numero && String(m.note || '').startsWith('Facture ' + d0.numero)); if (r.error) { say('Erreur stock : ' + r.error.message); return; }
+        for (const l of lignesDe(d0.id)) { const k = String(l.produit_id); if (l.produit_id && net[k] > 0) { const dec = Math.min(num(l.quantite_recue), net[k]); net[k] -= dec; await sb.from('document_lignes').update({ quantite_recue: r4(num(l.quantite_recue) - dec) }).eq('id', l.id); } }
+      }
       const u = await sb.from('documents').update({ statut: 'annulee' }).eq('id', ed.doc.id); if (u.error) { say('Erreur : ' + u.error.message); return; }
       await load(true); ouvrir(ed.doc.id); return;
     }
     if (t.closest('#cm-del')) {
-      const d = ed.doc, p = d.type !== 'devis' ? payeDoc(d) : 0, recu = lignesDe(d.id).some(l => num(l.quantite_recue) > 0);
+      const d = ed.doc, p = d.type !== 'devis' ? payeDoc(d) : 0;
       if (p > 0) { say('Ce document a des paiements rattachés : supprimez-les d’abord (Paiements et soldes).'); return; }
-      if (recu) { say('Des marchandises ont déjà été reçues avec ce bon : il ne peut pas être supprimé.'); return; }
-      if (!confirm('Supprimer définitivement ' + TYPES[d.type].l.toLowerCase() + ' ' + d.numero + ' ?')) return;
+      const mf = d.type === 'facture' && window.PFAPI ? PFAPI.mouvements().filter(m => m.reference === d.numero && String(m.note || '').startsWith('Facture ' + d.numero)) : [];
+      const mr = d.type === 'bon_commande' && window.StockAPI ? StockAPI.mouvements().filter(m => m.note === 'Réception ' + d.numero) : [];
+      const net = mf.reduce((s, m) => s - (Number(m.quantite) || 0), 0);
+      if (!confirm('Supprimer définitivement ' + TYPES[d.type].l.toLowerCase() + ' ' + d.numero + ' ?' + (mf.length ? '\n\nLe stock revient comme avant : ' + nf(net, 0) + ' pièce(s) remises en stock et livraison(s) annulée(s).' : '') + (mr.length ? '\n\nLes ' + mr.length + ' réception(s) en stock seront annulées : le stock revient comme avant.' : ''))) return;
+      if (mf.length) { const r = await PFAPI.annulerPar(m => m.reference === d.numero && String(m.note || '').startsWith('Facture ' + d.numero)); if (r.error) { say('Erreur stock : ' + r.error.message); return; } }
+      if (mr.length) { const r = await StockAPI.annulerPar(m => m.note === 'Réception ' + d.numero); if (r.error) { say('Erreur stock : ' + r.error.message); return; } }
       const x = await sb.from('documents').delete().eq('id', d.id); if (x.error) { say('Erreur : ' + x.error.message); return; }
-      ed = null; await load(true); return;
+      ed = null; await load(true); say(TYPES[d.type].l + ' supprimé' + (d.type === 'facture' ? 'e' : '') + (mf.length || mr.length ? ' : stock remis comme avant.' : '.')); return;
     }
     if (t.closest('#cm-ent-save')) {
       const v = {}; root.querySelectorAll('[data-ent]').forEach(i => { v[i.dataset.ent] = i.value.trim(); }); v.tva_defaut = ENT.tva_defaut || 0;

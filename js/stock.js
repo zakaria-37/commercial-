@@ -582,6 +582,12 @@ window.StockAPI = {
   },
   /* Sorties déjà enregistrées avec cette référence (évite de valider deux fois le même bon) */
   mouvements: () => STOCK_MVTS,
+  async annulerPar(pred) {
+    const l = STOCK_MVTS.filter(pred);
+    for (const m of l) { const r = await sb.from('stock_mouvements').delete().eq('id', m.id); if (r.error) return { error: r.error }; }
+    await loadStock();
+    return { n: l.length };
+  },
   dejaSorti(reference) { return reference ? STOCK_MVTS.filter(m => m.type === 'sortie' && m.reference === reference) : []; }
 };
 

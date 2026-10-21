@@ -448,6 +448,19 @@
     await load(); await refreshAteliers();
   }
 
+  /* Supprime des mouvements (sans question) et remet la commande liée à jour : stock recalculé comme avant */
+  async function annulerPar(pred) {
+    const l = MVTS.filter(pred);
+    for (const m of l) {
+      const q = Number(m.quantite) || 0;
+      const r = await sb.from('pf_mouvements').delete().eq('id', m.id);
+      if (r.error) return { error: r.error };
+      if (m.commande_id && (m.type === 'livraison' || m.type === 'retour')) await majCommande(m.commande_id, q);
+    }
+    await load(); await refreshAteliers();
+    return { n: l.length, mouvements: l };
+  }
+
   /* ---------- Stockage automatique depuis les productions terminées ---------- */
   async function entrerProd(prodId) {
     const prod = PRODS.find(x => String(x.id) === String(prodId)); if (!prod) return;
@@ -599,7 +612,7 @@
   /* ---------- API pour le Tableau de bord ---------- */
   window.PFAPI = {
     load, list: () => PR, qty: qtyOf, open: () => openPane('pf'), openPane, etat, saisir, creerClient, bonLivraison,
-    mouvements: () => MVTS, produits: () => PR, commandes: () => CMDS, reste: resteCmd, coutProduit: cout,
+    annulerPar, mouvements: () => MVTS, produits: () => PR, commandes: () => CMDS, reste: resteCmd, coutProduit: cout,
     clients: () => clientsList().map(c => ({ id: c.id, nom: clientNom(c.id) })),
     commandesOuvertes: (produitId, clientId) => CMDS.filter(c => cmdOuverte(c) && (!produitId || (produitDeCmd(c) && String(produitDeCmd(c).id) === String(produitId))) && (!clientId || String(c.contact_id) === String(clientId)))
       .map(c => ({ id: c.id, numero: c.commande_numero || '—', reste: resteCmd(c), client: clientNom(c.contact_id) })),
