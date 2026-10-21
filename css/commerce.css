@@ -1,0 +1,26 @@
+/* Commerce : devis, factures, bons de commande */
+#cm-root .iv-tbl{width:100%;border-collapse:collapse}
+#cm-root .iv-tbl th.n,#cm-root .iv-tbl td.n{text-align:right;white-space:nowrap}
+#cm-root .iv-tbl td small{display:block;color:var(--mut);font-size:12px}
+#cm-root .iv-tbl tr.row{cursor:pointer}
+#cm-root .iv-in input,#cm-root .iv-in select{padding:8px;border:1px solid #ccc;border-radius:8px;font:inherit;max-width:100%}
+#cm-root .iv-in input.iv-t{width:100%;min-width:140px}
+#cm-root .iv-in input.iv-q{width:84px;text-align:right}
+#cm-root .iv-in input.iv-p{width:120px;text-align:right}
+#cm-root .iv-in select{min-width:150px}
+#cm-root .iv-help{margin:6px 0 12px;color:var(--mut);font-size:13px;line-height:1.5}
+#cm-root .iv-empty{padding:22px 12px;text-align:center;color:var(--mut)}
+#cm-root .iv-err{padding:16px;color:#b3261e}
+#cm-root .iv-save{color:var(--mut);font-size:13px}
+.cm-bdg{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;vertical-align:middle;white-space:nowrap}
+.cm-bdg.g{background:#e4f5e8;color:#17632a}.cm-bdg.b{background:#e3eefb;color:#174a8a}.cm-bdg.o{background:#fdf0dc;color:#8a5a12}.cm-bdg.r{background:#fbe6e3;color:#b3261e}.cm-bdg.x{background:#eee;color:#555}
+.cm-tot{display:flex;justify-content:flex-end;margin-top:12px}
+.cm-tt{min-width:280px;border-collapse:collapse}
+.cm-tt td{padding:5px 10px;text-align:right}.cm-tt td:first-child{text-align:left;color:var(--mut)}
+.cm-tt tr.cm-ttc td{border-top:2px solid #111;font-weight:700;font-size:16px;color:#111}
+@media (max-width:700px){
+  #cm-root .iv-opt{display:none}
+  #cm-root .iv-in input.iv-q{width:70px}#cm-root .iv-in input.iv-p{width:96px}
+  #cm-root .iv-tbl th,#cm-root .iv-tbl td{padding:8px 6px;font-size:13px}
+  .cm-tot{justify-content:stretch}.cm-tt{width:100%;min-width:0}
+}

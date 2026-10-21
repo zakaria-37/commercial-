@@ -21,7 +21,7 @@
 
   // Ordre = parents d'abord (important pour envoyer les nouvelles lignes à Supabase)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants', 'productions', 'commandes',
-                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'paiements'];
+                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres'];
 
   // Valeurs par défaut (les mêmes que dans les fichiers supabase/*.sql)
   var DEFAULTS = {
@@ -30,7 +30,7 @@
     ateliers: { adresse: '', tel: '', email: '', responsable: '', capacite_journaliere: 0, statut: 'Actif', notes: '' },
     productions: { quantite_lancee: 0, statut: 'En cours', notes: '', date_reception_reelle: null, delai_jours: null, produit_id: null },
     commandes: { contact_id: null, commande_numero: null, quantite_commandee: 0, quantite_recue: 0, date_reception_prevue: null,
-                 statut: 'En attente', notes: '' },
+                 statut: 'En attente', notes: '', prix_unitaire: 0 },
     employes: { prenom: '', poste: '', salaire_mensuel: 0, taux_horaire: 0, taux_heure_sup: 0, heure_fin_normale: '19:00', notes: '' },
     acomptes: { montant: 0, note: '' },
     pointages: { heures: 0, heure_debut: null, heure_fin: null },
@@ -42,7 +42,10 @@
     stock_mouvements: { date_mvt: null, type: 'entree', prix_achat: null, fournisseur: '', contact_id: null, reference: '', note: '', source: 'manuel' },
     produits: { description: '', modele_id: null, mo_date: null, mo_salaires: 0, mo_charges: 0, mo_pieces: 0, prix_vente: 0, seuil_pf: 0, marque: 'MARIA BAG' },
     pf_mouvements: { date_mvt: null, type: 'entree', contact_id: null, client_nom: '', commande_id: null, production_id: null, prix_vente: null, reference: '', note: '' },
-    paiements: { date_paiement: null, contact_id: null, contact_nom: '', mode: 'especes', reference: '', note: '' },
+    paiements: { date_paiement: null, contact_id: null, contact_nom: '', mode: 'especes', reference: '', note: '', document_id: null },
+    documents: { date_doc: null, echeance: null, contact_id: null, contact_nom: '', statut: 'brouillon', source_id: null, commande_id: null, tva_taux: 0, remise: 0, notes: '' },
+    document_lignes: { produit_id: null, article_id: null, designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, quantite_recue: 0, ordre: 0 },
+    parametres: { valeur: {} },
     inventaires: { annee: 0, date_inventaire: null, statut: 'brouillon', debut_periode: null, ventes: 0, achats: 0, valeur_nette: 0, stock_applique: false, notes: '', cloture_le: null },
     inventaire_lignes: { ref_id: null, libelle: '', detail: '', unite: '', quantite_theorique: null, quantite: null, prix_unitaire: 0, cond_nom: '', cond_qte: 0, prix_vente: 0, montant: 0, note: '', ordre: 0 },
     produit_lignes: { categorie: 'Autre outil', designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, perte_pct: 0, note: '', ordre: 0, article_id: null }
@@ -51,7 +54,7 @@
   // Contraintes « unique » (pour afficher la même erreur que Supabase)
   var UNIQUE = {
     ateliers: [['nom']], modeles: [['nom']], produits: [['nom']], stock_articles: [['categorie', 'nom']],
-    pointages: [['employe_id', 'date_pointage']], commandes: [['commande_numero']], inventaires: [['nom']]
+    pointages: [['employe_id', 'date_pointage']], commandes: [['commande_numero']], inventaires: [['nom']], documents: [['type', 'numero']], parametres: [['cle']]
   };
   // Clé utilisée pour envoyer une ligne à Supabase
   var CONFLICT = { pointages: 'employe_id,date_pointage' };
@@ -70,7 +73,9 @@
     ['employes', 'pointages', 'employe_id', 'cascade'], ['employes', 'acomptes', 'employe_id', 'cascade'],
     ['employes', 'charges', 'employe_id', 'null'],
     ['inventaires', 'inventaire_lignes', 'inventaire_id', 'cascade'],
-    ['contacts', 'paiements', 'contact_id', 'null']
+    ['contacts', 'paiements', 'contact_id', 'null'],
+    ['documents', 'document_lignes', 'document_id', 'cascade'], ['contacts', 'documents', 'contact_id', 'null'], ['commandes', 'documents', 'commande_id', 'null'],
+    ['produits', 'document_lignes', 'produit_id', 'null'], ['stock_articles', 'document_lignes', 'article_id', 'null'], ['documents', 'paiements', 'document_id', 'null']
   ];
 
   /* ---------- État ---------- */
@@ -484,7 +489,7 @@
       var app = document.getElementById('app');
       if (!app || app.classList.contains('hide')) return;
       if (document.querySelector('#m.on, #m.show, #bkBg')) return;     // fenêtre ouverte : pas de rechargement sous les doigts
-      ['loadContacts', 'loadAteliers', 'loadProductions', 'loadCommandes', 'loadEmployes', 'loadCharges', 'loadProduction', 'loadProduits', 'loadStock', 'loadPF', 'loadInventaire', 'loadPaiements']
+      ['loadContacts', 'loadAteliers', 'loadProductions', 'loadCommandes', 'loadEmployes', 'loadCharges', 'loadProduction', 'loadProduits', 'loadStock', 'loadPF', 'loadInventaire', 'loadPaiements', 'loadCommerce']
         .forEach(function (f) { try { if (typeof window[f] === 'function') window[f](); } catch (e) {} });
     }, 300);
   }

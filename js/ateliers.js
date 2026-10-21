@@ -418,9 +418,10 @@ function renderCommandes() {
     (!q || [c.commande_numero,c.modele_nom,c.contact_nom].join(' ').toLocaleLowerCase().includes(q)));
   tbody.innerHTML = rows.length ? rows.map(c => `<tr>
     <td><b>${escA(c.commande_numero || '—')}</b></td><td>${escA(c.modele_nom || 'N/A')}</td>
-    <td>${escA(c.contact_nom || 'N/A')}</td><td>${Number(c.quantite_commandee)||0}</td><td>${Number(c.quantite_recue)||0}</td>
+    <td>${escA(c.contact_nom || 'N/A')}</td><td>${Number(c.quantite_commandee)||0}${Number(c.prix_unitaire)>0?'<small>'+(Number(c.quantite_commandee)*Number(c.prix_unitaire)).toLocaleString('fr-FR')+' DA</small>':''}</td><td>${Number(c.quantite_recue)||0}</td>
     <td>${fdA(c.date_commande)}</td><td>${fdA(c.date_reception_prevue)}</td><td>${escA(c.statut || 'En attente')}</td>
     <td><button class="btn xs" type="button" onclick="editCommande('${escA(c.id)}')">Modifier</button>
+    <button class="btn xs" type="button" onclick="if(window.CommerceAPI)CommerceAPI.facturerCommande('${escA(c.id)}')">Facturer</button>
     <button class="btn xs r" type="button" onclick="removeCommande('${escA(c.id)}')">Supprimer</button></td></tr>`).join('') :
     '<tr><td colspan="9" class="at-empty">Aucune commande correspondante.</td></tr>';
 }
@@ -612,7 +613,7 @@ function showFormCommande() {
   updateAtelierSelects();
   const f = $a('#cmd-form'); if (!f) return;
   f.reset(); $a('#cmd-date').value = todayA(); $a('#cmd-qte').value = 1;
-  $a('#cmd-recue').value = 0; $a('#cmd-status').value = 'En attente';
+  $a('#cmd-recue').value = 0; $a('#cmd-status').value = 'En attente'; if ($a('#cmd-prix')) $a('#cmd-prix').value = '';
   f.style.display = 'block';
 }
 function editCommande(id) {
@@ -625,6 +626,7 @@ function editCommande(id) {
   $a('#cmd-contact').value = c.contact_id || '';
   $a('#cmd-numero').value = c.commande_numero || '';
   $a('#cmd-qte').value = c.quantite_commandee || 1;
+  if ($a('#cmd-prix')) $a('#cmd-prix').value = Number(c.prix_unitaire) > 0 ? c.prix_unitaire : '';
   $a('#cmd-recue').value = c.quantite_recue || 0;
   $a('#cmd-date').value = c.date_commande || todayA();
   $a('#cmd-reception').value = c.date_reception_prevue || '';
@@ -645,7 +647,8 @@ async function saveCommande() {
     toastA('Remplissez les champs obligatoires.'); return;
   }
   if (quantite_recue > quantite_commandee) { toastA('La quantité reçue ne peut pas dépasser la quantité commandée.'); return; }
-  const obj = {production_id,contact_id,commande_numero,quantite_commandee,quantite_recue,date_commande,date_reception_prevue,statut,notes};
+  const prix_unitaire = Math.max(0, Number($a('#cmd-prix') ? $a('#cmd-prix').value : 0) || 0);
+  const obj = {production_id,contact_id,commande_numero,quantite_commandee,quantite_recue,date_commande,date_reception_prevue,statut,notes,prix_unitaire};
   const result = curCommande ? await updateCommande(curCommande.id,obj) : await createCommande(obj);
   if (!result) return;
   if (curCommande) COMMANDES = COMMANDES.map(c => c.id === result.id ? result : c);
