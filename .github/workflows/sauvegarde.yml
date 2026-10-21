@@ -1,0 +1,30 @@
+name: Sauvegarde hebdomadaire
+
+on:
+  schedule:
+    - cron: '17 3 * * 0'      # chaque dimanche à 03h17 UTC
+  workflow_dispatch: {}        # bouton « Run workflow » pour lancer à la main
+
+permissions:
+  contents: read
+
+jobs:
+  sauvegarde:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Exporter les données Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: node scripts/sauvegarde_hebdo.mjs
+      - name: Conserver la sauvegarde (90 jours)
+        uses: actions/upload-artifact@v4
+        with:
+          name: sauvegarde-mariabag-${{ github.run_number }}
+          path: sauvegarde/*.json
+          retention-days: 90
+          if-no-files-found: error
