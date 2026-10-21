@@ -168,10 +168,10 @@
       return '<b>' + esc(f.main) + '</b>' + (f.sub ? '<small>' + esc(f.sub) + '</small>' : '');
     }
     if (!l.produit_id || !window.PFAPI) return '<small>—</small>';
-    const st = PFAPI.qty(l.produit_id), demande = ed.lignes.filter(x => String(x.produit_id) === String(l.produit_id)).reduce((s, x) => s + num(x.quantite), 0), reste = st - demande;
-    return '<b>' + nf(st, 0) + '</b> pcs<small class="' + (reste < 0 ? 'cm-neg' : '') + '">' + (reste < 0 ? 'manque ' + nf(-reste, 0) : 'reste ' + nf(reste, 0) + ' après') + '</small>';
+    const st = PFAPI.qty(l.produit_id), aLivrer = ed.lignes.filter(x => String(x.produit_id) === String(l.produit_id)).reduce((s, x) => s + Math.max(0, num(x.quantite) - num(x.quantite_recue)), 0), reste = st - aLivrer;
+    return '<b>' + nf(st, 0) + '</b> pcs<small class="' + (reste < 0 ? 'cm-neg' : '') + '">' + (aLivrer <= 0 ? 'tout est déjà sorti du stock' : reste < 0 ? 'manque ' + nf(-reste, 0) + ' pour sortir ' + nf(aLivrer, 0) : 'restera ' + nf(reste, 0) + ' après sortie') + '</small>';
   }
-  function majStocks() { document.querySelectorAll('#cm-lignes tr[data-i]').forEach(tr => { const l = ed.lignes[Number(tr.dataset.i)], c = tr.querySelector('.cm-st'); if (l && c) c.innerHTML = stockTxt(ed.doc.type, l); }); }
+  function majStocks() { document.querySelectorAll('#cm-lignes tr[data-i]').forEach(tr => { const l = ed.lignes[Number(tr.dataset.i)], c = tr.querySelector('.cm-st'), v = tr.querySelector('.cm-lv'); if (l && c) c.innerHTML = stockTxt(ed.doc.type, l); if (l && v) v.textContent = l.produit_id ? nf(l.quantite_recue || 0, 0) + ' / ' + nf(l.quantite || 0, 0) : '—'; }); }
 
   /* ---------- Éditeur ---------- */
   function nouveauDoc(type, base) {
@@ -202,13 +202,13 @@
       '<label>Remise (DA)<input id="cm-remise" type="number" min="0" step="any" inputmode="decimal" value="' + (Number(doc.remise) || '') + '" placeholder="0"></label>' +
       (doc.type === 'devis' ? '<label>Statut<select id="cm-statut">' + Object.keys(STATUTS_DEVIS).map(k => '<option value="' + k + '"' + (doc.statut === k ? ' selected' : '') + '>' + STATUTS_DEVIS[k] + '</option>').join('') + '</select></label>' : '') +
       '<label style="grid-column:1/-1">Note<input id="cm-notes" maxlength="300" value="' + esc(doc.notes || '') + '" placeholder="Facultatif : conditions, délai…"></label></div></div>';
-    h += '<div class="card" style="margin-top:12px"><h3 style="margin-top:0">Lignes</h3><div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>' + (bc ? 'Élément' : 'Produit') + '</th><th>Désignation</th><th>' + (bc ? 'Unité' : 'Qté') + '</th><th>' + (bc ? 'Qté' : 'Prix (DA)') + '</th>' + (bc ? '<th>Prix (DA)</th>' : '') + '<th class="n">En stock</th><th class="n">Montant</th>' + (bc ? '<th class="n iv-opt">Reçu</th>' : '') + '<th></th></tr></thead><tbody id="cm-lignes">' +
+    h += '<div class="card" style="margin-top:12px"><h3 style="margin-top:0">Lignes</h3><div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>' + (bc ? 'Élément' : 'Produit') + '</th><th>Désignation</th><th>' + (bc ? 'Unité' : 'Qté') + '</th><th>' + (bc ? 'Qté' : 'Prix (DA)') + '</th>' + (bc ? '<th>Prix (DA)</th>' : '') + '<th class="n">En stock</th>' + (bc ? '' : '<th class="n">Livré</th>') + '<th class="n">Montant</th>' + (bc ? '<th class="n iv-opt">Reçu</th>' : '') + '<th></th></tr></thead><tbody id="cm-lignes">' +
       ed.lignes.map((l, i) => '<tr data-i="' + i + '"><td><select data-f="ref">' + optsRef(doc.type, l) + '</select></td><td><input class="iv-t" data-f="des" maxlength="200" value="' + esc(l.designation) + '" placeholder="Désignation"></td>' +
         (bc ? '<td><input class="iv-t" data-f="uni" maxlength="20" style="width:90px" value="' + esc(l.unite) + '"></td><td><input class="iv-q" data-f="qte" type="number" min="0" step="any" inputmode="decimal" value="' + (l.quantite || '') + '"></td><td><input class="iv-p" data-f="pu" type="number" min="0" step="any" inputmode="decimal" value="' + (l.prix_unitaire || '') + '"></td>'
           : '<td><input class="iv-q" data-f="qte" type="number" min="0" step="any" inputmode="decimal" value="' + (l.quantite || '') + '"></td><td><input class="iv-p" data-f="pu" type="number" min="0" step="any" inputmode="decimal" value="' + (l.prix_unitaire || '') + '"></td>') +
-        '<td class="n cm-st">' + stockTxt(doc.type, l) + '</td><td class="n cm-mt">' + money(r2(num(l.quantite) * num(l.prix_unitaire))) + '</td>' + (bc ? '<td class="n iv-opt">' + nf(l.quantite_recue || 0, 2) + '</td>' : '') + '<td class="n"><button class="btn s d" type="button" data-rm="' + i + '">×</button></td></tr>').join('') + '</tbody></table></div>' +
+        '<td class="n cm-st">' + stockTxt(doc.type, l) + '</td>' + (bc ? '' : '<td class="n cm-lv">' + (l.produit_id ? nf(l.quantite_recue || 0, 0) + ' / ' + nf(l.quantite || 0, 0) : '—') + '</td>') + '<td class="n cm-mt">' + money(r2(num(l.quantite) * num(l.prix_unitaire))) + '</td>' + (bc ? '<td class="n iv-opt">' + nf(l.quantite_recue || 0, 2) + '</td>' : '') + '<td class="n"><button class="btn s d" type="button" data-rm="' + i + '">×</button></td></tr>').join('') + '</tbody></table></div>' +
       '<div class="at-actions"><button class="btn s" type="button" id="cm-addl">+ Ajouter une ligne</button></div>' +
-      (bc ? '' : '<p class="iv-help">« En stock » = pièces finies disponibles dans le Stock. La facture ne modifie pas le stock : enregistrez la livraison dans <b>Stock → Sortir</b> (client + commande).</p>') +
+      (bc ? '' : '<p class="iv-help">« En stock » = pièces finies réellement disponibles. Après enregistrement, le bouton <b>« Sortir du stock »</b> crée la livraison au client (stock réduit, historique et commande mis à jour) ; « Livré » indique ce qui est déjà sorti.</p>') +
       '<div class="cm-tot" id="cm-tot">' + totHtml(t, doc) + '</div></div>';
     // paiements rattachés (factures et bons de commande)
     if (!nouveau && (fac || bc)) {
@@ -225,6 +225,7 @@
       h += '<button class="btn" type="button" id="cm-pdf">PDF</button>';
       if (doc.type === 'devis' && doc.statut !== 'facture') h += '<button class="btn" type="button" id="cm-tofac">Transformer en facture</button>';
       if (bc) h += '<button class="btn" type="button" id="cm-rec">Réceptionner</button>';
+      if (fac && etatFacture(doc).l !== 'Annulée' && ed.lignes.some(l => l.produit_id && num(l.quantite) > num(l.quantite_recue))) h += '<button class="btn p" type="button" id="cm-livrer">Sortir du stock</button>';
       if (fac && etatFacture(doc).l !== 'Annulée') h += '<button class="btn" type="button" id="cm-annul">Annuler la facture</button>';
       h += '<button class="btn d" type="button" id="cm-del">Supprimer</button>';
     }
@@ -277,7 +278,7 @@
     for (let k = 0; k < ls.length; k++) {
       const l = ls[k], lr = { document_id: id, produit_id: l.produit_id || null, article_id: l.article_id || null, designation: String(l.designation).trim(), unite: l.unite || 'pcs', quantite: r4(num(l.quantite)), prix_unitaire: r4(num(l.prix_unitaire)), ordre: k };
       if (l.id) { const u = await sb.from('document_lignes').update(lr).eq('id', l.id); if (u.error) { say('Erreur ligne : ' + u.error.message); return false; } }
-      else { const i = await sb.from('document_lignes').insert([lr]).select(); if (i.error || !i.data) { say('Erreur ligne : ' + ((i.error && i.error.message) || '')); return false; } l.id = i.data[0].id; }
+      else { lr.quantite_recue = r4(num(l.quantite_recue)); const i = await sb.from('document_lignes').insert([lr]).select(); if (i.error || !i.data) { say('Erreur ligne : ' + ((i.error && i.error.message) || '')); return false; } l.id = i.data[0].id; }
     }
     ed.lignes = ls;
     await load(true); ed = { doc: Object.assign({}, docById(id)), lignes: lignesDe(id).map(x => Object.assign({}, x)), supprimes: [] };
@@ -346,7 +347,7 @@
     if (!ls.length) { say('Aucune livraison pour ce client sur cette période.'); return; }
     const c = cById(cl); fromLiv = false;
     nouveauDoc('facture', { contact_id: cl, contact_nom: c ? lbl(c) : '', notes: 'Livraisons du ' + fd(a) + ' au ' + fd(b) });
-    ed.lignes = ls.map(x => ({ id: null, produit_id: x.produit_id, article_id: null, designation: x.designation, unite: 'pcs', quantite: x.q, prix_unitaire: x.pu, quantite_recue: 0 }));
+    ed.lignes = ls.map(x => ({ id: null, produit_id: x.produit_id, article_id: null, designation: x.designation, unite: 'pcs', quantite: x.q, prix_unitaire: x.pu, quantite_recue: x.q }));      // déjà livrées : pas de nouvelle sortie
     render();
   }
   async function devisEnFacture() {
@@ -358,6 +359,25 @@
     if (!(await enregistrer(true))) return;
     await sb.from('documents').update({ statut: 'facture' }).eq('id', src);
     await load(true); say('Facture créée à partir du devis.'); render();
+  }
+
+  /* ---------- Sortie du stock (livraison au client depuis la facture) ---------- */
+  async function livrerFacture() {
+    if (!(await enregistrer(true))) return;
+    const doc = ed.doc, ls = ed.lignes.filter(l => l.produit_id && num(l.quantite) > num(l.quantite_recue) + 0.0001);
+    if (!ls.length) { say('Tout est déjà sorti du stock.'); return; }
+    const manques = ls.filter(l => PFAPI.qty(l.produit_id) < num(l.quantite) - num(l.quantite_recue));
+    const resume = ls.map(l => '• ' + l.designation + ' : ' + nf(num(l.quantite) - num(l.quantite_recue), 0) + ' pcs (stock ' + nf(PFAPI.qty(l.produit_id), 0) + ')').join('\n');
+    if (!confirm('Sortir du stock et livrer à ' + doc.contact_nom + ' ?\n\n' + resume + (manques.length ? '\n\n⚠ Stock insuffisant pour : ' + manques.map(l => l.designation).join(', ') + '.\nLe stock deviendra négatif.' : ''))) return;
+    const echecs = [];
+    for (const l of ls) {
+      const q = Math.round(num(l.quantite) - num(l.quantite_recue));
+      const r = await PFAPI.saisir({ type: 'livraison', produitId: l.produit_id, quantite: q, clientId: doc.contact_id, commandeId: doc.commande_id || null, prix: num(l.prix_unitaire), reference: doc.numero, date: today(), note: 'Facture ' + doc.numero });
+      if (r.error) { echecs.push(l.designation + ' : ' + r.error.message); continue; }
+      await sb.from('document_lignes').update({ quantite_recue: r4(num(l.quantite_recue) + q) }).eq('id', l.id);
+    }
+    await load(true); ouvrir(doc.id);
+    say(echecs.length ? 'Sortie partielle : ' + echecs.join(' ; ') : 'Stock mis à jour : pièces sorties et livraison enregistrée.');
   }
 
   /* ---------- Paiement et réception ---------- */
@@ -445,6 +465,7 @@
     if (t.closest('#cm-addl')) { lireEntete(); ed.lignes.push(ligneVide()); render(); return; }
     const rm = t.closest('[data-rm]'); if (rm) { lireEntete(); const l = ed.lignes[Number(rm.dataset.rm)]; if (l && l.id) { if (num(l.quantite_recue) > 0) { say('Cette ligne a déjà été reçue : impossible de la supprimer.'); return; } ed.supprimes.push(l.id); } ed.lignes.splice(Number(rm.dataset.rm), 1); render(); return; }
     if (t.closest('#cm-pdf')) { pdf(); return; }
+    if (t.closest('#cm-livrer')) { await livrerFacture(); return; }
     if (t.closest('#cm-tofac')) { await devisEnFacture(); return; }
     if (t.closest('#cm-pay')) { lireEntete(); payForm = true; render(); return; }
     if (t.closest('#cm-pno')) { payForm = null; render(); return; }
