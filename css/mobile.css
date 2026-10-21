@@ -35,6 +35,9 @@ html{overscroll-behavior-y:none}
   nav button[data-v="stock"]::before{content:"\1F4E6"}
   nav button[data-v="production"]::before{content:"\1F4CB"}
   nav button[data-v="produits"]::before{content:"\1F45C"}
+  nav button[data-v="inventaire"]::before{content:"\1F4CA"}
+  nav button[data-v="commerce"]::before{content:"\1F9FE"}
+  nav button[data-v="equipe"]::before{content:"\1F512"}
 
   /* 8 onglets : la barre défile au pouce, l'onglet actif reste centré */
   nav{overflow-x:auto!important;overflow-y:hidden;scrollbar-width:none;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
@@ -65,8 +68,8 @@ html{overscroll-behavior-y:none}
   .pd-mo,.pr-calc{align-items:end}
   .at-fields{gap:10px}
   .at-fields label{font-size:13px}
-  .at-actions{display:flex;flex-wrap:wrap;gap:8px}
-  .at-actions .btn{flex:1 1 140px}
+  .at-actions{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px}
+  .at-actions .btn{flex:1 1 140px;width:auto}
   .at-form{padding:14px 12px}
 
   /* Onglets internes (Ateliers…) : défilement horizontal au pouce */
@@ -86,6 +89,11 @@ html{overscroll-behavior-y:none}
 }
 
 /* Petits écrans (≤ 360 px) */
+/* iPhone : les champs en 16 px évitent le zoom automatique de Safari quand on touche un champ */
+@media (max-width:700px){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px!important}
+  #login .lcard .lfield input{font-size:16px}
+}
 @media (max-width:360px){
   nav button{font-size:9.5px!important}
   nav button::before{font-size:17px}

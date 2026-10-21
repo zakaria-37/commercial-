@@ -24,3 +24,12 @@
   #cm-root .iv-tbl th,#cm-root .iv-tbl td{padding:8px 6px;font-size:13px}
   .cm-tot{justify-content:stretch}.cm-tt{width:100%;min-width:0}
 }
+/* Totaux : restent en tableau (libellé à gauche, montant à droite) même en affichage téléphone */
+@media (max-width:700px){
+  .cm-tt{display:table!important;width:100%}
+  .cm-tt tbody{display:table-row-group!important}
+  .cm-tt tr{display:table-row!important}
+  .cm-tt td{display:table-cell!important;padding:6px 4px!important;border:0}
+  .cm-tt td:last-child{text-align:right!important;white-space:nowrap}
+  .cm-tt tr.cm-ttc td{border-top:2px solid #111}
+}

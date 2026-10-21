@@ -32,7 +32,7 @@ body.mode-simple .back-stock{display:block}
   #sp-nform .at-fields,#sp-qform .at-fields{grid-template-columns:1fr 1fr!important;align-items:end}
   #sp-nform .at-fields label:nth-child(1),#sp-nform .at-fields label:nth-child(2),#sp-qform .at-fields label:nth-child(3),#sp-qform .at-fields label:nth-child(4){grid-column:1/-1}
   /* 6 onglets en mode simple : ils se partagent la largeur, sans défilement */
-  body.mode-simple nav button{flex:1 1 0!important;min-width:0!important;padding-left:2px!important;padding-right:2px!important}
+  body.mode-simple nav button{flex:1 0 auto!important;min-width:66px!important;padding-left:4px!important;padding-right:4px!important;white-space:nowrap}
 }
 
 /* onglets du Stock : une seule rangée, défilante au doigt si besoin */
