@@ -1,0 +1,10 @@
+/* Tableau des salaires : tient dans la largeur de l'écran, sans défilement horizontal */
+#emp-table{min-width:0;width:100%;table-layout:auto}
+#emp-table th{white-space:normal;padding:9px 8px;line-height:1.25;cursor:default;font-size:12px}
+#emp-table td{padding:9px 8px;font-size:13.5px;line-height:1.35;vertical-align:middle}
+#emp-table td small{display:block;color:var(--mut);font-size:12px}
+#emp-table td b{white-space:nowrap}
+#emp-tbody td.emp-act{min-width:0;width:108px;white-space:normal}
+#emp-tbody td.emp-act .btn{display:block;width:100%;margin:0 0 4px;padding:6px 4px;font-size:12.5px;white-space:nowrap}
+#emp-tbody td.emp-act .btn:last-child{margin-bottom:0}
+@media (max-width:1060px){#emp-table{min-width:880px}}

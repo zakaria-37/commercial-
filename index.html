@@ -24,6 +24,7 @@
 <link rel="stylesheet" href="css/inventaire.css">
 <link rel="stylesheet" href="css/paiements.css">
 <link rel="stylesheet" href="css/commerce.css">
+<link rel="stylesheet" href="css/employes.css">
 <link rel="stylesheet" href="css/dashboard.css">
 <link rel="stylesheet" href="css/mobile.css">
 <style>
@@ -217,7 +218,7 @@
     <div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="cancelFormEmploye()">Annuler</button></div>
   </form>
   <div class="card"><h2>Salaires du mois : paie ordinaire − acomptes ; heures sup mises de côté à part</h2>
-    <div class="at-scroll"><table><thead><tr><th>Employé</th><th>Poste</th><th>Taux horaire</th><th>Jours</th><th>Heures (normales · sup)</th><th>Paie ordinaire</th><th>Paie heures sup</th><th>Acomptes</th><th>Reste à payer</th><th>Heures sup à remettre</th><th>Actions</th></tr></thead><tbody id="emp-tbody"><tr><td colspan="11" class="at-empty">Chargement…</td></tr></tbody></table></div>
+    <div class="at-scroll"><table id="emp-table"><thead><tr><th>Employé</th><th>Taux horaire</th><th>Jours · heures</th><th>Paie ordinaire</th><th>Paie heures sup</th><th>Acomptes</th><th>Reste à payer</th><th>H. sup à remettre</th><th>Actions</th></tr></thead><tbody id="emp-tbody"><tr><td colspan="9" class="at-empty">Chargement…</td></tr></tbody></table></div>
   </div>
   <div class="card" id="ac-panel" style="display:none;margin-top:16px">
     <div class="at-actions" style="margin-top:0"><h2 id="ac-title" style="margin-right:auto"></h2><button class="btn" type="button" onclick="closeAcomptes()">Fermer</button></div>

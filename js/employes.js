@@ -164,7 +164,7 @@ function renderEmployes() {
   );
 
   if (!list.length) {
-    tb.innerHTML = '<tr><td colspan="11" class="at-empty">Aucun employ\u00e9. Cliquez sur \u00ab\u00a0+ Nouvel employ\u00e9\u00a0\u00bb.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="9" class="at-empty">Aucun employ\u00e9. Cliquez sur \u00ab\u00a0+ Nouvel employ\u00e9\u00a0\u00bb.</td></tr>';
     renderPanel(false);
     return;
   }
@@ -173,25 +173,22 @@ function renderEmployes() {
     const hn = heuresNormales(e, mois), hs = heuresSup(e, mois), j = joursTravailles(e.id, mois);
     const po = paieOrdinaire(e, mois), ps = paieSup(e, mois), ac = totalAcomptes(e.id, mois), reste = round2(po - ac), st = statut(reste), solde = soldeSup(e);
     return '<tr' + (String(e.id) === String(selEmploye) ? ' style="background:var(--nb)"' : '') + '>' +
-      '<td><b>' + escE(e.nom) + '</b> ' + escE(e.prenom) + '</td>' +
-      '<td>' + escE(e.poste) + '</td>' +
-      '<td>' + money(e.taux_horaire) + ' / h<br><small>Sup : ' + money(tauxSup(e)) + ' / h</small></td>' +
-      '<td>' + j + '</td>' +
-      '<td>' + fmtH(hn) + '<br><small>Sup : ' + (hs > 0 ? fmtH(hs) : '\u2014') + '</small></td>' +
+      '<td><b>' + escE(e.nom) + '</b> ' + escE(e.prenom) + (e.poste ? '<small>' + escE(e.poste) + '</small>' : '') + '</td>' +
+      '<td>' + money(e.taux_horaire) + ' / h<small>Sup : ' + money(tauxSup(e)) + ' / h</small></td>' +
+      '<td><b>' + fmtH(hn) + '</b><small>' + j + ' jour' + (j > 1 ? 's' : '') + ' \u00b7 Sup : ' + (hs > 0 ? fmtH(hs) : '\u2014') + '</small></td>' +
       '<td>' + money(po) + '</td>' +
       '<td>' + (ps > 0 ? '<b style="color:#8a5a12">' + money(ps) + '</b><br><small>mise de côté</small>' : '\u2014') + '</td>' +
       '<td>' + money(ac) + '</td>' +
       '<td><b style="color:' + st.color + '">' + money(reste) + '</b><br><small style="color:' + st.color + '">' + st.txt + '</small></td>' +
       '<td>' + (solde > 0.004 ? '<b style="color:#8a5a12">' + money(solde) + '</b>' : '<small>' + (solde < -0.004 ? 'avance ' + money(-solde) : '\u2014') + '</small>') + '</td>' +
       '<td class="emp-act">' +
-        '<button class="btn s p" type="button" onclick="openAcomptes(\'' + e.id + '\')">Pointage</button> ' +
-        '<button class="btn s" type="button" onclick="showFormEmploye(\'' + e.id + '\')">Modifier</button> ' +
+        '<button class="btn s p" type="button" onclick="openAcomptes(\'' + e.id + '\')">Pointage</button>' +
+        '<button class="btn s" type="button" onclick="showFormEmploye(\'' + e.id + '\')">Modifier</button>' +
         '<button class="btn s d" type="button" onclick="removeEmploye(\'' + e.id + '\')">Supprimer</button>' +
       '</td></tr>';
   }).join('') +
-  '<tr style="font-weight:700;background:var(--nb)"><td colspan="3">Total</td><td>' +
-    list.reduce((s, e) => s + joursTravailles(e.id, mois), 0) + '</td><td>' +
-    fmtH(list.reduce((s, e) => s + heuresNormales(e, mois), 0)) + '<br><small>Sup : ' + fmtH(list.reduce((s, e) => s + heuresSup(e, mois), 0)) + '</small></td><td>' +
+  '<tr style="font-weight:700;background:var(--nb)"><td colspan="2">Total</td><td>' +
+    fmtH(list.reduce((s, e) => s + heuresNormales(e, mois), 0)) + '<small>' + (tj => tj + ' jour' + (tj > 1 ? 's' : ''))(list.reduce((s, e) => s + joursTravailles(e.id, mois), 0)) + ' \u00b7 Sup : ' + fmtH(list.reduce((s, e) => s + heuresSup(e, mois), 0)) + '</small></td><td>' +
     money(list.reduce((s, e) => s + paieOrdinaire(e, mois), 0)) + '</td><td>' +
     money(list.reduce((s, e) => s + paieSup(e, mois), 0)) + '</td><td>' +
     money(list.reduce((s, e) => s + totalAcomptes(e.id, mois), 0)) + '</td><td>' +
