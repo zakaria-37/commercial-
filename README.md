@@ -83,7 +83,7 @@ git push -u origin main
 5. Déployez.
 
 Une fois déployé, Render vous donne une URL du type
-`https://maria-bag-platform.onrender.com`. C'est l'adresse à partager avec
+`https://commercial-tf07.onrender.com`. C'est l'adresse à partager avec
 Khalida.
 
 ---
