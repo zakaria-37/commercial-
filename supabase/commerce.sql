@@ -10,6 +10,8 @@
 create extension if not exists pgcrypto;
 
 alter table public.commandes add column if not exists prix_unitaire numeric(14,2) not null default 0 check (prix_unitaire >= 0);
+-- commandes.cout_unitaire : prix de production (coût de revient) d'une pièce, pour calculer la marge
+alter table public.commandes add column if not exists cout_unitaire numeric(14,2) not null default 0 check (cout_unitaire >= 0);
 
 create table if not exists public.documents (
   id uuid primary key default gen_random_uuid(),

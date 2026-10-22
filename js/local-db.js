@@ -30,7 +30,7 @@
     ateliers: { adresse: '', tel: '', email: '', responsable: '', capacite_journaliere: 0, statut: 'Actif', notes: '' },
     productions: { quantite_lancee: 0, statut: 'En cours', notes: '', date_reception_reelle: null, delai_jours: null, produit_id: null },
     commandes: { contact_id: null, commande_numero: null, quantite_commandee: 0, quantite_recue: 0, date_reception_prevue: null,
-                 statut: 'En attente', notes: '', prix_unitaire: 0 },
+                 statut: 'En attente', notes: '', prix_unitaire: 0, cout_unitaire: 0 },
     employes: { prenom: '', poste: '', salaire_mensuel: 0, taux_horaire: 0, taux_heure_sup: 0, heure_fin_normale: '19:00', notes: '' },
     acomptes: { montant: 0, note: '' },
     pointages: { heures: 0, heure_debut: null, heure_fin: null },

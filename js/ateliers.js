@@ -418,9 +418,9 @@ function renderCommandes() {
     (!q || [c.commande_numero,c.modele_nom,c.contact_nom].join(' ').toLocaleLowerCase().includes(q)));
   tbody.innerHTML = rows.length ? rows.map(c => `<tr>
     <td><b>${escA(c.commande_numero || '—')}</b></td><td>${escA(c.modele_nom || 'N/A')}</td>
-    <td>${escA(c.contact_nom || 'N/A')}</td><td>${Number(c.quantite_commandee)||0}${Number(c.prix_unitaire)>0?'<small>'+(Number(c.quantite_commandee)*Number(c.prix_unitaire)).toLocaleString('fr-FR')+' DA</small>':''}</td><td>${Number(c.quantite_recue)||0}</td>
+    <td>${escA(c.contact_nom || 'N/A')}</td><td>${Number(c.quantite_commandee)||0}${Number(c.prix_unitaire)>0?'<small>Vente : '+(Number(c.quantite_commandee)*Number(c.prix_unitaire)).toLocaleString('fr-FR')+' DA</small>':''}${Number(c.cout_unitaire)>0?'<small>Production : '+(Number(c.quantite_commandee)*Number(c.cout_unitaire)).toLocaleString('fr-FR')+' DA</small>':''}${Number(c.prix_unitaire)>0&&Number(c.cout_unitaire)>0?'<small style="color:'+(Number(c.prix_unitaire)>=Number(c.cout_unitaire)?'#1e6e32':'#b3261e')+'">Marge : '+(Number(c.quantite_commandee)*(Number(c.prix_unitaire)-Number(c.cout_unitaire))).toLocaleString('fr-FR')+' DA</small>':''}</td><td>${Number(c.quantite_recue)||0}</td>
     <td>${fdA(c.date_commande)}</td><td>${fdA(c.date_reception_prevue)}</td><td>${escA(c.statut || 'En attente')}</td>
-    <td><button class="btn xs" type="button" onclick="editCommande('${escA(c.id)}')">Modifier</button>
+    <td>${c.statut!=='Reçue'&&c.statut!=='Annulée'?`<button class="btn xs p" type="button" onclick="livrerCommande('${escA(c.id)}')">Livrer au client</button> `:''}<button class="btn xs" type="button" onclick="editCommande('${escA(c.id)}')">Modifier</button>
     <button class="btn xs" type="button" onclick="if(window.CommerceAPI)CommerceAPI.facturerCommande('${escA(c.id)}')">Facturer</button>
     <button class="btn xs r" type="button" onclick="removeCommande('${escA(c.id)}')">Supprimer</button></td></tr>`).join('') :
     '<tr><td colspan="9" class="at-empty">Aucune commande correspondante.</td></tr>';
@@ -613,8 +613,8 @@ function showFormCommande() {
   updateAtelierSelects();
   const f = $a('#cmd-form'); if (!f) return;
   f.reset(); $a('#cmd-date').value = todayA(); $a('#cmd-qte').value = 1;
-  $a('#cmd-recue').value = 0; $a('#cmd-status').value = 'En attente'; if ($a('#cmd-prix')) $a('#cmd-prix').value = '';
-  f.style.display = 'block';
+  $a('#cmd-recue').value = 0; $a('#cmd-status').value = 'En attente'; if ($a('#cmd-prix')) $a('#cmd-prix').value = ''; if ($a('#cmd-cout')) $a('#cmd-cout').value = '';
+  f.style.display = 'block'; majMargeCommande();
 }
 function editCommande(id) {
   curCommande = COMMANDES.find(c => String(c.id) === String(id));
@@ -627,11 +627,13 @@ function editCommande(id) {
   $a('#cmd-numero').value = c.commande_numero || '';
   $a('#cmd-qte').value = c.quantite_commandee || 1;
   if ($a('#cmd-prix')) $a('#cmd-prix').value = Number(c.prix_unitaire) > 0 ? c.prix_unitaire : '';
+  if ($a('#cmd-cout')) $a('#cmd-cout').value = Number(c.cout_unitaire) > 0 ? c.cout_unitaire : '';
   $a('#cmd-recue').value = c.quantite_recue || 0;
   $a('#cmd-date').value = c.date_commande || todayA();
   $a('#cmd-reception').value = c.date_reception_prevue || '';
   $a('#cmd-status').value = c.statut || 'En attente';
   $a('#cmd-notes').value = c.notes || '';
+  majMargeCommande(true);
 }
 async function saveCommande() {
   const production_id = $a('#cmd-production').value;
@@ -648,13 +650,60 @@ async function saveCommande() {
   }
   if (quantite_recue > quantite_commandee) { toastA('La quantité reçue ne peut pas dépasser la quantité commandée.'); return; }
   const prix_unitaire = Math.max(0, Number($a('#cmd-prix') ? $a('#cmd-prix').value : 0) || 0);
-  const obj = {production_id,contact_id,commande_numero,quantite_commandee,quantite_recue,date_commande,date_reception_prevue,statut,notes,prix_unitaire};
+  const cout_unitaire = Math.max(0, Number($a('#cmd-cout') ? $a('#cmd-cout').value : 0) || 0);
+  const obj = {production_id,contact_id,commande_numero,quantite_commandee,quantite_recue,date_commande,date_reception_prevue,statut,notes,prix_unitaire,cout_unitaire};
+  const ancienStatut = curCommande ? curCommande.statut : null;
   const result = curCommande ? await updateCommande(curCommande.id,obj) : await createCommande(obj);
   if (!result) return;
   if (curCommande) COMMANDES = COMMANDES.map(c => c.id === result.id ? result : c);
   else COMMANDES.unshift(result);
   curCommande = null; $a('#cmd-form').style.display = 'none';
   renderCommandes(); refreshProduction(); toastA('Commande enregistrée.');
+  // commande terminée : proposer tout de suite le bon de livraison
+  if (statut === 'Terminée' && ancienStatut !== 'Terminée' && quantite_commandee > quantite_recue &&
+      confirm('Commande ' + commande_numero + ' terminée.\nCréer maintenant le bon de livraison pour le client (' + (quantite_commandee - quantite_recue) + ' pièces) ?')) await livrerCommande(result.id, true);
+}
+
+/* Prix de production = coût de revient du produit lié à la production (fiche matières + main-d'œuvre) ; marge par pièce et au total */
+function majMargeCommande(auto) {
+  const prod = $a('#cmd-production') ? $a('#cmd-production').value : '', coutEl = $a('#cmd-cout'), prixEl = $a('#cmd-prix'), box = $a('#cmd-marge');
+  const p = prod && window.PFAPI && PFAPI.produitDeProduction ? PFAPI.produitDeProduction(prod) : null;
+  if (auto && p) {
+    const c = PFAPI.coutProduit(p);
+    if (coutEl && !coutEl.value && c > 0) coutEl.value = Math.round(c * 100) / 100;
+    if (prixEl && !prixEl.value && Number(p.prix_vente) > 0) prixEl.value = p.prix_vente;
+  }
+  if (!box) return;
+  const cout = Number(coutEl && coutEl.value) || 0, prix = Number(prixEl && prixEl.value) || 0, q = Number($a('#cmd-qte') ? $a('#cmd-qte').value : 0) || 0;
+  const f = n => Math.round(n).toLocaleString('fr-FR') + ' DA';
+  box.innerHTML = cout > 0 && prix > 0
+    ? 'Marge par pièce : <b style="color:' + (prix >= cout ? '#1e6e32' : '#b3261e') + '">' + f(prix - cout) + '</b> (' + Math.round((prix - cout) / prix * 100) + ' % du prix de vente) · sur ' + q + ' pièces : <b>' + f((prix - cout) * q) + '</b>'
+    : (p ? 'Le prix de production se remplit automatiquement depuis le coût de revient du produit « ' + escA(p.nom) + ' ». Indiquez le prix de vente pour voir la marge.' : 'Indiquez le prix de production et le prix de vente pour voir la marge. (Associez la production à un produit pour remplir le coût automatiquement.)');
+}
+
+/* Livrer au client : crée le mouvement de livraison (stock produits finis −, commande mise à jour) avec un bon de livraison */
+async function livrerCommande(id, tout) {
+  const c = COMMANDES.find(x => String(x.id) === String(id)); if (!c) return;
+  if (!window.PFAPI) { toastA('Module Stock des produits finis non chargé.'); return; }
+  try { await PFAPI.load(); } catch (e) { /* on continue avec les données déjà chargées */ }
+  const p = PFAPI.produitDeCommande(id);
+  if (!p) { toastA('Associez d’abord cette production à un produit fini (Stock → Modèles finis, « Commandes clients à livrer »).'); return; }
+  const reste = Math.max(0, (Number(c.quantite_commandee) || 0) - (Number(c.quantite_recue) || 0));
+  if (reste < 1) { toastA('Cette commande est déjà entièrement livrée.'); return; }
+  const stock = PFAPI.qty(p.id);
+  let q = reste;
+  if (!tout) {
+    const v = prompt('Livrer combien de pièces de « ' + p.nom + ' » à ' + (c.contact_nom && c.contact_nom !== 'N/A' ? c.contact_nom : 'ce client') + ' ?\n(Reste à livrer : ' + reste + ' · en stock : ' + stock + ')', String(Math.min(reste, Math.max(stock, 1))));
+    if (v === null) return;
+    q = Math.round(Number(v));
+    if (!(q >= 1)) { toastA('Quantité invalide.'); return; }
+  }
+  if (q > stock && !confirm('Stock insuffisant : il y a ' + stock + ' pièces et vous en livrez ' + q + '.\nLe stock deviendra négatif. Continuer ?')) return;
+  const r = await PFAPI.saisir({ type: 'livraison', produitId: p.id, quantite: q, commandeId: c.id, clientId: c.contact_id, prix: Number(c.prix_unitaire) || Number(p.prix_vente) || 0, note: 'Commande ' + (c.commande_numero || '') });
+  if (r.error) { toastA('Erreur : ' + (r.error.message || r.error)); return; }
+  await loadCommandes(); renderCommandes(); refreshProduction();
+  toastA('Livraison enregistrée : ' + q + ' pièces (bon ' + r.reference + ').');
+  if (confirm('Livraison enregistrée (' + r.reference + ').\nTélécharger le bon de livraison PDF ?')) PFAPI.bonLivraison(r.reference);
 }
 async function removeCommande(id) {
   const c = COMMANDES.find(x => String(x.id) === String(id));
@@ -672,6 +721,8 @@ document.querySelectorAll('[data-at-tab]').forEach(btn => btn.addEventListener('
   if (btn.dataset.atTab === 'suivi-pane') { updateAtelierSelects(); renderCommandes(); }
 }));
 $a('#cmd-q')?.addEventListener('input', renderCommandes);
+$a('#cmd-production')?.addEventListener('change', () => { const o = $a('#cmd-cout'); if (o && !curCommande) o.value = ''; if ($a('#cmd-prix') && !curCommande) $a('#cmd-prix').value = ''; majMargeCommande(true); });
+['#cmd-cout', '#cmd-prix', '#cmd-qte'].forEach(s => $a(s)?.addEventListener('input', () => majMargeCommande(false)));
 $a('#cmd-statut')?.addEventListener('change', renderCommandes);
 
 document.addEventListener('mariabag:authenticated', () => {
