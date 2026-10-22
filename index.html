@@ -171,10 +171,12 @@
         <div class="at-fields">
           <label>Atelier *<select id="prod-atelier" required></select></label><label>Modèle / produit *<input id="prod-modele" required></label>
           <label>Quantité lancée<input id="prod-quantite" type="number" min="0" value="0" required></label>
+          <label>Client de la commande<select id="prod-contact"><option value="">Aucun contact</option></select></label>
           <label>Date de lancement *<input id="prod-date-lancement" type="date" required></label><label>Réception prévue *<input id="prod-date-reception" type="date" required></label>
           <label>Réception réelle<input id="prod-date-reelle" type="date"></label>
           <label>Statut<select id="prod-statut"><option>En attente</option><option selected>En cours</option><option>Terminée</option><option>Retardée</option></select></label>
           <label style="grid-column:1/-1">Notes<textarea id="prod-notes"></textarea></label>
+          <div id="prod-cmd-note" class="iv-help" style="grid-column:1/-1;margin:0"></div>
         </div><div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="cancelFormProduction()">Annuler</button></div>
       </form>
       <div class="at-scroll"><table><thead><tr><th>Modèle</th><th>Atelier</th><th>Quantité</th><th>Lancement</th><th>Réception prévue</th><th>Délai</th><th>Réception réelle</th><th>Statut</th><th>Commandes</th><th>Actions</th></tr></thead><tbody id="production-tbody"><tr><td colspan="10" class="at-empty">Chargement…</td></tr></tbody></table></div>

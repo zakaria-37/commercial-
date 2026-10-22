@@ -232,6 +232,8 @@ async function editProduction(id) {
   if (!curProduction) return;
   
   $a('#prod-form').style.display = 'block';
+  if ($a('#prod-contact')) $a('#prod-contact').parentElement.style.display = 'none';
+  if ($a('#prod-cmd-note')) $a('#prod-cmd-note').textContent = 'La commande liée à cette production suit les changements (quantité, réception prévue, statut « Terminée ») tant que rien n’a été livré.';
   $a('#prod-atelier').value = curProduction.atelier_id;
   $a('#prod-modele').value = curProduction.modele_nom;
   $a('#prod-quantite').value = curProduction.quantite_lancee;
@@ -322,7 +324,9 @@ async function saveProduction() {
   } else {
     result = await createProduction(obj);
     if (result) PRODUCTIONS.push(result);
+    if (result) await commandeAuto(result, $a('#prod-contact') ? $a('#prod-contact').value || null : null);
   }
+  if (result && curProduction) await syncCommandeProduction(result);
   
   if (result) {
     curProduction = null;
@@ -330,6 +334,42 @@ async function saveProduction() {
     refreshProduction();
     toastA('Production enregistrée');
   }
+}
+
+/* Nouvelle production = nouvelle commande liée (suivi, prix, livraison) */
+function prochainNumeroCommande() {
+  const n = COMMANDES.reduce((m, c) => { const x = /^CMD-(\d+)$/i.exec(c.commande_numero || ''); return x ? Math.max(m, Number(x[1])) : m; }, 0);
+  const existe = new Set(COMMANDES.map(c => c.commande_numero));
+  let k = n + 1, num = 'CMD-' + String(k).padStart(3, '0');
+  while (existe.has(num)) { k++; num = 'CMD-' + String(k).padStart(3, '0'); }
+  return num;
+}
+async function commandeAuto(prod, contactId) {
+  const q = Number(prod.quantite_lancee) || 0;
+  if (q < 1) return;
+  let cout = 0, prix = 0;
+  try { if (window.PFAPI && PFAPI.load) await PFAPI.load(); } catch (e) { /* données déjà chargées */ }
+  try { const p = window.PFAPI && PFAPI.produitDeProduction ? PFAPI.produitDeProduction(prod.id) : null; if (p) { cout = Math.round((PFAPI.coutProduit(p) || 0) * 100) / 100; prix = Number(p.prix_vente) || 0; } } catch (e) { /* coût non disponible */ }
+  const fini = prod.statut === 'Terminée' || !!prod.date_reception_reelle;
+  const obj = { production_id: prod.id, contact_id: contactId, commande_numero: prochainNumeroCommande(), quantite_commandee: q, quantite_recue: 0,
+    date_commande: prod.date_lancement || todayA(), date_reception_prevue: prod.date_reception_prevue || null, statut: fini ? 'Terminée' : 'En production',
+    notes: 'Créée automatiquement avec la production ' + (prod.modele_nom || ''), prix_unitaire: prix, cout_unitaire: cout };
+  const r = await createCommande(obj);
+  if (r) { COMMANDES.unshift(r); renderCommandes(); toastA('Production enregistrée — commande ' + r.commande_numero + ' créée automatiquement.'); }
+}
+/* Production modifiée : la commande liée suit (quantité, date prévue, statut) tant que rien n'est livré */
+async function syncCommandeProduction(prod) {
+  const l = COMMANDES.filter(c => String(c.production_id) === String(prod.id));
+  if (l.length !== 1) return;
+  const c = l[0], recue = Number(c.quantite_recue) || 0, q = Number(prod.quantite_lancee) || 0, o = {};
+  if (q >= Math.max(1, recue) && q !== Number(c.quantite_commandee)) o.quantite_commandee = q;
+  if ((prod.date_reception_prevue || null) !== (c.date_reception_prevue || null)) o.date_reception_prevue = prod.date_reception_prevue || null;
+  const fini = prod.statut === 'Terminée' || !!prod.date_reception_reelle;
+  if (fini && (c.statut === 'En attente' || c.statut === 'En production')) o.statut = 'Terminée';
+  if (!fini && c.statut === 'Terminée' && recue === 0) o.statut = 'En production';
+  if (!Object.keys(o).length) return;
+  const r = await updateCommande(c.id, o);
+  if (r) { COMMANDES = COMMANDES.map(x => x.id === r.id ? r : x); renderCommandes(); }
 }
 
 function cancelFormAtelier() {
@@ -365,6 +405,8 @@ function showFormProduction() {
   $a('#prod-date-reelle').value = '';
   $a('#prod-statut').value = 'En cours';
   $a('#prod-notes').value = '';
+  if ($a('#prod-contact')) { $a('#prod-contact').value = ''; $a('#prod-contact').parentElement.style.display = ''; }
+  if ($a('#prod-cmd-note')) $a('#prod-cmd-note').textContent = 'En enregistrant, une commande est créée automatiquement pour cette production (suivi, prix, livraison au client). Choisissez le client si vous le connaissez.';
 }
 
 
@@ -387,6 +429,12 @@ function updateAtelierSelects() {
     const old = p.value;
     p.innerHTML = '<option value="">Choisir une production</option>' + PRODUCTIONS.map(x => `<option value="${escA(x.id)}">${escA(x.modele_nom)} — ${escA(x.atelier_nom || '')}</option>`).join('');
     if (old) p.value = old;
+  }
+  const pc = $a('#prod-contact');
+  if (pc && typeof D !== 'undefined') {
+    const old = pc.value;
+    pc.innerHTML = '<option value="">Aucun contact</option>' + D.map(x => `<option value="${escA(x.id)}">${escA([x.prenom,x.nom].filter(Boolean).join(' '))}${x.societe ? ' — '+escA(x.societe) : ''}</option>`).join('');
+    if (old) pc.value = old;
   }
   const c = $a('#cmd-contact');
   if (c && typeof D !== 'undefined') {
