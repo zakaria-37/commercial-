@@ -1,0 +1,6 @@
+#ap-root .ap-tbl{width:100%;border-collapse:collapse}
+#ap-root .ap-tbl th.ap-n,#ap-root .ap-tbl td.ap-n{text-align:right;white-space:nowrap}
+#ap-root .ap-tbl td small{display:block;color:var(--mut);font-size:12px}
+#ap-root .ap-act{white-space:nowrap}
+#ap-root .ap-help{margin:6px 0 12px;color:var(--mut);font-size:13px;line-height:1.5}
+#ap-root .ap-err{color:var(--r);padding:12px}

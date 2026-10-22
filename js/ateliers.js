@@ -237,6 +237,7 @@ async function editProduction(id) {
   $a('#prod-atelier').value = curProduction.atelier_id;
   $a('#prod-modele').value = curProduction.modele_nom;
   $a('#prod-quantite').value = curProduction.quantite_lancee;
+  $a('#prod-facon').value = Number(curProduction.prix_facon) > 0 ? curProduction.prix_facon : '';
   $a('#prod-date-lancement').value = curProduction.date_lancement;
   $a('#prod-date-reception').value = curProduction.date_reception_prevue;
   $a('#prod-date-reelle').value = curProduction.date_reception_reelle || '';
@@ -311,7 +312,8 @@ async function saveProduction() {
   }
   
   const delai_jours = calcDelai(date_lancement, date_reception_prevue);
-  const obj = { atelier_id, modele_nom, quantite_lancee, date_lancement, date_reception_prevue, date_reception_reelle, statut, delai_jours, notes };
+  const prix_facon = Math.max(0, Number($a('#prod-facon').value) || 0);
+  const obj = { atelier_id, modele_nom, quantite_lancee, prix_facon, date_lancement, date_reception_prevue, date_reception_reelle, statut, delai_jours, notes };
   let result;
   
   if (curProduction) {
@@ -400,6 +402,7 @@ function showFormProduction() {
   $a('#prod-atelier').value = '';
   $a('#prod-modele').value = '';
   $a('#prod-quantite').value = '';
+  $a('#prod-facon').value = '';
   $a('#prod-date-lancement').value = todayA();
   $a('#prod-date-reception').value = '';
   $a('#prod-date-reelle').value = '';
@@ -767,6 +770,7 @@ document.querySelectorAll('[data-at-tab]').forEach(btn => btn.addEventListener('
   document.querySelectorAll('.at-pane').forEach(p => p.classList.toggle('on', p.id === btn.dataset.atTab));
   if (btn.dataset.atTab === 'productions-pane') { renderAtelierStats(); updateAtelierSelects(); }
   if (btn.dataset.atTab === 'suivi-pane') { updateAtelierSelects(); renderCommandes(); }
+  if (btn.dataset.atTab === 'paie-pane' && window.loadAteliersPaie) window.loadAteliersPaie();
 }));
 $a('#cmd-q')?.addEventListener('input', renderCommandes);
 $a('#cmd-production')?.addEventListener('change', () => { const o = $a('#cmd-cout'); if (o && !curCommande) o.value = ''; if ($a('#cmd-prix') && !curCommande) $a('#cmd-prix').value = ''; majMargeCommande(true); });

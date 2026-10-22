@@ -21,14 +21,14 @@
 
   // Ordre = parents d'abord (important pour envoyer les nouvelles lignes à Supabase)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants', 'productions', 'commandes',
-                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs'];
+                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers'];
 
   // Valeurs par défaut (les mêmes que dans les fichiers supabase/*.sql)
   var DEFAULTS = {
     contacts: { nom: '', prenom: '', poste: '', societe: '', type: 'Client', statut: 'En attente', tel: '', email: '', ville: '',
                 source: '', produits: '', notes: '', hist: [], derniere: null, relance: null },
     ateliers: { adresse: '', tel: '', email: '', responsable: '', capacite_journaliere: 0, statut: 'Actif', notes: '' },
-    productions: { quantite_lancee: 0, statut: 'En cours', notes: '', date_reception_reelle: null, delai_jours: null, produit_id: null },
+    productions: { prix_facon: 0, quantite_lancee: 0, statut: 'En cours', notes: '', date_reception_reelle: null, delai_jours: null, produit_id: null },
     commandes: { contact_id: null, commande_numero: null, quantite_commandee: 0, quantite_recue: 0, date_reception_prevue: null,
                  statut: 'En attente', notes: '', prix_unitaire: 0, cout_unitaire: 0 },
     employes: { prenom: '', poste: '', salaire_mensuel: 0, taux_horaire: 0, taux_heure_sup: 0, heure_fin_normale: '19:00', notes: '' },
@@ -42,6 +42,7 @@
     stock_mouvements: { date_mvt: null, type: 'entree', prix_achat: null, fournisseur: '', contact_id: null, reference: '', note: '', source: 'manuel' },
     produits: { description: '', modele_id: null, mo_date: null, mo_salaires: 0, mo_charges: 0, mo_pieces: 0, prix_vente: 0, seuil_pf: 0, marque: 'MARIA BAG' },
     pf_mouvements: { date_mvt: null, type: 'entree', contact_id: null, client_nom: '', commande_id: null, production_id: null, prix_vente: null, reference: '', note: '' },
+    paiements_ateliers: { atelier_id: null, atelier_nom: '', production_id: null, type: 'paiement', date_paiement: null, mode: 'especes', reference: '', note: '' },
     paiements: { date_paiement: null, contact_id: null, contact_nom: '', mode: 'especes', reference: '', note: '', document_id: null },
     documents: { date_doc: null, echeance: null, paiement: 'terme', contact_id: null, contact_nom: '', statut: 'brouillon', source_id: null, commande_id: null, tva_taux: 0, remise: 0, notes: '' },
     document_lignes: { produit_id: null, article_id: null, designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, quantite_recue: 0, ordre: 0 },
@@ -74,7 +75,7 @@
     ['employes', 'pointages', 'employe_id', 'cascade'], ['employes', 'acomptes', 'employe_id', 'cascade'],
     ['employes', 'charges', 'employe_id', 'null'],
     ['inventaires', 'inventaire_lignes', 'inventaire_id', 'cascade'],
-    ['contacts', 'paiements', 'contact_id', 'null'],
+    ['contacts', 'paiements', 'contact_id', 'null'], ['ateliers', 'paiements_ateliers', 'atelier_id', 'null'], ['productions', 'paiements_ateliers', 'production_id', 'null'],
     ['employes', 'remises_hs', 'employe_id', 'cascade'], ['documents', 'document_lignes', 'document_id', 'cascade'], ['contacts', 'documents', 'contact_id', 'null'], ['commandes', 'documents', 'commande_id', 'null'],
     ['produits', 'document_lignes', 'produit_id', 'null'], ['stock_articles', 'document_lignes', 'article_id', 'null'], ['documents', 'paiements', 'document_id', 'null']
   ];

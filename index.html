@@ -25,6 +25,7 @@
 <link rel="stylesheet" href="css/paiements.css">
 <link rel="stylesheet" href="css/commerce.css">
 <link rel="stylesheet" href="css/employes.css">
+<link rel="stylesheet" href="css/ateliers_paiements.css">
 <link rel="stylesheet" href="css/dashboard.css">
 <link rel="stylesheet" href="css/mobile.css">
 <style>
@@ -149,6 +150,7 @@
     <button type="button" class="on" data-at-tab="ateliers-pane">Ateliers</button>
     <button type="button" data-at-tab="productions-pane">Productions</button>
     <button type="button" data-at-tab="suivi-pane">Suivi & commandes</button>
+    <button type="button" data-at-tab="paie-pane">Paiements ateliers</button>
   </div>
   <div id="ateliers-pane" class="at-pane on">
     <div class="card"><div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">Ateliers partenaires</h2><button class="btn p" type="button" onclick="showFormAtelier()">+ Nouvel atelier</button></div>
@@ -171,6 +173,7 @@
         <div class="at-fields">
           <label>Atelier *<select id="prod-atelier" required></select></label><label>Modèle / produit *<input id="prod-modele" required></label>
           <label>Quantité lancée<input id="prod-quantite" type="number" min="0" value="0" required></label>
+          <label>Prix de façon d’une pièce (DA)<input id="prod-facon" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Payé à l’atelier"></label>
           <label>Client de la commande<select id="prod-contact"><option value="">Aucun contact</option></select></label>
           <label>Date de lancement *<input id="prod-date-lancement" type="date" required></label><label>Réception prévue *<input id="prod-date-reception" type="date" required></label>
           <label>Réception réelle<input id="prod-date-reelle" type="date"></label>
@@ -182,6 +185,7 @@
       <div class="at-scroll"><table><thead><tr><th>Modèle</th><th>Atelier</th><th>Quantité</th><th>Lancement</th><th>Réception prévue</th><th>Délai</th><th>Réception réelle</th><th>Statut</th><th>Commandes</th><th>Actions</th></tr></thead><tbody id="production-tbody"><tr><td colspan="10" class="at-empty">Chargement…</td></tr></tbody></table></div>
     </div>
   </div>
+  <div id="paie-pane" class="at-pane"><div id="ap-root"></div></div>
   <div id="suivi-pane" class="at-pane">
     <div class="card"><h2>Suivi des commandes</h2><div class="tools"><input id="cmd-q" type="search" placeholder="Rechercher modèle ou numéro de commande"><select id="cmd-statut"><option value="">Tous les statuts</option><option>En attente</option><option>En production</option><option>Terminée</option><option>Partiellement reçue</option><option>Reçue</option><option>Annulée</option></select><button class="btn p" type="button" onclick="showFormCommande()">+ Nouvelle commande</button></div>
       <form id="cmd-form" class="at-form" onsubmit="event.preventDefault();saveCommande()">
@@ -742,6 +746,7 @@
 <script src="js/inventaire.js"></script>
 <script src="js/simple.js"></script>
 <script src="js/yards.js"></script>
+<script src="js/ateliers_paiements.js"></script>
 <script src="js/production.js"></script>
 <script src="js/produits.js"></script>
 <script src="js/dashboard.js"></script>
