@@ -662,7 +662,7 @@ function showFormCommande() {
   const f = $a('#cmd-form'); if (!f) return;
   f.reset(); $a('#cmd-date').value = todayA(); $a('#cmd-qte').value = 1;
   $a('#cmd-recue').value = 0; $a('#cmd-status').value = 'En attente'; if ($a('#cmd-prix')) $a('#cmd-prix').value = ''; if ($a('#cmd-cout')) $a('#cmd-cout').value = '';
-  f.style.display = 'block'; majMargeCommande();
+  f.style.display = 'block'; $a('#cmd-numero').value = prochainNumeroCommande(); majMargeCommande();
 }
 function editCommande(id) {
   curCommande = COMMANDES.find(c => String(c.id) === String(id));
@@ -686,7 +686,7 @@ function editCommande(id) {
 async function saveCommande() {
   const production_id = $a('#cmd-production').value;
   const contact_id = $a('#cmd-contact').value || null;
-  const commande_numero = $a('#cmd-numero').value.trim();
+  const commande_numero = $a('#cmd-numero').value.trim() || (curCommande ? '' : prochainNumeroCommande());
   const quantite_commandee = Number($a('#cmd-qte').value) || 0;
   const quantite_recue = Number($a('#cmd-recue').value) || 0;
   const date_commande = $a('#cmd-date').value;
