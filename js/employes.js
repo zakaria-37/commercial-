@@ -396,8 +396,8 @@ function renderGrid(emp, mois) {
     const deb = p && p.heure_debut ? String(p.heure_debut).slice(0, 5) : '';
     const fin = p && p.heure_fin ? String(p.heure_fin).slice(0, 5) : '';
     html += '<tr><td>' + fdE(date) + '</td><td>' + JOURS[jourSemaine(date)] + '</td><td>S' + semaineDuMois(date) + '</td>' +
-      '<td><input id="pd-' + date + '" type="time" value="' + deb + '" onchange="savePointage(\'' + date + '\')"></td>' +
-      '<td><input id="pf-' + date + '" type="time" value="' + fin + '" onchange="savePointage(\'' + date + '\')"></td>' +
+      '<td><input id="pd-' + date + '" type="time" value="' + deb + '" oninput="ptChange(\'' + date + '\')" onchange="ptChange(\'' + date + '\')" onblur="ptFlush(\'' + date + '\')"></td>' +
+      '<td><input id="pf-' + date + '" type="time" value="' + fin + '" oninput="ptChange(\'' + date + '\')" onchange="ptChange(\'' + date + '\')" onblur="ptFlush(\'' + date + '\')"></td>' +
       '<td id="norm-' + date + '">' + (dt.norm > 0 ? fmtH(dt.norm) : '\u2014') + '</td>' +
       '<td id="sup-' + date + '">' + (dt.sup > 0 ? fmtH(dt.sup) : '\u2014') + '</td>' +
       '<td id="gain-' + date + '">' + money(p ? round2(gainPointage(p, emp)) : 0) + '</td>' +
@@ -407,6 +407,12 @@ function renderGrid(emp, mois) {
   $e('#pt-grid').innerHTML = html;
 }
 
+/* Saisie des heures : on n'enregistre pas à chaque chiffre tapé (« 1 » donne 01:00, une heure « reculée » qui faisait bugger),
+   mais quand la saisie est terminée (1,5 s sans toucher, ou en quittant la case). */
+const PT_TIMERS = {};
+function ptChange(date) { clearTimeout(PT_TIMERS[date]); PT_TIMERS[date] = setTimeout(() => savePointage(date), 1500); }
+function ptFlush(date) { if (PT_TIMERS[date]) { clearTimeout(PT_TIMERS[date]); delete PT_TIMERS[date]; savePointage(date); } }
+
 /* ---------- Sauvegarde d'un pointage ---------- */
 async function savePointage(date) {
   if (!selEmploye) return;
@@ -414,6 +420,9 @@ async function savePointage(date) {
   const fin = $e('#pf-' + date) ? $e('#pf-' + date).value : '';
   const emp = EMPLOYES.find(x => String(x.id) === String(selEmploye));
   if (!emp) return;
+  clearTimeout(PT_TIMERS[date]); delete PT_TIMERS[date];
+  // fin avant le début : saisie en cours ou erreur, on n'enregistre pas (la valeur reste dans la case pour être corrigée)
+  if (deb && fin && toMin(fin) <= toMin(deb)) { toastE('L\u2019heure de fin (' + fin + ') doit \u00eatre apr\u00e8s l\u2019heure de d\u00e9but (' + deb + ').'); return; }
 
   if (!deb && !fin) {
     // Supprimer le pointage si les deux champs sont vides
