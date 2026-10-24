@@ -36,7 +36,9 @@
     let hn = 0, hs = 0, po = 0, ps = 0;
     pts.forEach(p => { const x = detail(p, emp); hn += x.norm; hs += x.sup; po += x.norm * Number(emp.taux_horaire || 0); ps += x.sup * tauxSup(emp); });
     const ac = round2(acs.reduce((s, a) => s + Number(a.montant || 0), 0));
-    return { pts, acs, absences, jours: presents.size, hn, hs, po: round2(po), ps: round2(ps), ac, net: round2(po - ac) };
+    const rets = CREDITS.filter(r => String(r.employe_id) === String(emp.id) && r.type === 'retenue' && r.date_op >= du && r.date_op <= au);
+    const ret = round2(rets.reduce((s, r) => s + Number(r.montant || 0), 0));
+    return { pts, acs, rets, ret, credit: soldeCredit(emp.id), absences, jours: presents.size, hn, hs, po: round2(po), ps: round2(ps), ac, net: round2(po - ac - ret) };
   }
 
   function page(doc, emp, D, du, au, ENT) {
@@ -98,10 +100,12 @@
     const L = (l, v, bold, color) => { doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(bold ? 12 : 10); doc.setTextColor(...(color || [0, 0, 0])); T(l, M, y); T(v, W - M, y, { align: 'right' }); y += bold ? 8 : 6; };
     L('Salaire ordinaire (' + fmtH(D.hn) + ' x ' + money(emp.taux_horaire) + ')', money(D.po));
     L('Acomptes deja retires', '- ' + money(D.ac));
+    if (D.ret > 0) L('Retenue credit personnel', '- ' + money(D.ret));
     doc.setDrawColor(120); doc.line(M, y - 3, W - M, y - 3); y += 1;
     L('NET A PAYER (sans heures supplementaires)', money(D.net), true, D.net < 0 ? [180, 30, 30] : [30, 110, 50]);
     if (D.hs > 0) { doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(120, 80, 10); T('Heures supplementaires de la periode : ' + fmtH(D.hs) + ' = ' + money(D.ps) + ' - gardees a part (non incluses ci-dessus).', M, y); y += 6; }
-    if (D.net < 0) { doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(180, 30, 30); T('Les acomptes depassent la paie ordinaire de la periode.', M, y); y += 6; }
+    if (D.ret > 0 || D.credit > 0.004) { doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(90); T('Credit personnel restant a rembourser apres cette fiche : ' + money(Math.max(0, D.credit)) + '.', M, y); y += 6; }
+    if (D.net < 0) { doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(180, 30, 30); T('Les acomptes et retenues depassent la paie ordinaire de la periode.', M, y); y += 6; }
 
     y = Math.max(y + 8, H - 38); if (y > H - 30) { doc.addPage(); y = H - 38; }
     doc.setDrawColor(150); doc.setTextColor(60); doc.setFont('helvetica', 'normal'); doc.setFontSize(9);

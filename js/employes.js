@@ -2,7 +2,7 @@
    MARIA BAG — Employés : salaire par POINTAGE (heures par jour)
    ============================================================ */
 
-let EMPLOYES = [], ACOMPTES = [], POINTAGES = [], POINT_ALL = [], REMISES = [], hsForm = null, hsErr = '';
+let EMPLOYES = [], ACOMPTES = [], POINTAGES = [], POINT_ALL = [], REMISES = [], CREDITS = [], hsForm = null, hsErr = '', crForm = null, crErr = '';
 let curEmploye = null;
 let selEmploye = null;
 let curAcompte = null;
@@ -106,7 +106,12 @@ function salaireDuMois(emp, mois) { return round2(pointagesDuMois(emp.id, mois).
    les acomptes se déduisent de la paie ordinaire ; les heures sup sont mises de côté et remises plus tard */
 function paieOrdinaire(emp, mois) { return round2(pointagesDuMois(emp.id, mois).reduce((s, p) => s + detail(p, emp).norm * Number(emp.taux_horaire || 0), 0)); }
 function paieSup(emp, mois) { return round2(pointagesDuMois(emp.id, mois).reduce((s, p) => s + detail(p, emp).sup * tauxSup(emp), 0)); }
-function resteSalaire(emp, mois) { return round2(paieOrdinaire(emp, mois) - totalAcomptes(emp.id, mois)); }
+/* Crédit personnel : crédits accordés + soldes de départ − retenues sur salaire = reste dû par l'employé */
+function opsCr(empId) { return CREDITS.filter(r => String(r.employe_id) === String(empId)).sort((a, b) => String(b.date_op).localeCompare(String(a.date_op))); }
+function crSomme(empId, type) { return round2(opsCr(empId).filter(r => r.type === type).reduce((s, r) => s + Number(r.montant || 0), 0)); }
+function soldeCredit(empId) { return round2(crSomme(empId, 'credit') + crSomme(empId, 'report') - crSomme(empId, 'retenue')); }
+function retenueMois(empId, mois) { return round2(opsCr(empId).filter(r => r.type === 'retenue' && String(r.date_op || '').startsWith(mois)).reduce((s, r) => s + Number(r.montant || 0), 0)); }
+function resteSalaire(emp, mois) { return round2(paieOrdinaire(emp, mois) - totalAcomptes(emp.id, mois) - retenueMois(emp.id, mois)); }
 /* Heures sup mises de côté, tous mois confondus : gagné + soldes de départ − remises déjà faites */
 function supGagnee(emp) { return round2(POINT_ALL.filter(p => String(p.employe_id) === String(emp.id)).reduce((s, p) => s + detail(p, emp).sup * tauxSup(emp), 0)); }
 function opsHS(empId) { return REMISES.filter(r => String(r.employe_id) === String(empId)).sort((a, b) => String(b.date_op).localeCompare(String(a.date_op))); }
@@ -130,11 +135,12 @@ async function loadEmployes() {
 async function loadMois() {
   const mois = curMonth();
   const d1 = mois + '-01', d2 = mois + '-' + String(joursDansMois(mois)).padStart(2, '0');
-  const [a, p, pa, rm] = await Promise.all([
+  const [a, p, pa, rm, cr] = await Promise.all([
     sb.from('acomptes').select('*').gte('date_acompte', d1).lte('date_acompte', d2).order('date_acompte', { ascending: true }),
     sb.from('pointages').select('*').gte('date_pointage', d1).lte('date_pointage', d2),
     sb.from('pointages').select('*'),
-    sb.from('remises_hs').select('*')
+    sb.from('remises_hs').select('*'),
+    sb.from('credits_employes').select('*')
   ]);
   if (a.error || p.error) { showLoadError(a.error || p.error); return; }
   ACOMPTES = a.data || [];
@@ -142,6 +148,8 @@ async function loadMois() {
   POINT_ALL = pa.error ? POINTAGES : (pa.data || []);
   hsErr = rm.error ? (/does not exist|relation|schema cache/i.test(rm.error.message) ? 'Table « remises_hs » introuvable : exécutez supabase/heures_sup.sql dans SQL Editor, puis rechargez la page.' : rm.error.message) : '';
   REMISES = rm.error ? [] : (rm.data || []);
+  crErr = cr.error ? (/does not exist|relation|schema cache/i.test(cr.error.message) ? 'Table « credits_employes » introuvable : exécutez supabase/credits_employes.sql dans SQL Editor, puis rechargez la page.' : cr.error.message) : '';
+  CREDITS = cr.error ? [] : (cr.data || []);
   renderEmployes();
 }
 
@@ -164,22 +172,23 @@ function renderEmployes() {
   );
 
   if (!list.length) {
-    tb.innerHTML = '<tr><td colspan="9" class="at-empty">Aucun employ\u00e9. Cliquez sur \u00ab\u00a0+ Nouvel employ\u00e9\u00a0\u00bb.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="10" class="at-empty">Aucun employ\u00e9. Cliquez sur \u00ab\u00a0+ Nouvel employ\u00e9\u00a0\u00bb.</td></tr>';
     renderPanel(false);
     return;
   }
 
   tb.innerHTML = list.map(e => {
     const hn = heuresNormales(e, mois), hs = heuresSup(e, mois), j = joursTravailles(e.id, mois);
-    const po = paieOrdinaire(e, mois), ps = paieSup(e, mois), ac = totalAcomptes(e.id, mois), reste = round2(po - ac), st = statut(reste), solde = soldeSup(e);
+    const po = paieOrdinaire(e, mois), ps = paieSup(e, mois), ac = totalAcomptes(e.id, mois), rt = retenueMois(e.id, mois), reste = round2(po - ac - rt), st = statut(reste), solde = soldeSup(e), cred = soldeCredit(e.id);
     return '<tr' + (String(e.id) === String(selEmploye) ? ' style="background:var(--nb)"' : '') + '>' +
       '<td><b>' + escE(e.nom) + '</b> ' + escE(e.prenom) + (e.poste ? '<small>' + escE(e.poste) + '</small>' : '') + '</td>' +
       '<td>' + money(e.taux_horaire) + ' / h<small>Sup : ' + money(tauxSup(e)) + ' / h</small></td>' +
       '<td><b>' + fmtH(hn) + '</b><small>' + j + ' jour' + (j > 1 ? 's' : '') + ' \u00b7 Sup : ' + (hs > 0 ? fmtH(hs) : '\u2014') + '</small></td>' +
       '<td>' + money(po) + '</td>' +
       '<td>' + (ps > 0 ? '<b style="color:#8a5a12">' + money(ps) + '</b><br><small>mise de côté</small>' : '\u2014') + '</td>' +
-      '<td>' + money(ac) + '</td>' +
+      '<td>' + money(ac) + (rt > 0 ? '<small style="color:#b3261e">Retenue cr\u00e9dit : ' + money(rt) + '</small>' : '') + '</td>' +
       '<td><b style="color:' + st.color + '">' + money(reste) + '</b><br><small style="color:' + st.color + '">' + st.txt + '</small></td>' +
+      '<td>' + (cred > 0.004 ? '<b style="color:#b3261e">' + money(cred) + '</b><small>\u00e0 rembourser</small>' : (cred < -0.004 ? '<small>trop rembours\u00e9 ' + money(-cred) + '</small>' : '<small>\u2014</small>')) + '</td>' +
       '<td>' + (solde > 0.004 ? '<b style="color:#8a5a12">' + money(solde) + '</b>' : '<small>' + (solde < -0.004 ? 'avance ' + money(-solde) : '\u2014') + '</small>') + '</td>' +
       '<td class="emp-act">' +
         '<button class="btn s p" type="button" onclick="openAcomptes(\'' + e.id + '\')">Pointage</button>' +
@@ -193,6 +202,7 @@ function renderEmployes() {
     money(list.reduce((s, e) => s + paieSup(e, mois), 0)) + '</td><td>' +
     money(list.reduce((s, e) => s + totalAcomptes(e.id, mois), 0)) + '</td><td>' +
     money(list.reduce((s, e) => s + resteSalaire(e, mois), 0)) + '</td><td>' +
+    money(list.reduce((s, e) => s + Math.max(0, soldeCredit(e.id)), 0)) + '</td><td>' +
     money(list.reduce((s, e) => s + Math.max(0, soldeSup(e)), 0)) + '</td><td></td></tr>';
 
   renderPanel(false);
@@ -292,8 +302,8 @@ function renderPanel(skipGrid) {
   const mois = curMonth(), taux = Number(emp.taux_horaire || 0);
   const items = acomptesDuMois(emp.id, mois);
   const jours = joursTravailles(emp.id, mois);
-  const po = paieOrdinaire(emp, mois), ps = paieSup(emp, mois), ac = totalAcomptes(emp.id, mois);
-  const reste = round2(po - ac), st = statut(reste);
+  const po = paieOrdinaire(emp, mois), ps = paieSup(emp, mois), ac = totalAcomptes(emp.id, mois), rt = retenueMois(emp.id, mois);
+  const reste = round2(po - ac - rt), st = statut(reste);
   const nbSem = Math.ceil(joursDansMois(mois) / 7);
 
   $e('#ac-title').textContent = 'Pointage et acomptes \u2014 ' + emp.nom + ' ' + (emp.prenom || '') + ' (' + mois.split('-').reverse().join('/') + ')';
@@ -307,6 +317,7 @@ function renderPanel(skipGrid) {
     '<div class="at-stat"><span>Paie ordinaire du mois</span><b>' + money(po) + '</b></div>' +
     '<div class="at-stat"><span>Paie heures sup (mise de c\u00f4t\u00e9)</span><b style="color:#8a5a12">' + money(ps) + '</b></div>' +
     '<div class="at-stat"><span>Acomptes d\u00e9j\u00e0 vers\u00e9s</span><b>' + money(ac) + '</b></div>' +
+    (rt > 0 ? '<div class="at-stat"><span>Retenue cr\u00e9dit personnel (ce mois)</span><b style="color:#b3261e">' + money(rt) + '</b></div>' : '') +
     '<div class="at-stat"><span>Reste \u00e0 payer (paie ordinaire) \u2014 ' + st.txt + '</span><b style="color:' + st.color + '">' + money(reste) + '</b></div>';
   if (taux === 0) resume += '<div class="at-stat" style="grid-column:1/-1;color:var(--r)">\u26a0 Le taux horaire est \u00e0 0\u00a0DA : cliquez sur \u00ab\u00a0Modifier\u00a0\u00bb pour l\u2019indiquer.</div>';
   if (hs > 0 && !(Number(emp.taux_heure_sup) > 0)) resume += '<div class="at-stat" style="grid-column:1/-1;color:var(--r)">\u26a0 Le taux des heures suppl\u00e9mentaires n\u2019est pas d\u00e9fini : elles sont pay\u00e9es au taux normal. Cliquez sur \u00ab\u00a0Modifier\u00a0\u00bb pour l\u2019indiquer.</div>';
@@ -327,10 +338,12 @@ function renderPanel(skipGrid) {
     cumul = round2(cumul + gain - a); totHn += hN; totHs += hS; totG += gain; totS += gainS; totA += a;
     rows += '<tr><td>' + labelSemaine(s, mois) + '</td><td>' + (hN ? fmtH(hN) : '\u2014') + '</td><td>' + (hS ? fmtH(hS) : '\u2014') + '</td><td>' + (gain ? money(gain) : '\u2014') + '</td><td>' + (gainS ? money(gainS) : '\u2014') + '</td><td>' + (a ? money(a) : '\u2014') + '</td><td>' + money(cumul) + '</td></tr>';
   }
+  if (rt > 0) { cumul = round2(cumul - rt); totA += rt; rows += '<tr><td>Retenue cr\u00e9dit personnel</td><td></td><td></td><td></td><td></td><td>' + money(rt) + '</td><td>' + money(cumul) + '</td></tr>'; }
   rows += '<tr style="font-weight:700;background:var(--nb)"><td>Total du mois</td><td>' + fmtH(totHn) + '</td><td>' + fmtH(totHs) + '</td><td>' + money(totG) + '</td><td>' + money(totS) + '</td><td>' + money(totA) + '</td><td style="color:' + st.color + '">' + money(reste) + '</td></tr>';
   $e('#ac-semaines').innerHTML = rows;
 
   renderHS(emp, mois, ps);
+  renderCredit(emp, mois);
 
   // Détail des acomptes
   $e('#ac-liste').innerHTML = items.length ? items.map(a =>
@@ -384,6 +397,52 @@ async function hsSupprimer(id) {
   REMISES = REMISES.filter(x => String(x.id) !== String(id)); renderPanel(true); renderEmployes();
 }
 document.addEventListener('submit', ev => { if (ev.target.id === 'hs-form') { ev.preventDefault(); hsEnregistrer(); } });
+
+/* ---------- Crédit personnel de l'employé (hors travail) ---------- */
+function renderCredit(emp, mois) {
+  const box = $e('#cr-box'); if (!box) return;
+  if (crErr) { box.innerHTML = '<div class="at-stat" style="color:var(--r)">' + escE(crErr) + '</div>'; return; }
+  const cr = crSomme(emp.id, 'credit'), rep = crSomme(emp.id, 'report'), ret = crSomme(emp.id, 'retenue'), solde = soldeCredit(emp.id), ops = opsCr(emp.id), rt = retenueMois(emp.id, mois);
+  const T = { credit: 'Cr\u00e9dit accord\u00e9', retenue: 'Retenue sur salaire', report: 'Solde de d\u00e9part' };
+  let h = '<h2>Cr\u00e9dit personnel</h2><p class="pr-help">Argent que vous avancez \u00e0 l\u2019employ\u00e9 <b>en dehors du travail</b> (mariage, urgence\u2026). Chaque fin de mois, enregistrez la <b>retenue sur salaire</b> : elle est d\u00e9duite du reste \u00e0 payer du mois et le cr\u00e9dit diminue automatiquement.</p>' +
+    '<div class="at-stats"><div class="at-stat"><span>Cr\u00e9dits accord\u00e9s' + (rep ? ' (+ ' + money(rep) + ' avant la plateforme)' : '') + '</span><b>' + money(cr + rep) + '</b></div>' +
+    '<div class="at-stat"><span>D\u00e9j\u00e0 rembours\u00e9</span><b>' + money(ret) + '</b></div>' +
+    '<div class="at-stat"><span>Retenue ce mois-ci</span><b>' + money(rt) + '</b></div>' +
+    '<div class="at-stat"><span>' + (solde < 0 ? 'Trop rembours\u00e9' : 'Reste \u00e0 rembourser') + '</span><b style="color:' + (solde > 0.004 ? '#b3261e' : solde < -0.004 ? '#8a5a12' : '#1e6e32') + '">' + money(Math.abs(solde)) + '</b></div></div>';
+  if (crForm) {
+    const t = crForm.type, aff = escE(emp.nom), reste = round2(paieOrdinaire(emp, mois) - totalAcomptes(emp.id, mois) - rt);
+    h += '<form id="cr-form" class="at-form" style="display:block"><h3 style="margin-top:0">' + (t === 'credit' ? 'Nouveau cr\u00e9dit pour ' + aff : t === 'retenue' ? 'Retenue sur le salaire de ' + aff + ' (' + mois.split('-').reverse().join('/') + ')' : 'Solde de d\u00e9part (cr\u00e9dit d\u00fb avant la plateforme)') + '</h3>' +
+      '<div class="at-fields"><label>Date<input id="cr-date" type="date" value="' + (t === 'retenue' && !isoE(new Date()).startsWith(mois) ? mois + '-' + String(joursDansMois(mois)).padStart(2, '0') : isoE(new Date())) + '"></label>' +
+      '<label>Montant (DA) *<input id="cr-montant" type="number" min="0" step="0.01" inputmode="decimal" required value="' + (t === 'retenue' && solde > 0 ? Math.min(solde, Math.max(0, reste)) : '') + '"></label>' +
+      '<label>Note<input id="cr-note" maxlength="150" placeholder="' + (t === 'credit' ? 'Ex : mariage, urgence\u2026' : 'Facultatif') + '"></label></div>' +
+      (t === 'retenue' ? '<p class="pr-help" style="margin:4px 0">Reste \u00e0 payer ce mois avant retenue : <b>' + money(reste + 0) + '</b> \u00b7 cr\u00e9dit \u00e0 rembourser : <b>' + money(Math.max(0, solde)) + '</b></p>' : '') +
+      '<div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="crFermer()">Annuler</button></div></form>';
+  } else h += '<div class="at-actions"><button class="btn p" type="button" onclick="crOuvrir(\'credit\')">+ Accorder un cr\u00e9dit</button><button class="btn" type="button" onclick="crOuvrir(\'retenue\')">Retenue sur le salaire du mois</button><button class="btn" type="button" onclick="crOuvrir(\'report\')">Solde de d\u00e9part</button></div>';
+  h += ops.length ? '<div class="at-scroll"><table style="min-width:0"><thead><tr><th>Date</th><th>Type</th><th>Montant</th><th>Note</th><th></th></tr></thead><tbody>' +
+    ops.map(r => '<tr><td>' + fdE(r.date_op) + '</td><td>' + T[r.type] + '</td><td><b style="color:' + (r.type === 'retenue' ? '#1e6e32' : '#b3261e') + '">' + (r.type === 'retenue' ? '\u2212 ' : '+ ') + money(r.montant) + '</b></td><td>' + escE(r.note || '') + '</td><td><button class="btn s d" type="button" onclick="crSupprimer(\'' + r.id + '\')">Supprimer</button></td></tr>').join('') + '</tbody></table></div>' : '';
+  box.innerHTML = h;
+}
+function crOuvrir(type) { crForm = { type }; const emp = EMPLOYES.find(x => String(x.id) === String(selEmploye)); if (emp) renderCredit(emp, curMonth()); const m = $e('#cr-montant'); if (m) { m.focus(); m.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }
+function crFermer() { crForm = null; renderPanel(true); }
+async function crEnregistrer() {
+  const emp = EMPLOYES.find(x => String(x.id) === String(selEmploye)); if (!emp || !crForm) return;
+  const montant = parseFloat($e('#cr-montant').value) || 0, date = $e('#cr-date').value, type = crForm.type;
+  if (montant <= 0) { toastE('Le montant doit \u00eatre sup\u00e9rieur \u00e0 0.'); return; }
+  if (!date) { toastE('La date est obligatoire.'); return; }
+  if (type === 'retenue' && montant > soldeCredit(emp.id) + 0.004 && !confirm('Cette retenue (' + money(montant) + ') d\u00e9passe le cr\u00e9dit \u00e0 rembourser (' + money(Math.max(0, soldeCredit(emp.id))) + ').\nContinuer ?')) return;
+  const r = await sb.from('credits_employes').insert([{ employe_id: emp.id, date_op: date, type, montant: round2(montant), note: $e('#cr-note').value.trim() }]).select();
+  if (r.error) { toastE('Erreur : ' + errMsgE(r.error)); return; }
+  CREDITS.push(r.data[0]); crForm = null;
+  toastE(type === 'credit' ? 'Cr\u00e9dit enregistr\u00e9 : ' + money(montant) : type === 'retenue' ? 'Retenue enregistr\u00e9e : ' + money(montant) + ' \u2014 d\u00e9duite du salaire.' : 'Solde de d\u00e9part enregistr\u00e9.');
+  renderPanel(true); renderEmployes();
+}
+async function crSupprimer(id) {
+  if (!confirm('Supprimer cette op\u00e9ration ? Le cr\u00e9dit et le reste \u00e0 payer seront recalcul\u00e9s.')) return;
+  const r = await sb.from('credits_employes').delete().eq('id', id);
+  if (r.error) { toastE('Erreur : ' + errMsgE(r.error)); return; }
+  CREDITS = CREDITS.filter(x => String(x.id) !== String(id)); renderPanel(true); renderEmployes();
+}
+document.addEventListener('submit', ev => { if (ev.target.id === 'cr-form') { ev.preventDefault(); crEnregistrer(); } });
 
 /* ---------- Grille de pointage ---------- */
 function renderGrid(emp, mois) {
@@ -576,6 +635,8 @@ function exportEmployes() {
     for (let s = 1; s <= nbSem; s++)
       r['Acompte S' + s] = round2(its.filter(a => semaineDuMois(a.date_acompte) === s).reduce((t, a) => t + Number(a.montant || 0), 0));
     r['Total acomptes'] = totalAcomptes(e.id, mois);
+    r['Retenue cr\u00e9dit perso'] = retenueMois(e.id, mois);
+    r['Cr\u00e9dit perso restant d\u00fb'] = soldeCredit(e.id);
     r['Reste \u00e0 payer'] = resteSalaire(e, mois);
     r['Statut'] = statut(r['Reste \u00e0 payer']).txt;
     r['Heures sup \u00e0 remettre (cumul)'] = soldeSup(e);

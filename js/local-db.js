@@ -21,7 +21,7 @@
 
   // Ordre = parents d'abord (important pour envoyer les nouvelles lignes à Supabase)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants', 'productions', 'commandes',
-                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers'];
+                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers', 'credits_employes'];
 
   // Valeurs par défaut (les mêmes que dans les fichiers supabase/*.sql)
   var DEFAULTS = {
@@ -48,6 +48,7 @@
     document_lignes: { produit_id: null, article_id: null, designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, quantite_recue: 0, ordre: 0 },
     parametres: { valeur: {} },
     remises_hs: { date_op: null, type: 'remise', note: '' },
+    credits_employes: { date_op: null, type: 'credit', note: '' },
     inventaires: { annee: 0, date_inventaire: null, statut: 'brouillon', debut_periode: null, ventes: 0, achats: 0, valeur_nette: 0, stock_applique: false, notes: '', cloture_le: null },
     inventaire_lignes: { ref_id: null, libelle: '', detail: '', unite: '', quantite_theorique: null, quantite: null, prix_unitaire: 0, cond_nom: '', cond_qte: 0, prix_vente: 0, montant: 0, note: '', ordre: 0 },
     produit_lignes: { categorie: 'Autre outil', designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, perte_pct: 0, note: '', ordre: 0, article_id: null }
@@ -76,7 +77,7 @@
     ['employes', 'charges', 'employe_id', 'null'],
     ['inventaires', 'inventaire_lignes', 'inventaire_id', 'cascade'],
     ['contacts', 'paiements', 'contact_id', 'null'], ['ateliers', 'paiements_ateliers', 'atelier_id', 'null'], ['productions', 'paiements_ateliers', 'production_id', 'null'],
-    ['employes', 'remises_hs', 'employe_id', 'cascade'], ['documents', 'document_lignes', 'document_id', 'cascade'], ['contacts', 'documents', 'contact_id', 'null'], ['commandes', 'documents', 'commande_id', 'null'],
+    ['employes', 'remises_hs', 'employe_id', 'cascade'], ['employes', 'credits_employes', 'employe_id', 'cascade'], ['documents', 'document_lignes', 'document_id', 'cascade'], ['contacts', 'documents', 'contact_id', 'null'], ['commandes', 'documents', 'commande_id', 'null'],
     ['produits', 'document_lignes', 'produit_id', 'null'], ['stock_articles', 'document_lignes', 'article_id', 'null'], ['documents', 'paiements', 'document_id', 'null']
   ];
 
