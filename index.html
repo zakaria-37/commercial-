@@ -228,6 +228,9 @@
   <div class="card"><h2>Salaires du mois : paie ordinaire − acomptes ; heures sup mises de côté à part</h2>
     <div class="at-scroll"><table id="emp-table"><thead><tr><th>Employé</th><th>Taux horaire</th><th>Jours · heures</th><th>Paie ordinaire</th><th>Paie heures sup</th><th>Acomptes</th><th>Reste à payer</th><th>Crédit perso</th><th>H. sup à remettre</th><th>Actions</th></tr></thead><tbody id="emp-tbody"><tr><td colspan="10" class="at-empty">Chargement…</td></tr></tbody></table></div>
   </div>
+  <div class="card" style="margin-top:16px"><div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">Cumul des heures sup mises de côté (mois par mois)</h2><button class="btn" type="button" onclick="hsCumulPdf()">Imprimer (PDF)</button><button class="btn" type="button" onclick="hsCumulExcel()">Exporter Excel</button></div>
+    <p class="pr-help" style="margin:4px 0 10px">Le total de ce que vous devez remettre à chaque employé le jour où vous payez ses heures sup : somme de tous les mois, moins ce qui a déjà été remis.</p>
+    <div id="hs-cumul"></div></div>
   <div class="card" id="ac-panel" style="display:none;margin-top:16px">
     <div class="at-actions" style="margin-top:0"><h2 id="ac-title" style="margin-right:auto"></h2><button class="btn" type="button" onclick="closeAcomptes()">Fermer</button></div>
     <div id="ac-resume" class="at-stats"></div>
@@ -736,6 +739,7 @@
 <script src="js/app.js"></script>
 <script src="js/ateliers.js"></script>
 <script src="js/employes.js"></script>
+<script src="js/hs_cumul.js"></script>
 <script src="js/fiche_paie.js"></script>
 <script src="js/charges.js"></script>
 <script src="js/stock.js"></script>

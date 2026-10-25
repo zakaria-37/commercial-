@@ -174,6 +174,7 @@ function renderEmployes() {
   if (!list.length) {
     tb.innerHTML = '<tr><td colspan="10" class="at-empty">Aucun employ\u00e9. Cliquez sur \u00ab\u00a0+ Nouvel employ\u00e9\u00a0\u00bb.</td></tr>';
     renderPanel(false);
+    if (typeof renderHSCumul === 'function') renderHSCumul();
     return;
   }
 
@@ -206,6 +207,7 @@ function renderEmployes() {
     money(list.reduce((s, e) => s + Math.max(0, soldeSup(e)), 0)) + '</td><td></td></tr>';
 
   renderPanel(false);
+  if (typeof renderHSCumul === 'function') renderHSCumul();
 }
 
 /* ---------- Formulaire employé : afficher / cacher ---------- */
