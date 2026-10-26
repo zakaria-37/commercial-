@@ -97,6 +97,18 @@ function gainPointage(p, emp) {
   const d = detail(p, emp);
   return d.norm * Number(emp.taux_horaire || 0) + d.sup * tauxSup(emp);
 }
+/* Jours d'absence : jour marqué « Absent » (même un jour de repos) + jour ouvré passé sans aucune heure pointée */
+function joursAbsents(empId, du, au) {
+  const repos = $e('#pt-repos') ? Number($e('#pt-repos').value) : 5, today = isoE(new Date());
+  const mine = POINT_ALL.filter(p => String(p.employe_id) === String(empId) && p.date_pointage >= du && p.date_pointage <= au);
+  const presents = new Set(mine.filter(p => hrs(p) > 0).map(p => p.date_pointage)), marques = new Set(mine.filter(p => p.absent).map(p => p.date_pointage));
+  const out = [];
+  for (let [y, m, d] = du.split('-').map(Number), cur = du; cur <= au; d++, cur = isoE(new Date(y, m - 1, d))) {
+    if (presents.has(cur)) continue;
+    if (marques.has(cur) || (cur <= today && jourSemaine(cur) !== repos)) out.push(cur);
+  }
+  return out;
+}
 function heuresDuMois(empId, mois) { return pointagesDuMois(empId, mois).reduce((s, p) => s + hrs(p), 0); }
 function heuresNormales(emp, mois) { return pointagesDuMois(emp.id, mois).reduce((s, p) => s + detail(p, emp).norm, 0); }
 function heuresSup(emp, mois) { return pointagesDuMois(emp.id, mois).reduce((s, p) => s + detail(p, emp).sup, 0); }
@@ -307,6 +319,7 @@ function renderPanel(skipGrid) {
   const po = paieOrdinaire(emp, mois), ps = paieSup(emp, mois), ac = totalAcomptes(emp.id, mois), rt = retenueMois(emp.id, mois);
   const reste = round2(po - ac - rt), st = statut(reste);
   const nbSem = Math.ceil(joursDansMois(mois) / 7);
+  const nbAbs = joursAbsents(emp.id, mois + '-01', mois + '-' + String(joursDansMois(mois)).padStart(2, '0')).length;
 
   $e('#ac-title').textContent = 'Pointage et acomptes \u2014 ' + emp.nom + ' ' + (emp.prenom || '') + ' (' + mois.split('-').reverse().join('/') + ')';
 
@@ -316,6 +329,7 @@ function renderPanel(skipGrid) {
     '<div class="at-stat"><span>Taux heure sup</span><b>' + money(tauxSup(emp)) + '</b></div>' +
     '<div class="at-stat"><span>Heures normales (' + jours + ' jour' + (jours > 1 ? 's' : '') + ', jusqu\u2019\u00e0 ' + finNormale(emp) + ')</span><b>' + fmtH(hn) + '</b></div>' +
     '<div class="at-stat"><span>Heures suppl\u00e9mentaires</span><b>' + (hs > 0 ? fmtH(hs) : '\u2014') + '</b></div>' +
+    '<div class="at-stat"><span>Jours d\u2019absence</span><b style="color:' + (nbAbs ? '#b3261e' : 'inherit') + '">' + nbAbs + '</b></div>' +
     '<div class="at-stat"><span>Paie ordinaire du mois</span><b>' + money(po) + '</b></div>' +
     '<div class="at-stat"><span>Paie heures sup (mise de c\u00f4t\u00e9)</span><b style="color:#8a5a12">' + money(ps) + '</b></div>' +
     '<div class="at-stat"><span>Acomptes d\u00e9j\u00e0 vers\u00e9s</span><b>' + money(ac) + '</b></div>' +
@@ -453,19 +467,40 @@ function renderGrid(emp, mois) {
   let html = '';
   for (let d = 1; d <= joursDansMois(mois); d++) {
     const date = mois + '-' + String(d).padStart(2, '0');
-    const p = map[date], dt = p ? detail(p, emp) : { norm: 0, sup: 0 };
+    const p = map[date], dt = p ? detail(p, emp) : { norm: 0, sup: 0 }, abs = !!(p && p.absent);
     const deb = p && p.heure_debut ? String(p.heure_debut).slice(0, 5) : '';
     const fin = p && p.heure_fin ? String(p.heure_fin).slice(0, 5) : '';
-    html += '<tr><td>' + fdE(date) + '</td><td>' + JOURS[jourSemaine(date)] + '</td><td>S' + semaineDuMois(date) + '</td>' +
+    html += '<tr' + (abs ? ' style="background:#fdecea"' : '') + '><td>' + fdE(date) + '</td><td>' + JOURS[jourSemaine(date)] + '</td><td>S' + semaineDuMois(date) + '</td>' +
       '<td><input id="pd-' + date + '" type="time" value="' + deb + '" oninput="ptChange(\'' + date + '\')" onchange="ptChange(\'' + date + '\')" onblur="ptFlush(\'' + date + '\')"></td>' +
       '<td><input id="pf-' + date + '" type="time" value="' + fin + '" oninput="ptChange(\'' + date + '\')" onchange="ptChange(\'' + date + '\')" onblur="ptFlush(\'' + date + '\')"></td>' +
-      '<td id="norm-' + date + '">' + (dt.norm > 0 ? fmtH(dt.norm) : '\u2014') + '</td>' +
+      '<td id="norm-' + date + '">' + (abs ? '<b style="color:#b3261e">Absent</b>' : dt.norm > 0 ? fmtH(dt.norm) : '\u2014') + '</td>' +
       '<td id="sup-' + date + '">' + (dt.sup > 0 ? fmtH(dt.sup) : '\u2014') + '</td>' +
       '<td id="gain-' + date + '">' + money(p ? round2(gainPointage(p, emp)) : 0) + '</td>' +
       '<td><button class="btn s" type="button" onclick="quickPointage(\'' + date + '\', true)">Pr\u00e9sent</button> ' +
+      '<button class="btn s' + (abs ? ' d' : '') + '" type="button" onclick="absentPointage(\'' + date + '\')">Absent</button> ' +
       '<button class="btn s" type="button" onclick="quickPointage(\'' + date + '\', false)">Effacer</button></td></tr>';
   }
   $e('#pt-grid').innerHTML = html;
+}
+
+/* Marquer un jour « Absent » : enregistré (apparaît sur la fiche de paie), sans heures */
+async function absentPointage(date) {
+  if (!selEmploye) return;
+  clearTimeout(PT_TIMERS[date]); delete PT_TIMERS[date];
+  const existing = POINTAGES.find(p => String(p.employe_id) === String(selEmploye) && p.date_pointage === date);
+  const payload = { employe_id: selEmploye, date_pointage: date, heure_debut: null, heure_fin: null, heures: 0, absent: true };
+  let res;
+  if (existing) {
+    res = await sb.from('pointages').update(payload).eq('id', existing.id).select();
+    if (!res.error && res.data && res.data[0]) { const i = POINTAGES.findIndex(p => String(p.id) === String(existing.id)); if (i !== -1) POINTAGES[i] = res.data[0]; }
+  } else {
+    res = await sb.from('pointages').insert([payload]).select();
+    if (!res.error && res.data && res.data[0]) POINTAGES.push(res.data[0]);
+  }
+  if (res.error) { toastE('Erreur pointage : ' + errMsgE(res.error)); return; }
+  POINT_ALL = POINT_ALL.filter(p => !(String(p.employe_id) === String(selEmploye) && p.date_pointage === date)); if (res.data && res.data[0]) POINT_ALL.push(res.data[0]);
+  const emp = EMPLOYES.find(x => String(x.id) === String(selEmploye)); renderGrid(emp, curMonth()); renderPanel(true); renderEmployes();
+  toastE('Absence enregistr\u00e9e le ' + fdE(date) + '.');
 }
 
 /* Saisie des heures : on n'enregistre pas à chaque chiffre tapé (« 1 » donne 01:00, une heure « reculée » qui faisait bugger),
@@ -492,7 +527,7 @@ async function savePointage(date) {
     if (idx !== -1) POINTAGES.splice(idx, 1);
   } else {
     const existing = POINTAGES.find(p => String(p.employe_id) === String(selEmploye) && p.date_pointage === date);
-    const payload = { employe_id: selEmploye, date_pointage: date, heure_debut: deb || null, heure_fin: fin || null };
+    const payload = { employe_id: selEmploye, date_pointage: date, heure_debut: deb || null, heure_fin: fin || null, absent: false };
     let res;
     if (existing) {
       res = await sb.from('pointages').update(payload).eq('id', existing.id).select();
@@ -507,11 +542,12 @@ async function savePointage(date) {
     if (res.error) { toastE('Erreur pointage : ' + errMsgE(res.error)); return; }
   }
 
+  { const cur = POINTAGES.find(p => String(p.employe_id) === String(selEmploye) && p.date_pointage === date); POINT_ALL = POINT_ALL.filter(p => !(String(p.employe_id) === String(selEmploye) && p.date_pointage === date)); if (cur) POINT_ALL.push(cur); }
   // Mise à jour en live de la ligne
   const updatedEmp = EMPLOYES.find(x => String(x.id) === String(selEmploye));
   const updatedP = POINTAGES.find(p => String(p.employe_id) === String(selEmploye) && p.date_pointage === date);
   const dt = updatedP ? detail(updatedP, updatedEmp) : { norm: 0, sup: 0 };
-  if ($e('#norm-' + date)) $e('#norm-' + date).textContent = dt.norm > 0 ? fmtH(dt.norm) : '\u2014';
+  if ($e('#norm-' + date)) $e('#norm-' + date).textContent = updatedP && updatedP.absent ? 'Absent' : dt.norm > 0 ? fmtH(dt.norm) : '\u2014';
   if ($e('#sup-' + date)) $e('#sup-' + date).textContent = dt.sup > 0 ? fmtH(dt.sup) : '\u2014';
   if ($e('#gain-' + date)) $e('#gain-' + date).textContent = money(updatedP ? round2(gainPointage(updatedP, updatedEmp)) : 0);
 

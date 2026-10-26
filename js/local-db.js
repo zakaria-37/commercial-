@@ -33,7 +33,7 @@
                  statut: 'En attente', notes: '', prix_unitaire: 0, cout_unitaire: 0 },
     employes: { prenom: '', poste: '', salaire_mensuel: 0, taux_horaire: 0, taux_heure_sup: 0, heure_fin_normale: '19:00', notes: '' },
     acomptes: { montant: 0, note: '' },
-    pointages: { heures: 0, heure_debut: null, heure_fin: null },
+    pointages: { heures: 0, heure_debut: null, heure_fin: null, absent: false },
     charges: { montant: 0, employe_id: null, employe_nom: '', note: '' },
     modeles: { description: '' },
     composants: { unite: 'pcs', quantite: 0, perte_pct: 0, note: '', ordre: 0, article_id: null, type: 'matiere', prix_unitaire: 0 },

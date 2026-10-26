@@ -29,10 +29,8 @@
     const r = await sb.from('acomptes').select('*').eq('employe_id', emp.id).gte('date_acompte', du).lte('date_acompte', au).order('date_acompte', { ascending: true });
     if (r.error) throw new Error(r.error.message);
     acs = r.data || [];
-    const repos = $e('#pt-repos') ? Number($e('#pt-repos').value) : 5, today = isoE(new Date());
     const presents = new Set(pts.filter(p => hrs(p) > 0).map(p => p.date_pointage));
-    const absences = [];
-    for (let d = du; d <= au && d <= today; d = addDay(d)) if (jourSemaine(d) !== repos && !presents.has(d)) absences.push(d);
+    const absences = joursAbsents(emp.id, du, au);
     let hn = 0, hs = 0, po = 0, ps = 0;
     pts.forEach(p => { const x = detail(p, emp); hn += x.norm; hs += x.sup; po += x.norm * Number(emp.taux_horaire || 0); ps += x.sup * tauxSup(emp); });
     const ac = round2(acs.reduce((s, a) => s + Number(a.montant || 0), 0));
@@ -73,15 +71,21 @@
     });
 
     // Détail journalier
-    const jours = D.pts.filter(p => hrs(p) > 0).map(p => {
-      const x = detail(p, emp), d = p.date_pointage;
-      return [fdl(d), JOURS[jourSemaine(d)], p.heure_debut ? String(p.heure_debut).slice(0, 5) : '', p.heure_fin ? String(p.heure_fin).slice(0, 5) : '', fmtH(x.norm), x.sup > 0 ? fmtH(x.sup) : '-', money(round2(x.norm * Number(emp.taux_horaire || 0)))];
-    });
+    // chaque jour de la période apparaît : travaillé, ABSENT, ou repos (aucun jour sauté)
+    const today = isoE(new Date()), repos = $e('#pt-repos') ? Number($e('#pt-repos').value) : 5, abs = new Set(D.absences), parJour = {}, kinds = [], jours = [];
+    D.pts.forEach(p => { parJour[p.date_pointage] = p; });
+    for (let d = du; d <= au; d = addDay(d)) {
+      const p = parJour[d];
+      if (p && hrs(p) > 0) { const x = detail(p, emp); kinds.push('p'); jours.push([fdl(d), JOURS[jourSemaine(d)], p.heure_debut ? String(p.heure_debut).slice(0, 5) : '', p.heure_fin ? String(p.heure_fin).slice(0, 5) : '', fmtH(x.norm), x.sup > 0 ? fmtH(x.sup) : '-', money(round2(x.norm * Number(emp.taux_horaire || 0)))]); }
+      else if (abs.has(d)) { kinds.push('a'); jours.push([fdl(d), JOURS[jourSemaine(d)], 'ABSENT', '', '', '', money(0)]); }
+      else if (d <= today && jourSemaine(d) === repos) { kinds.push('r'); jours.push([fdl(d), JOURS[jourSemaine(d)], 'Repos', '', '', '', '-']); }
+    }
     doc.autoTable({
       startY: doc.lastAutoTable.finalY + 6, margin: { left: M, right: M, bottom: 20 }, theme: 'grid', styles: { fontSize: 8.5, cellPadding: 1.6 },
       headStyles: { fillColor: [74, 44, 42], textColor: 255 },
       head: [['Date', 'Jour', 'Debut', 'Fin', 'H. normales', 'H. sup', 'Gain du jour (hors sup)'].map(pdfT)],
       body: (jours.length ? jours : [['Aucun pointage sur cette periode', '', '', '', '', '', '']]).map(r => r.map(pdfT)),
+      didParseCell: d => { if (d.section === 'body' && kinds[d.row.index] === 'a') { d.cell.styles.textColor = [179, 38, 30]; d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [253, 236, 234]; } else if (d.section === 'body' && kinds[d.row.index] === 'r') d.cell.styles.textColor = [130, 130, 130]; },
       columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } }
     });
 
