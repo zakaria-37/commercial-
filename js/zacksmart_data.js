@@ -78,13 +78,14 @@
     const mois = (typeof curMonth === 'function') ? curMonth() : new Date().toISOString().slice(0, 7);
     const m = tk.length ? EMPLOYES.filter(e => matchTxt(tk, [e.nom, e.prenom, e.poste].join(' '))) : [];
     const lst = (m.length ? m : EMPLOYES).slice(0, 25);
-    let t = '== EMPLOYÉS (mois affiché dans la page Employés : ' + mois + ') ==\nRègles : heures normales payées au taux horaire jusqu\'à la fin de journée (19h), heures sup payées à part (mises de côté), net = paie ordinaire − acomptes − retenue de crédit personnel.\n';
+    let t = '== EMPLOYÉS (mois affiché dans la page Employés : ' + mois + ') ==\nRÈGLE ABSOLUE : « le salaire » d\'un employé = SALAIRE FINAL À PAYER = paie des heures normales (jusqu\'à 19h) − acomptes − retenue de crédit personnel. Les heures supplémentaires sont gardées à part par l\'employeur : ne les ajoute JAMAIS au salaire et ne calcule aucun « total brut » avec elles. Donne en premier le SALAIRE FINAL.\n';
     let tot = { po: 0, ps: 0, reste: 0, cred: 0, sup: 0 };
     const ligne = e => { const po = paieOrdinaire(e, mois), ps = paieSup(e, mois), ac = totalAcomptes(e.id, mois), rt = retenueMois(e.id, mois), reste = resteSalaire(e, mois), cred = soldeCredit(e.id), sup = soldeSup(e), hn = heuresNormales(e, mois), hs = heuresSup(e, mois), j = joursTravailles(e.id, mois);
-      return '- ' + e.nom + ' ' + (e.prenom || '') + (e.poste ? ' (' + e.poste + ')' : '') + ' : taux ' + f2(e.taux_horaire) + ' DA/h (sup ' + f2(tauxSup(e)) + ') ; ' + j + ' jours, ' + f2(hn) + ' h normales, ' + f2(hs) + ' h sup ; paie ordinaire ' + f2(po) + ' DA ; acomptes ' + f2(ac) + ' ; retenue crédit ' + f2(rt) + ' ; RESTE À PAYER ' + f2(reste) + ' DA ; paie heures sup du mois ' + f2(ps) + ' ; heures sup cumulées à remettre ' + f2(sup) + ' DA ; crédit personnel à rembourser ' + f2(cred) + ' DA'; };
+      return '- ' + e.nom + ' ' + (e.prenom || '') + (e.poste ? ' (' + e.poste + ')' : '') + ' : SALAIRE FINAL À PAYER ' + f2(reste) + ' DA = paie des heures normales ' + f2(po) + ' DA (' + f2(hn) + ' h × ' + f2(e.taux_horaire) + ' DA/h, ' + j + ' jours travaillés) − acomptes ' + f2(ac) + ' DA' + (rt > 0 ? ' − retenue crédit personnel ' + f2(rt) + ' DA' : '') +
+        ' ‖ à part, NON inclus dans le salaire : heures sup du mois ' + f2(hs) + ' h (' + f2(ps) + ' DA mis de côté), heures sup cumulées à remettre ' + f2(sup) + ' DA ‖ crédit personnel restant à rembourser ' + f2(cred) + ' DA'; };
     EMPLOYES.forEach(e => { try { tot.po += paieOrdinaire(e, mois); tot.ps += paieSup(e, mois); tot.reste += resteSalaire(e, mois); tot.cred += Math.max(0, soldeCredit(e.id)); tot.sup += Math.max(0, soldeSup(e)); } catch (x) { /* ignoré */ } });
     t += lst.map(e => { try { return ligne(e); } catch (x) { return '- ' + e.nom + ' : calcul indisponible'; } }).join('\n') + '\n';
-    t += 'TOTAUX de tous les employés (' + EMPLOYES.length + ') : paie ordinaire ' + f2(tot.po) + ' DA ; reste à payer ' + f2(tot.reste) + ' DA ; paie heures sup du mois ' + f2(tot.ps) + ' DA ; heures sup cumulées à remettre ' + f2(tot.sup) + ' DA ; crédits personnels à rembourser ' + f2(tot.cred) + ' DA.\n';
+    t += 'TOTAUX de tous les employés (' + EMPLOYES.length + ') : salaires finaux à payer ' + f2(tot.reste) + ' DA (paie des heures normales ' + f2(tot.po) + ' DA moins acomptes et retenues) ; à part : heures sup du mois ' + f2(tot.ps) + ' DA, heures sup cumulées à remettre ' + f2(tot.sup) + ' DA ; crédits personnels à rembourser ' + f2(tot.cred) + ' DA.\n';
     return lim(t, 3600);
   }
 
