@@ -43,12 +43,27 @@
     p.innerHTML = '<header><span class="zs-av">Z</span><div><b>ZACKsmart</b><small>Conseiller commercial et guide de la plateforme</small></div><button type="button" id="zs-deep" title="Mode discussion approfondie (réponses détaillées)">🧠</button><button type="button" id="zs-big" title="Agrandir / réduire">⤢</button><button type="button" id="zs-clear" title="Effacer la conversation">🗑</button><button type="button" id="zs-close" title="Fermer">✕</button></header>' +
       '<div id="zs-msgs"></div><form id="zs-form"><textarea id="zs-input" rows="1" maxlength="1000" placeholder="Posez votre question…"></textarea><button id="zs-send" type="submit">Envoyer</button></form>';
     document.body.appendChild(b); document.body.appendChild(p);
-    b.onclick = () => { p.classList.toggle('on'); if (p.classList.contains('on')) { paint(); $('#zs-input').focus(); } };
     const vue = () => { p.classList.toggle('big', big); $('#zs-deep').classList.toggle('act', deep); $('#zs-deep').title = deep ? 'Discussion approfondie : ACTIVÉE (cliquer pour réponses courtes)' : 'Réponses courtes (cliquer pour activer la discussion approfondie)'; $('#zs-input').placeholder = deep ? 'Décrivez votre situation ou posez votre question…' : 'Posez votre question…'; };
     $('#zs-deep').onclick = () => { deep = !deep; try { localStorage.setItem('zacksmart_deep', deep ? '1' : '0'); } catch (e) { /* ok */ } vue(); };
     $('#zs-big').onclick = () => { big = !big; try { localStorage.setItem('zacksmart_big', big ? '1' : '0'); } catch (e) { /* ok */ } vue(); };
     vue();
-    $('#zs-close').onclick = () => p.classList.remove('on');
+    // iPhone : le panneau suit la zone réellement visible (le clavier ne cache plus le champ) et la page derrière ne défile pas
+    const mobile = () => window.matchMedia('(max-width:700px)').matches, vv = window.visualViewport;
+    const fit = () => { if (!mobile()) { p.style.removeProperty('--zs-h'); p.style.removeProperty('--zs-top'); return; }
+      p.style.setProperty('--zs-h', (vv ? vv.height : window.innerHeight) + 'px'); p.style.setProperty('--zs-top', (vv ? vv.offsetTop : 0) + 'px');
+      const m = $('#zs-msgs'); if (m) m.scrollTop = m.scrollHeight; };
+    // sur téléphone la barre de navigation est en bas : le bouton se place juste au-dessus
+    const placeBtn = () => { const n = document.querySelector('nav'); if (!n || !mobile()) { document.documentElement.style.removeProperty('--zs-nav'); return; }
+      const r = n.getBoundingClientRect(), pos = getComputedStyle(n).position; if ((pos === 'fixed' || pos === 'sticky') && r.top > window.innerHeight / 2) document.documentElement.style.setProperty('--zs-nav', Math.max(0, Math.round(window.innerHeight - r.top - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab') || 0))) + 'px'); };
+    placeBtn(); window.addEventListener('resize', placeBtn); window.addEventListener('orientationchange', () => setTimeout(placeBtn, 300)); setTimeout(placeBtn, 800);
+    const lock = on => document.documentElement.classList.toggle('zs-lock', !!on && mobile());
+    const ouvrir = () => { p.classList.add('on'); lock(true); fit(); paint(); if (!mobile()) $('#zs-input').focus(); };
+    const fermer = () => { p.classList.remove('on'); lock(false); };
+    if (vv) { vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); }
+    window.addEventListener('orientationchange', () => setTimeout(fit, 250)); window.addEventListener('resize', fit);
+    $('#zs-input').addEventListener('focus', () => setTimeout(fit, 300));
+    b.onclick = () => { if (p.classList.contains('on')) fermer(); else ouvrir(); };
+    $('#zs-close').onclick = fermer;
     $('#zs-clear').onclick = () => { if (!msgs.length || confirm('Effacer la conversation ?')) { msgs = []; save(); paint(); } };
     $('#zs-form').onsubmit = e => { e.preventDefault(); send($('#zs-input').value); };
     $('#zs-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('#zs-input').value); } });
@@ -89,5 +104,5 @@
   document.addEventListener('mariabag:authenticated', () => { build(); $('#zs-btn').classList.add('on'); });
   // déconnexion : on masque l'assistant quand l'écran de connexion est affiché (la connexion par ancien mot de passe n'a pas de profil)
   document.addEventListener('mariabag:profil', () => setTimeout(() => { const l = $('#login'), b = $('#zs-btn'), p = $('#zs-panel');
-    if (l && b && getComputedStyle(l).display !== 'none') { b.classList.remove('on'); if (p) p.classList.remove('on'); } }, 60));
+    if (l && b && getComputedStyle(l).display !== 'none') { b.classList.remove('on'); if (p) p.classList.remove('on'); document.documentElement.classList.remove('zs-lock'); } }, 60));
 })();
