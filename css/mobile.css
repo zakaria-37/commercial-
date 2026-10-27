@@ -28,6 +28,7 @@ html{overscroll-behavior-y:none}
   nav button::before{display:block;font-size:19px;line-height:1;filter:grayscale(1) brightness(1.6);opacity:.8}
   nav button.on::before{filter:none;opacity:1}
   nav button[data-v="dash"]::before{content:"\1F3E0"}
+  nav button[data-v="notes"]::before{content:"\1F4DD"}
   nav button[data-v="list"]::before{content:"\1F465"}
   nav button[data-v="ateliers"]::before{content:"\1F3ED"}
   nav button[data-v="employes"]::before{content:"\1F9D1\200D\1F527"}

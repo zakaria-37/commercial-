@@ -112,6 +112,7 @@ function show(v) {
   else if (v === 'inventaire') { if (typeof loadInventaire === 'function') loadInventaire(true); }
   else if (v === 'commerce') { if (typeof loadCommerce === 'function') loadCommerce(true); }
   else if (v === 'equipe') { if (typeof loadEquipe === 'function') loadEquipe(); }
+  else if (v === 'notes') { if (typeof loadNotes === 'function') loadNotes(); }
   else list();
 }
 
