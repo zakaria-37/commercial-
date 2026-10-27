@@ -9,7 +9,7 @@
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const KEY = 'zacksmart_hist';
-  const SUGG = ['Comment faire une facture ?', 'Comment noter un rendez-vous avec une grande surface ?', 'Comment préparer un rendez-vous avec un client ?', 'Comment fixer mon prix de vente ?', 'Comment relancer un client qui ne paie pas ?'];
+  const SUGG = ['Aide-moi à organiser ma semaine commerciale', 'Plan pour prospecter les grandes surfaces', 'Comment négocier le prix avec une grande surface ?', 'Comment fixer mon prix de vente et ma marge ?', 'Comment diriger et suivre le travail de l’équipe ?', 'Comment faire une facture ?'];
   const FAQ = [
     [['facture', 'devis', 'bon de commande'], 'Pour faire une facture : menu **Commerce** → onglet Factures → « + Nouvelle facture ». Choisissez le client, ajoutez les lignes (produit, quantité, prix), le mode de paiement (cash, à terme ou versement) puis enregistrez. Le PDF se télécharge depuis la liste. Le stock des produits finis diminue automatiquement.'],
     [['rendez-vous', 'rdv', 'grande surface', 'prospect'], 'Pour noter un rendez-vous : menu **Notes** → onglet Rendez-vous → « + Nouveau rendez-vous ». Indiquez l’objet, la date, l’heure, le lieu, le type (grande surface, client, prospect) et ce que vous voulez proposer. Après le rendez-vous, cliquez sur **Fait** et écrivez le résultat.'],
@@ -25,7 +25,8 @@
     [['sauvegarde', 'copie', 'export'], 'Sauvegarde : bouton **Sauvegarde** en haut de l’écran pour télécharger une copie complète de vos données. Faites-le régulièrement.'],
     [['contact', 'client', 'fournisseur'], 'Contacts : menu **Contacts** → liste des clients et fournisseurs, avec les onglets Clients/Fournisseurs (classement), Chiffre d’affaires et Paiements (soldes).'],
   ];
-  let msgs = [], busy = false;
+  let msgs = [], busy = false, deep = true, big = false;
+  try { deep = localStorage.getItem('zacksmart_deep') !== '0'; big = localStorage.getItem('zacksmart_big') === '1'; } catch (e) { /* valeurs par défaut */ }
   try { msgs = JSON.parse(localStorage.getItem(KEY) || '[]').slice(-30); } catch (e) { msgs = []; }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(msgs.slice(-30))); } catch (e) { /* stockage indisponible */ } };
 
@@ -39,10 +40,14 @@
     if ($('#zs-btn')) return;
     const b = document.createElement('button'); b.id = 'zs-btn'; b.type = 'button'; b.innerHTML = '<span class="zs-av">Z</span>ZACKsmart'; b.title = 'Assistant ZACKsmart';
     const p = document.createElement('div'); p.id = 'zs-panel';
-    p.innerHTML = '<header><span class="zs-av">Z</span><div><b>ZACKsmart</b><small>Assistant MARIA BAG · aide et conseils</small></div><button type="button" id="zs-clear" title="Effacer la conversation">🗑</button><button type="button" id="zs-close" title="Fermer">✕</button></header>' +
+    p.innerHTML = '<header><span class="zs-av">Z</span><div><b>ZACKsmart</b><small>Conseiller commercial et guide de la plateforme</small></div><button type="button" id="zs-deep" title="Mode discussion approfondie (réponses détaillées)">🧠</button><button type="button" id="zs-big" title="Agrandir / réduire">⤢</button><button type="button" id="zs-clear" title="Effacer la conversation">🗑</button><button type="button" id="zs-close" title="Fermer">✕</button></header>' +
       '<div id="zs-msgs"></div><form id="zs-form"><textarea id="zs-input" rows="1" maxlength="1000" placeholder="Posez votre question…"></textarea><button id="zs-send" type="submit">Envoyer</button></form>';
     document.body.appendChild(b); document.body.appendChild(p);
     b.onclick = () => { p.classList.toggle('on'); if (p.classList.contains('on')) { paint(); $('#zs-input').focus(); } };
+    const vue = () => { p.classList.toggle('big', big); $('#zs-deep').classList.toggle('act', deep); $('#zs-deep').title = deep ? 'Discussion approfondie : ACTIVÉE (cliquer pour réponses courtes)' : 'Réponses courtes (cliquer pour activer la discussion approfondie)'; $('#zs-input').placeholder = deep ? 'Décrivez votre situation ou posez votre question…' : 'Posez votre question…'; };
+    $('#zs-deep').onclick = () => { deep = !deep; try { localStorage.setItem('zacksmart_deep', deep ? '1' : '0'); } catch (e) { /* ok */ } vue(); };
+    $('#zs-big').onclick = () => { big = !big; try { localStorage.setItem('zacksmart_big', big ? '1' : '0'); } catch (e) { /* ok */ } vue(); };
+    vue();
     $('#zs-close').onclick = () => p.classList.remove('on');
     $('#zs-clear').onclick = () => { if (!msgs.length || confirm('Effacer la conversation ?')) { msgs = []; save(); paint(); } };
     $('#zs-form').onsubmit = e => { e.preventDefault(); send($('#zs-input').value); };
@@ -64,17 +69,18 @@
     let rep = null, note = false;
     try {
       if (!navigator.onLine) throw new Error('offline');
-      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 30000);
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 60000);
       const r = await fetch(SUPABASE_URL + '/functions/v1/zacksmart', { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
-        body: JSON.stringify({ messages: msgs.filter(m => !m.note).slice(-10).map(m => ({ role: m.role, content: m.content })), page: page() }) });
+        body: JSON.stringify({ messages: msgs.filter(m => !m.note).slice(-16).map(m => ({ role: m.role, content: m.content })), page: page(), deep }) });
       clearTimeout(t);
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.reply) rep = d.reply;
       else if (d.error === 'rate') { rep = 'Vous écrivez très vite 🙂 Patientez quelques secondes puis réessayez.'; note = true; }
       else throw new Error(d.error || 'http ' + r.status);
     } catch (e) {
-      const f = faq(text), off = !navigator.onLine || e.message === 'offline';
-      rep = (off ? 'Vous êtes hors ligne : réponse de secours. ' : 'L’assistant intelligent n’est pas disponible pour le moment : réponse de secours. ') + (f ? '\n' + f : 'Je n’ai pas de réponse prête pour cette question. Reformulez avec des mots comme « facture », « rendez-vous », « fiche de paie », « stock »…');
+      const f = faq(text), off = !navigator.onLine || e.message === 'offline', cfg = e.message === 'not_configured', salut = /^\s*(salut|bonjour|bonsoir|salam|slm|hello|coucou|hi)\b/i.test(text);
+      rep = (off ? 'Vous êtes hors ligne : réponse de secours.' : cfg ? 'ZACKsmart n’est pas encore activé en mode intelligent : la clé de l’IA n’a pas encore été ajoutée côté serveur (Supabase → Edge Functions → Secrets → AI_API_KEY). En attendant, voici une aide de base.' : 'L’assistant intelligent ne répond pas pour le moment (' + esc(e.message) + ') : réponse de secours.') + '\n' +
+        (salut ? 'Bonjour ! Je suis ZACKsmart 😊 Une fois activé, nous pourrons discuter en profondeur de votre travail commercial et de l’organisation du travail.' : f ? f : 'Je n’ai pas de réponse prête pour cette question. Reformulez avec des mots comme « facture », « rendez-vous », « fiche de paie », « stock »…');
       note = false;
     }
     msgs.push({ role: 'assistant', content: rep, note }); busy = false; $('#zs-send').disabled = false; paint(); save();
