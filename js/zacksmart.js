@@ -56,7 +56,7 @@
   }
   function paint() {
     const box = $('#zs-msgs'); if (!box) return;
-    let h = '<div class="zs-m bot">Bonjour 👋 Je suis <b>ZACKsmart</b>. Je peux vous expliquer comment utiliser la plateforme et vous conseiller dans votre travail commercial (rendez-vous, prix, relances…).</div>';
+    let h = '<div class="zs-m bot">Bonjour 👋 Je suis <b>ZACKsmart</b>, développé par l’ingénieur <b>Benouadah Zakaria</b>. Je suis votre agent intelligent pour la société <b>Maria Bag</b> : je vous explique la plateforme et je vous conseille dans votre travail commercial (rendez-vous, prix, relances, organisation du travail…).</div>';
     if (!msgs.length) h += '<div class="zs-chips">' + SUGG.map(s => '<button type="button" data-q="' + esc(s) + '">' + esc(s) + '</button>').join('') + '</div>';
     msgs.forEach(m => { h += '<div class="zs-m ' + (m.role === 'user' ? 'me' : m.note ? 'note' : 'bot') + '">' + (m.role === 'user' ? esc(m.content).replace(/\n/g, '<br>') : md(m.content)) + '</div>'; });
     if (busy) h += '<div class="zs-m bot zs-dots"><span></span><span></span><span></span></div>';
