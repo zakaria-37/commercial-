@@ -273,6 +273,8 @@
     ma.envoi = true; ecrire('assistant', rep).then(id => { ma.envoi = false; if (id) ma.id = id; elaguer(); });
   }
 
+  // permet à une autre page (ex. Tendances) de poser une question à ZACKsmart : ouvre le chat et envoie
+  window.zsAsk = txt => { build(); const b = $('#zs-btn'); if (b) b.classList.add('on'); const p = $('#zs-panel'); if (p && !p.classList.contains('on')) b.click(); setTimeout(() => send(txt), 300); };
   document.addEventListener('mariabag:authenticated', () => { build(); $('#zs-btn').classList.add('on'); setTimeout(() => rafraichir(true), 1500); });
   // autres appareils : on relit la conversation régulièrement quand la fenêtre est ouverte, et au retour sur l'application
   setInterval(() => { const p = $('#zs-panel'); if (p && p.classList.contains('on') && document.visibilityState === 'visible') rafraichir(); }, 6000);

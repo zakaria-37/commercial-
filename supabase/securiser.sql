@@ -10,7 +10,7 @@ do $$
 declare t text; p record;
 begin
   foreach t in array array['contacts','ateliers','employes','modeles','stock_articles','composants','productions','commandes','acomptes','pointages','charges',
-                           'produits','produit_lignes','stock_mouvements','charges_fixes','pf_mouvements','inventaires','inventaire_lignes','documents','document_lignes','paiements','parametres','remises_hs','paiements_ateliers','credits_employes','rendez_vous','notes_perso'] loop
+                           'produits','produit_lignes','stock_mouvements','charges_fixes','pf_mouvements','inventaires','inventaire_lignes','documents','document_lignes','paiements','parametres','remises_hs','paiements_ateliers','credits_employes','rendez_vous','notes_perso','tendances'] loop
     for p in select policyname from pg_policies where schemaname = 'public' and tablename = t loop
       execute format('drop policy %I on public.%I', p.policyname, t);
     end loop;

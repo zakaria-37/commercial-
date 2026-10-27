@@ -12,7 +12,7 @@
   const ROLES = { admin: 'Administrateur', equipe: 'Équipe', en_attente: 'En attente d’approbation', desactive: 'Désactivé' };
   const TABLES = { contacts: 'Contacts', ateliers: 'Ateliers', employes: 'Employés', modeles: 'Modèles (Production)', stock_articles: 'Stock : éléments', composants: 'Fiche matières', productions: 'Productions',
     commandes: 'Commandes', acomptes: 'Acomptes', pointages: 'Pointages', charges: 'Charges', produits: 'Produits', produit_lignes: 'Coûts de produit', stock_mouvements: 'Stock : mouvements',
-    charges_fixes: 'Charges fixes', pf_mouvements: 'Produits finis : mouvements', inventaires: 'Inventaires', inventaire_lignes: 'Inventaire : lignes', paiements: 'Paiements', paiements_ateliers: 'Paiements des ateliers', credits_employes: 'Crédits des employés', rendez_vous: 'Notes et rendez-vous', notes_perso: 'Notes personnelles', documents: 'Commerce : documents', document_lignes: 'Commerce : lignes' };
+    charges_fixes: 'Charges fixes', pf_mouvements: 'Produits finis : mouvements', inventaires: 'Inventaires', inventaire_lignes: 'Inventaire : lignes', paiements: 'Paiements', paiements_ateliers: 'Paiements des ateliers', credits_employes: 'Crédits des employés', rendez_vous: 'Notes et rendez-vous', notes_perso: 'Notes personnelles', tendances: 'Tendances', documents: 'Commerce : documents', document_lignes: 'Commerce : lignes' };
   const ACT = { INSERT: 'Ajout', UPDATE: 'Modification', DELETE: 'Suppression' };
 
   let PROF = [], INVS = [], JOUR = [], err = '', filtreT = '', filtreU = '';
