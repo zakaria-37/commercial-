@@ -20,3 +20,16 @@
 #nt-root .nt-empty,#nt-root .nt-err{padding:18px;color:var(--mut);text-align:center}
 #nt-root .nt-err{color:var(--r)}
 @media(max-width:700px){#nt-root .nt-rdv{flex-direction:column}#nt-root .nt-act{max-width:none;width:100%;justify-content:flex-start}}
+#nt-root .nt-tabs{margin:0 0 12px}
+#nt-root .nt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:12px}
+#nt-root .nt-note{border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.06)}
+#nt-root .nt-done{opacity:.55}
+#nt-root .nt-done .nt-nt,#nt-root .nt-done b{text-decoration:line-through}
+#nt-root .nt-nh{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+#nt-root .nt-chk{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+#nt-root .nt-chk input{margin-top:3px;width:18px;height:18px;flex:0 0 auto}
+#nt-root .nt-pin{border:0;background:transparent;font-size:16px;cursor:pointer;opacity:.35;padding:0;line-height:1}
+#nt-root .nt-pin.on{opacity:1}
+#nt-root .nt-nt{white-space:pre-wrap;font-size:14px;flex:1;word-break:break-word}
+#nt-root .nt-nm{display:flex;flex-wrap:wrap;gap:6px}
+#nt-root .nt-act2{display:flex;gap:6px}

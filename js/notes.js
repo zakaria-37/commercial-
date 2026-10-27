@@ -16,13 +16,18 @@
   const lbl = c => [c.prenom, c.nom].filter(Boolean).join(' ') + (c.societe ? ' — ' + c.societe : '');
   const jourTxt = s => { const [y, m, d] = s.split('-').map(Number); return JOURS[new Date(y, m - 1, d).getDay()] + ' ' + fd(s); };
 
-  let RDV = [], err = '', form = null, fQ = '', fS = '', fT = '';
+  let RDV = [], NOTES = [], err = '', form = null, fQ = '', fS = '', fT = '', tab = 'rdv', nForm = null, nQ = '', nF = 'afaire', nC = '';
+  const CATS = ['À ne pas oublier', 'À faire (travail)', 'Personnel', 'Idée', 'Autre'], COULEURS = { jaune: '#fff4c2', rose: '#fde3ea', bleu: '#e0edfb', vert: '#e1f4e5', gris: '#eceff1' };
   const ouvert = r => r.statut === 'Prévu' || r.statut === 'Reporté';
+  let nErr = '';
 
   async function load() {
     const r = await sb.from('rendez_vous').select('*').order('date_rdv', { ascending: true }).order('heure', { ascending: true });
     if (r.error) { err = /does not exist|relation|schema cache/i.test(r.error.message) ? 'Table « rendez_vous » introuvable : exécutez supabase/rendez_vous.sql dans SQL Editor, puis rechargez la page.' : r.error.message; RDV = []; }
     else { err = ''; RDV = r.data || []; }
+    const n = await sb.from('notes_perso').select('*').order('created_at', { ascending: false });
+    NOTES = n.error ? [] : (n.data || []);
+    nErr = n.error ? (/does not exist|relation|schema cache/i.test(n.error.message) ? 'Table « notes_perso » introuvable : exécutez supabase/notes_perso.sql dans SQL Editor, puis rechargez la page.' : n.error.message) : '';
     render();
   }
 
@@ -45,12 +50,13 @@
   function render() {
     const root = $('#nt-root'); if (!root) return;
     if (err) { root.innerHTML = '<div class="card"><div class="nt-err">' + esc(err) + '</div></div>'; return; }
+    if (tab === 'perso') { renderPerso(root); return; }
     const today = iso(new Date()), d7 = new Date(); d7.setDate(d7.getDate() + 7); const sem = iso(d7), mois = today.slice(0, 7);
     const q = fQ.trim().toLowerCase();
     const L = RDV.filter(r => (!fT || r.type === fT) && (!q || [r.titre, r.contact_nom, r.lieu, r.objet, r.resultat].join(' ').toLowerCase().includes(q)) &&
       (!fS || (fS === 'avenir' ? ouvert(r) : r.statut === fS)));
     const groupes = [['En retard', r => ouvert(r) && r.date_rdv < today, 'nt-late'], ['Aujourd’hui', r => ouvert(r) && r.date_rdv === today, 'nt-today'], ['À venir', r => ouvert(r) && r.date_rdv > today, ''], ['Passés et clôturés', r => !ouvert(r), 'nt-past']];
-    let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Notes &amp; rendez-vous</h2><p>Vos rendez-vous fixes avec des clients, prospects et grandes surfaces pour proposer les services de l’atelier.</p></div></div>' +
+    let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Notes &amp; rendez-vous</h2><p>Vos rendez-vous fixes avec des clients, prospects et grandes surfaces pour proposer les services de l’atelier.</p></div></div>' + tabsHtml() +
       '<div class="at-stats"><div class="at-stat"><span>Aujourd’hui</span><b>' + RDV.filter(r => ouvert(r) && r.date_rdv === today).length + '</b></div>' +
       '<div class="at-stat"><span>Dans les 7 jours</span><b>' + RDV.filter(r => ouvert(r) && r.date_rdv >= today && r.date_rdv <= sem).length + '</b></div>' +
       '<div class="at-stat"><span>En retard (à clôturer)</span><b style="color:' + (RDV.some(r => ouvert(r) && r.date_rdv < today) ? '#b3261e' : 'inherit') + '">' + RDV.filter(r => ouvert(r) && r.date_rdv < today).length + '</b></div>' +
@@ -120,6 +126,66 @@
   });
   document.addEventListener('input', e => { if (e.target.id === 'nt-q') { fQ = e.target.value; render(); } });
   document.addEventListener('submit', e => { if (e.target.id === 'nt-form') { e.preventDefault(); enregistrer(); } });
+  const tabsHtml = () => '<div class="at-tabs nt-tabs"><button type="button" data-nt="tab" data-t="rdv" class="' + (tab === 'rdv' ? 'on' : '') + '">Rendez-vous (' + RDV.filter(ouvert).length + ')</button><button type="button" data-nt="tab" data-t="perso" class="' + (tab === 'perso' ? 'on' : '') + '">Notes personnelles (' + NOTES.filter(n => !n.fait).length + ')</button></div>';
+
+  /* ---------- Notes personnelles : pense-bête du gérant ---------- */
+  function carte(n, today) {
+    const retard = !n.fait && n.rappel && n.rappel < today, auj = !n.fait && n.rappel === today;
+    return '<div class="nt-note' + (n.fait ? ' nt-done' : '') + '" style="background:' + (COULEURS[n.couleur] || COULEURS.jaune) + '">' +
+      '<div class="nt-nh"><label class="nt-chk"><input type="checkbox" data-nt="nfait" data-id="' + esc(n.id) + '"' + (n.fait ? ' checked' : '') + '><b>' + esc(n.titre || n.categorie || 'Note') + '</b></label>' +
+      '<button class="nt-pin' + (n.epingle ? ' on' : '') + '" type="button" data-nt="npin" data-id="' + esc(n.id) + '" title="' + (n.epingle ? 'Désépingler' : 'Épingler en haut') + '">📌</button></div>' +
+      '<div class="nt-nt">' + esc(n.contenu) + '</div>' +
+      '<div class="nt-nm"><span class="nt-bdg nt-type">' + esc(n.categorie || '') + '</span>' + (n.rappel ? ' <span class="nt-bdg" style="background:' + (retard ? '#fdecea;color:#b3261e' : auj ? '#e0edfb;color:#2a5db0' : '#f0e8e4;color:#5b4a44') + '">⏰ ' + (auj ? 'Aujourd’hui' : fd(n.rappel)) + (retard ? ' (en retard)' : '') + '</span>' : '') + '</div>' +
+      '<div class="nt-act2"><button class="btn xs" type="button" data-nt="nedit" data-id="' + esc(n.id) + '">Modifier</button><button class="btn xs r" type="button" data-nt="nsuppr" data-id="' + esc(n.id) + '">Supprimer</button></div></div>';
+  }
+  function renderPerso(root) {
+    if (nErr) { root.innerHTML = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Notes &amp; rendez-vous</h2></div></div>' + tabsHtml() + '<div class="card"><div class="nt-err">' + esc(nErr) + '</div></div>'; return; }
+    const today = iso(new Date()), q = nQ.trim().toLowerCase();
+    const L = NOTES.filter(n => (!nC || n.categorie === nC) && (nF === 'toutes' || (nF === 'faites' ? n.fait : !n.fait)) && (!q || [n.titre, n.contenu, n.categorie].join(' ').toLowerCase().includes(q)))
+      .sort((a, b) => (b.epingle ? 1 : 0) - (a.epingle ? 1 : 0) || String(a.rappel || '9999').localeCompare(String(b.rappel || '9999')) || String(b.created_at).localeCompare(String(a.created_at)));
+    let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Notes personnelles</h2><p>Votre pense-bête de gérant : tâches des prochains jours de travail, choses à ne pas oublier, idées.</p></div></div>' + tabsHtml() +
+      '<div class="at-stats"><div class="at-stat"><span>À faire</span><b>' + NOTES.filter(n => !n.fait).length + '</b></div><div class="at-stat"><span>Pour aujourd’hui</span><b>' + NOTES.filter(n => !n.fait && n.rappel === today).length + '</b></div>' +
+      '<div class="at-stat"><span>En retard</span><b style="color:' + (NOTES.some(n => !n.fait && n.rappel && n.rappel < today) ? '#b3261e' : 'inherit') + '">' + NOTES.filter(n => !n.fait && n.rappel && n.rappel < today).length + '</b></div><div class="at-stat"><span>Terminées</span><b>' + NOTES.filter(n => n.fait).length + '</b></div></div>' +
+      '<div class="tools"><input id="nt-nq" type="search" placeholder="Rechercher dans les notes…" value="' + esc(nQ) + '"><select id="nt-nf"><option value="afaire"' + (nF === 'afaire' ? ' selected' : '') + '>À faire</option><option value="faites"' + (nF === 'faites' ? ' selected' : '') + '>Terminées</option><option value="toutes"' + (nF === 'toutes' ? ' selected' : '') + '>Toutes</option></select>' +
+      '<select id="nt-nc"><option value="">Toutes les catégories</option>' + CATS.map(c => '<option' + (nC === c ? ' selected' : '') + '>' + c + '</option>').join('') + '</select><button class="btn p" type="button" data-nt="nnew">+ Nouvelle note</button></div>';
+    if (nForm) h += '<form id="nt-nform" class="at-form" style="display:block"><h3 style="margin-top:0">' + (nForm.id ? 'Modifier la note' : 'Nouvelle note') + '</h3><div class="at-fields">' +
+      '<label>Titre (facultatif)<input id="nt-ntitre" maxlength="120" placeholder="Ex : Lundi — commander les fermetures" value="' + esc(nForm.titre) + '"></label>' +
+      '<label>Catégorie<select id="nt-ncat">' + CATS.map(c => '<option' + (nForm.categorie === c ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></label>' +
+      '<label>Me le rappeler le<input id="nt-nrappel" type="date" value="' + esc(nForm.rappel) + '"></label>' +
+      '<label>Couleur<select id="nt-ncoul">' + Object.keys(COULEURS).map(c => '<option value="' + c + '"' + (nForm.couleur === c ? ' selected' : '') + '>' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>').join('') + '</select></label>' +
+      '<label style="grid-column:1/-1">Note *<textarea id="nt-ncontenu" required rows="4" placeholder="Écrivez votre note…">' + esc(nForm.contenu) + '</textarea></label></div>' +
+      '<div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" data-nt="ncancel">Annuler</button></div></form>';
+    h += L.length ? '<div class="nt-grid">' + L.map(n => carte(n, today)).join('') + '</div>' : '<div class="card"><div class="nt-empty">' + (NOTES.length ? 'Aucune note ne correspond.' : 'Aucune note pour le moment. Cliquez sur « + Nouvelle note » pour écrire votre premier pense-bête.') + '</div></div>';
+    const a = document.activeElement, keep = a && root.contains(a) && a.id === 'nt-nq', pos = keep ? a.selectionStart : 0;
+    root.innerHTML = h;
+    if (keep) { const i = $('#nt-nq'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } }
+  }
+  function nLire() { if (!nForm || !$('#nt-ncontenu')) return; Object.assign(nForm, { titre: $('#nt-ntitre').value, categorie: $('#nt-ncat').value, rappel: $('#nt-nrappel').value, couleur: $('#nt-ncoul').value, contenu: $('#nt-ncontenu').value }); }
+  async function nEnreg() {
+    nLire(); if (!nForm.contenu.trim()) { say('Écrivez la note.'); return; }
+    const row = { titre: nForm.titre.trim(), contenu: nForm.contenu.trim(), categorie: nForm.categorie, couleur: nForm.couleur, rappel: nForm.rappel || null };
+    const r = nForm.id ? await sb.from('notes_perso').update(row).eq('id', nForm.id) : await sb.from('notes_perso').insert([row]);
+    if (r.error) { say('Erreur : ' + r.error.message); return; }
+    nForm = null; await load(); say('Note enregistrée.');
+  }
+  async function nMaj(id, o) { const r = await sb.from('notes_perso').update(o).eq('id', id); if (r.error) { say('Erreur : ' + r.error.message); return; } await load(); }
+  document.addEventListener('click', async e => {
+    const root = $('#nt-root'); const b = e.target.closest('[data-nt]'); if (!b || !root || !root.contains(b)) return;
+    const k = b.dataset.nt, id = b.dataset.id, n = NOTES.find(x => String(x.id) === String(id));
+    if (k === 'tab') { tab = b.dataset.t; render(); }
+    else if (k === 'nnew') { nForm = { id: null, titre: '', categorie: 'À ne pas oublier', rappel: '', couleur: 'jaune', contenu: '' }; render(); const t = $('#nt-ncontenu'); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); t.focus(); } }
+    else if (k === 'ncancel') { nForm = null; render(); }
+    else if (k === 'nedit' && n) { nForm = { id: n.id, titre: n.titre || '', categorie: n.categorie || 'Autre', rappel: n.rappel || '', couleur: n.couleur || 'jaune', contenu: n.contenu || '' }; render(); const t = $('#nt-ncontenu'); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); t.focus(); } }
+    else if (k === 'npin' && n) await nMaj(id, { epingle: !n.epingle });
+    else if (k === 'nsuppr' && n && confirm('Supprimer cette note ?')) { const x = await sb.from('notes_perso').delete().eq('id', id); if (x.error) say('Erreur : ' + x.error.message); else { await load(); say('Note supprimée.'); } }
+  });
+  document.addEventListener('change', async e => {
+    const root = $('#nt-root'); if (!root || !root.contains(e.target)) return;
+    if (e.target.dataset && e.target.dataset.nt === 'nfait') await nMaj(e.target.dataset.id, { fait: e.target.checked });
+    else if (e.target.id === 'nt-nf') { nF = e.target.value; render(); } else if (e.target.id === 'nt-nc') { nC = e.target.value; render(); }
+  });
+  document.addEventListener('input', e => { if (e.target.id === 'nt-nq') { nQ = e.target.value; render(); } });
+  document.addEventListener('submit', e => { if (e.target.id === 'nt-nform') { e.preventDefault(); nEnreg(); } });
   window.loadNotes = load;
   document.addEventListener('mariabag:authenticated', load);
 })();
