@@ -17,7 +17,7 @@
   const jourTxt = s => { const [y, m, d] = s.split('-').map(Number); return JOURS[new Date(y, m - 1, d).getDay()] + ' ' + fd(s); };
 
   let RDV = [], NOTES = [], err = '', form = null, fQ = '', fS = '', fT = '', tab = 'rdv', nForm = null, nQ = '', nF = 'afaire', nC = '';
-  const CATS = ['À ne pas oublier', 'À faire (travail)', 'Personnel', 'Idée', 'Autre'], COULEURS = { jaune: '#fff4c2', rose: '#fde3ea', bleu: '#e0edfb', vert: '#e1f4e5', gris: '#eceff1' };
+  const CATS = ['À ne pas oublier', 'À faire (travail)', 'Prospects à contacter', 'Personnel', 'Idée', 'Autre'], COULEURS = { jaune: '#fff4c2', rose: '#fde3ea', bleu: '#e0edfb', vert: '#e1f4e5', gris: '#eceff1' };
   const ouvert = r => r.statut === 'Prévu' || r.statut === 'Reporté';
   let nErr = '';
 
