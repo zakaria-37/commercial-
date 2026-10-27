@@ -563,5 +563,5 @@
   document.addEventListener('mariabag:authenticated', () => load(true));
 
   window.loadCommerce = load;
-  window.CommerceAPI = { load, facturerCommande, montantLettres, totaux, etatFacture };
+  window.CommerceAPI = { load, facturerCommande, montantLettres, totaux, etatFacture, docs: () => DOCS, lignesDe };
 })();

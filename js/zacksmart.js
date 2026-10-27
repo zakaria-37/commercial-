@@ -158,7 +158,7 @@
 
   /* ---------- Données réelles de la plateforme transmises à ZACKsmart (stock) ---------- */
   const STOP = new Set(['combien', 'jai', 'est', 'les', 'des', 'une', 'que', 'quel', 'quelle', 'quels', 'quelles', 'pour', 'dans', 'avec', 'mon', 'mes', 'ton', 'stock', 'reste', 'encore', 'matiere', 'matieres', 'article', 'quantite', 'produit', 'produits', 'finis', 'fini', 'tout', 'tous', 'liste', 'donne', 'moi', 'dis', 'sur', 'ceci', 'cela', 'quoi', 'faut', 'dois', 'peux', 'faire', 'avoir', 'suis', 'sont', 'plus', 'moins', 'quand', 'the', 'etat']);
-  const WORDS = /(stock|matiere|tissu|rouleau|metre|yard|fermeture|curseur|doublure|article|quantite|combien|reste|rupture|alerte|commander|acheter|disponible|inventaire|produit fini|produits finis|modele fini|manque)/;
+  const WORDS = /(stock|matiere|tissu|rouleau|metre|yard|fermeture|curseur|doublure|article|quantite|rupture|alerte|commander|acheter|disponible|inventaire|produit fini|produits finis|modele fini|manque)/;
   const nz = s => norm(s).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
   const f2 = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ');
   function contexteStock(question) {
@@ -169,7 +169,7 @@
       const hay = x => nz([x.nom, x.categorie, x.couleur, x.marque, x.note].join(' '));
       const hit = (arr) => arr.filter(x => { const h = hay(x); return toks.some(t => h.includes(t) || (t.length > 4 && h.includes(t.slice(0, -1)))); });
       const mA = hit(art), mP = hit(pf.map(p => ({ nom: p.nom, _p: p }))).map(x => x._p);
-      if (!WORDS.test(q) && !mA.length && !mP.length) return '';
+      if ((!WORDS.test(q) && !mA.length && !mP.length) || (!art.length && !pf.length)) return '';
       const cl = id => { const c = (typeof D !== 'undefined' && Array.isArray(D)) ? D.find(x => String(x.id) === String(id)) : null; return c ? (c.societe || [c.prenom, c.nom].filter(Boolean).join(' ')) : ''; };
       const ligne = a => { const qte = StockAPI.qty(a.id), f = StockAPI.fmtQty(a, qte), e = StockAPI.etat(a), cmd = StockAPI.aCommander(a), seuil = Number(a.seuil_alerte) || 0;
         return '- ' + a.nom + ' [' + (a.categorie || '') + (a.couleur ? ', ' + a.couleur : '') + '] : ' + f.main + (f.sub ? ' (' + f.sub + ')' : '') + ' — état : ' + e.l + (seuil ? ' (seuil d\'alerte ' + f2(seuil) + ' ' + a.unite + ')' : '') +
@@ -254,9 +254,10 @@
     let rep = null, note = false;
     try {
       if (!navigator.onLine) throw new Error('offline');
+      const plus = window.ZSData ? await ZSData.contexte(text) : '', st = contexteStock(text), ctxt = (plus ? st.slice(0, 3400) + '\n' + plus : st).slice(0, 9000);
       const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 60000);
       const r = await fetch(SUPABASE_URL + '/functions/v1/zacksmart', { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
-        body: JSON.stringify({ messages: msgs.filter(m => !m.note).slice(-16).map(m => ({ role: m.role, content: m.content })), page: page(), deep, contexte: contexteStock(text) }) });
+        body: JSON.stringify({ messages: msgs.filter(m => !m.note).slice(-16).map(m => ({ role: m.role, content: m.content })), page: page(), deep, contexte: ctxt }) });
       clearTimeout(t);
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.reply) rep = d.reply;
