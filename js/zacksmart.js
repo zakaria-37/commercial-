@@ -29,36 +29,50 @@
   try { deep = localStorage.getItem('zacksmart_deep') !== '0'; big = localStorage.getItem('zacksmart_big') === '1'; } catch (e) { /* valeurs par défaut */ }
   try { msgs = JSON.parse(localStorage.getItem(KEY) || '[]').slice(-30); } catch (e) { msgs = []; }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(msgs.slice(-30))); } catch (e) { /* stockage indisponible */ } };   // copie locale : affichage immédiat
-  /* Conversation synchronisée : un message = une ligne de la table zacksmart_messages (même profil = même conversation sur PC, téléphone, tablette) */
+  /* Conversation synchronisée : un message = une ligne de la table zacksmart_messages (même profil = même conversation sur PC, téléphone, tablette).
+     Lecture et écriture DIRECTES sur le serveur (pas de file d'attente cachée) ; hors ligne, les messages attendent puis partent au retour de la connexion. */
   const TBL = 'zacksmart_messages', MAX = 200;
-  const owner = () => (window.APP_USER && window.APP_USER.id) ? String(window.APP_USER.id) : 'partage';
-  let sync = true;   // false si la table n'existe pas encore : on reste en mode local
+  // tant que la sécurité par compte n'est pas activée, tous les appareils partagent la même conversation ; ensuite : une conversation par compte
+  const owner = () => (typeof AUTH_REQUIRED !== 'undefined' && AUTH_REQUIRED && window.APP_USER && window.APP_USER.id) ? String(window.APP_USER.id) : 'partage';
+  const rem = () => (window.LocalDB && LocalDB.remote) ? LocalDB.remote() : null;
+  let etat = { ok: null, msg: '' };
+  const majEtat = (ok, msg) => { etat = { ok, msg: msg || '' }; const e = $('#zs-st'); if (!e) return;
+    e.className = ok === true ? 'ok' : ok === false ? 'ko' : ''; e.textContent = ok === true ? '☁ Synchronisé sur vos appareils' : ok === false ? '⚠ Non synchronisé : ' + msg : ''; };
+  const en = x => x && x.message ? x.message : String(x || 'erreur');
   async function lire() {
-    if (!sync) return null;
-    const r = await sb.from(TBL).select('*');
-    if (r.error) { sync = false; return null; }
-    const me = owner();
-    return (r.data || []).filter(x => x.proprietaire === me).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id))).map(x => ({ id: x.id, role: x.role, content: x.content }));
+    const r = rem();
+    if (!r) { majEtat(false, 'connexion au serveur non prête'); return null; }
+    if (!navigator.onLine) { majEtat(false, 'hors ligne'); return null; }
+    try {
+      const q = await r.from(TBL).select('*').eq('proprietaire', owner()).order('created_at', { ascending: true }).limit(MAX);
+      if (q.error) { majEtat(false, /does not exist|relation|schema cache/i.test(en(q.error)) ? 'table absente sur le serveur' : en(q.error)); return null; }
+      majEtat(true); return (q.data || []).map(x => ({ id: x.id, role: x.role, content: x.content, t: x.created_at }));
+    } catch (e) { majEtat(false, en(e)); return null; }
   }
   async function ecrire(role, content) {
-    const row = { proprietaire: owner(), role, content, created_at: new Date().toISOString() };
-    if (!sync) return { role, content };
-    const r = await sb.from(TBL).insert([row]).select();
-    if (r.error || !r.data || !r.data[0]) { sync = false; return { role, content }; }
-    return { id: r.data[0].id, role, content };
+    const r = rem(); if (!r || !navigator.onLine) { majEtat(false, !navigator.onLine ? 'hors ligne (le message partira au retour de la connexion)' : 'connexion au serveur non prête'); return null; }
+    try {
+      const q = await r.from(TBL).insert([{ proprietaire: owner(), role, content }]).select();
+      if (q.error || !q.data || !q.data[0]) { majEtat(false, en(q.error || 'écriture refusée')); return null; }
+      majEtat(true); return q.data[0].id;
+    } catch (e) { majEtat(false, en(e)); return null; }
+  }
+  async function pousser() {            // messages écrits hors ligne ou en échec : renvoyés dans l'ordre
+    for (const m of msgs) { if (m.id || m.envoi) continue; m.envoi = true; const id = await ecrire(m.role, m.content); m.envoi = false; if (id) m.id = id; else break; }
   }
   async function elaguer() {
-    const l = await lire(); if (!l || l.length <= MAX) return;
-    for (const m of l.slice(0, l.length - MAX)) await sb.from(TBL).delete().eq('id', m.id);
+    const r = rem(); if (!r) return;
+    try { const q = await r.from(TBL).select('id').eq('proprietaire', owner()).order('created_at', { ascending: true }); const l = (q.data || []);
+      if (l.length > MAX) await r.from(TBL).delete().in('id', l.slice(0, l.length - MAX).map(x => x.id)); } catch (e) { /* sans importance */ }
   }
   async function rafraichir(force) {
     if (busy && !force) return;
-    if (sync && msgs.some(m => !m.id)) return;   // un message vient d'être envoyé : on attend qu'il soit enregistré
+    await pousser();
     const l = await lire(); if (!l) return;
+    const attente = msgs.filter(m => !m.id);                      // messages locaux pas encore partis : gardés à la fin
     const sig = a => a.length + ':' + (a.length ? a[a.length - 1].id : '');
-    if (sig(l) !== sig(msgs.filter(m => m.id))) { msgs = l; save(); paint(); }
+    if (sig(l) !== sig(msgs.filter(m => m.id)) || attente.length) { msgs = l.concat(attente); save(); paint(); }
   }
-
   /* Mise en forme des réponses : tableaux, titres, listes, gras/italique, code, sauts de ligne (<br> écrits par l'IA compris) */
   const inline = x => esc(x).replace(/\u0001/g, '<br>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s).,;:!?]|$)/g, '$1<i>$2</i>');
   const cells = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
@@ -95,7 +109,7 @@
     const b = document.createElement('button'); b.id = 'zs-btn'; b.type = 'button'; b.innerHTML = '<span class="zs-av">Z</span>ZACKsmart'; b.title = 'Assistant ZACKsmart';
     const p = document.createElement('div'); p.id = 'zs-panel';
     p.innerHTML = '<header><span class="zs-av">Z</span><div><b>ZACKsmart</b><small>Conseiller commercial et guide de la plateforme</small></div><button type="button" id="zs-deep" title="Mode discussion approfondie (réponses détaillées)">🧠</button><button type="button" id="zs-big" title="Agrandir / réduire">⤢</button><button type="button" id="zs-clear" title="Effacer la conversation">🗑</button><button type="button" id="zs-close" title="Fermer">✕</button></header>' +
-      '<div id="zs-msgs"></div><form id="zs-form"><textarea id="zs-input" rows="1" maxlength="1000" placeholder="Posez votre question…"></textarea><button id="zs-send" type="submit">Envoyer</button></form>';
+      '<div id="zs-msgs"></div><div id="zs-st"></div><form id="zs-form"><textarea id="zs-input" rows="1" maxlength="1000" placeholder="Posez votre question…"></textarea><button id="zs-send" type="submit">Envoyer</button></form>';
     document.body.appendChild(b); document.body.appendChild(p);
     const vue = () => { p.classList.toggle('big', big); $('#zs-deep').classList.toggle('act', deep); $('#zs-deep').title = deep ? 'Discussion approfondie : ACTIVÉE (cliquer pour réponses courtes)' : 'Réponses courtes (cliquer pour activer la discussion approfondie)'; $('#zs-input').placeholder = deep ? 'Décrivez votre situation ou posez votre question…' : 'Posez votre question…'; };
     $('#zs-deep').onclick = () => { deep = !deep; try { localStorage.setItem('zacksmart_deep', deep ? '1' : '0'); } catch (e) { /* ok */ } vue(); };
@@ -111,14 +125,17 @@
       const r = n.getBoundingClientRect(), pos = getComputedStyle(n).position; if ((pos === 'fixed' || pos === 'sticky') && r.top > window.innerHeight / 2) document.documentElement.style.setProperty('--zs-nav', Math.max(0, Math.round(window.innerHeight - r.top - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab') || 0))) + 'px'); };
     placeBtn(); window.addEventListener('resize', placeBtn); window.addEventListener('orientationchange', () => setTimeout(placeBtn, 300)); setTimeout(placeBtn, 800);
     const lock = on => document.documentElement.classList.toggle('zs-lock', !!on && mobile());
-    const ouvrir = () => { p.classList.add('on'); lock(true); fit(); paint(); if (!mobile()) $('#zs-input').focus(); if (window.LocalDB && LocalDB.sync) LocalDB.sync().catch(() => {}); rafraichir(); };
+    const ouvrir = () => { p.classList.add('on'); lock(true); fit(); paint(); if (!mobile()) $('#zs-input').focus(); rafraichir(true); };
     const fermer = () => { p.classList.remove('on'); lock(false); };
     if (vv) { vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); }
     window.addEventListener('orientationchange', () => setTimeout(fit, 250)); window.addEventListener('resize', fit);
     $('#zs-input').addEventListener('focus', () => setTimeout(fit, 300));
     b.onclick = () => { if (p.classList.contains('on')) fermer(); else ouvrir(); };
     $('#zs-close').onclick = fermer;
-    $('#zs-clear').onclick = async () => { if (!msgs.length || confirm('Effacer la conversation sur tous vos appareils ?')) { msgs = []; save(); paint(); if (sync) await sb.from(TBL).delete().eq('proprietaire', owner()); } };
+    $('#zs-clear').onclick = async () => { if (!msgs.length) return; if (!confirm('Effacer la conversation sur tous vos appareils ?')) return;
+      const r = rem(); if (r && navigator.onLine) { try { const q = await r.from(TBL).delete().eq('proprietaire', owner()); if (q.error) { majEtat(false, en(q.error)); return; } } catch (e) { majEtat(false, en(e)); return; } }
+      else if (r) { alert('Connexion nécessaire pour effacer la conversation sur tous les appareils.'); return; }
+      msgs = []; save(); paint(); };
     $('#zs-form').onsubmit = e => { e.preventDefault(); send($('#zs-input').value); };
     $('#zs-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('#zs-input').value); } });
     paint();
@@ -135,7 +152,7 @@
   async function send(text) {
     text = String(text || '').trim(); if (!text || busy) return;
     $('#zs-input').value = ''; const mu = { role: 'user', content: text }; msgs.push(mu); busy = true; $('#zs-send').disabled = true; paint(); save();
-    ecrire('user', text).then(x => { if (x.id) mu.id = x.id; });
+    mu.envoi = true; ecrire('user', text).then(id => { mu.envoi = false; if (id) mu.id = id; });
     let rep = null, note = false;
     try {
       if (!navigator.onLine) throw new Error('offline');
@@ -154,13 +171,14 @@
       note = false;
     }
     const ma = { role: 'assistant', content: rep, note }; msgs.push(ma); busy = false; $('#zs-send').disabled = false; paint(); save();
-    ecrire('assistant', rep).then(x => { if (x.id) ma.id = x.id; elaguer(); });
+    ma.envoi = true; ecrire('assistant', rep).then(id => { ma.envoi = false; if (id) ma.id = id; elaguer(); });
   }
 
   document.addEventListener('mariabag:authenticated', () => { build(); $('#zs-btn').classList.add('on'); setTimeout(() => rafraichir(true), 1500); });
   // autres appareils : on relit la conversation régulièrement quand la fenêtre est ouverte, et au retour sur l'application
   setInterval(() => { const p = $('#zs-panel'); if (p && p.classList.contains('on') && document.visibilityState === 'visible') rafraichir(); }, 6000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && $('#zs-btn')) rafraichir(); });
+  window.addEventListener('online', () => { if ($('#zs-btn')) rafraichir(true); });
   // déconnexion : on masque l'assistant quand l'écran de connexion est affiché (la connexion par ancien mot de passe n'a pas de profil)
   document.addEventListener('mariabag:profil', () => setTimeout(() => { const l = $('#login'), b = $('#zs-btn'), p = $('#zs-panel');
     if (l && b && getComputedStyle(l).display !== 'none') { b.classList.remove('on'); if (p) p.classList.remove('on'); document.documentElement.classList.remove('zs-lock'); } }, 60));
