@@ -7,7 +7,7 @@
   const REQUIRED = typeof AUTH_REQUIRED !== 'undefined' && AUTH_REQUIRED;
   const remote = () => (window.LocalDB && LocalDB.remote) ? LocalDB.remote() : null;
   const $l = id => document.getElementById(id);
-  let mode = 'login', profil = null;
+  let mode = 'login', profil = null, quitter = false;   // quitter = déconnexion demandée par l'utilisateur
 
   /* Barrière de synchronisation : rien n'est envoyé ni téléchargé sans compte connecté (si obligatoire) */
   if (window.LocalDB && LocalDB.setGate) LocalDB.setGate(async () => {
@@ -44,7 +44,8 @@
   async function lireProfil(user){
     const r = remote(); if (!r) return null;
     const q = await r.from('profils').select('*').eq('id', user.id).maybeSingle();
-    if (q.error || !q.data) return q.error && /fetch|network|failed/i.test(q.error.message) ? 'reseau' : null;
+    if (q.error) return 'reseau';                       // toute erreur (réseau, jeton expiré, serveur lent) : on ne déconnecte pas, on garde le profil connu
+    if (!q.data) return null;                           // requête réussie mais aucune ligne : compte vraiment non enregistré
     return q.data;
   }
   async function entrer(user, silencieux){
@@ -63,7 +64,13 @@
     const r = remote();
     if (r) {
       r.auth.onAuthStateChange((ev) => {
-        if (ev === 'SIGNED_OUT') { uncache(); if (!$l('app').classList.contains('hide')) showLogin(); }
+        if (ev === 'SIGNED_OUT') {
+          if (quitter) { uncache(); if (!$l('app').classList.contains('hide')) showLogin(); return; }
+          // déconnexion qui ne vient pas de vous (jeton non renouvelé, onglet voisin…) : on revérifie avant de vous renvoyer à l'écran de connexion
+          setTimeout(async () => { try { const s = await r.auth.getSession(); if (s && s.data && s.data.session) return;
+            if (!navigator.onLine) return;                                  // hors ligne : on reste dans l'application
+            if (!$l('app').classList.contains('hide')) { uncache(); showLogin('Votre session a expiré : reconnectez-vous.'); } } catch (e) { /* on reste connecté */ } }, 1500);
+        }
         if (ev === 'PASSWORD_RECOVERY') { setMode('reset'); document.getElementById('login').classList.remove('hide'); }
       });
       try {
@@ -214,8 +221,8 @@
   });
 
   document.getElementById('bLogout')?.addEventListener('click', async function(){
-    sessionStorage.removeItem(SESSION_KEY); uncache();
+    quitter = true; sessionStorage.removeItem(SESSION_KEY); uncache();
     const r = remote(); try { if (r) await r.auth.signOut(); } catch (e) {}
-    showLogin();
+    showLogin(); setTimeout(() => { quitter = false; }, 3000);
   });
 })();
