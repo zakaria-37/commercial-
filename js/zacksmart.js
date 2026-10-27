@@ -9,7 +9,7 @@
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const KEY = 'zacksmart_hist';
-  const SUGG = ['Aide-moi à organiser ma semaine commerciale', 'Plan pour prospecter les grandes surfaces', 'Comment négocier le prix avec une grande surface ?', 'Comment fixer mon prix de vente et ma marge ?', 'Comment diriger et suivre le travail de l’équipe ?', 'Comment faire une facture ?'];
+  const SUGG = ['Aide-moi à organiser ma semaine commerciale', 'Plan pour prospecter les grandes surfaces', 'Comment négocier le prix avec une grande surface ?', 'Comment fixer mon prix de vente et ma marge ?', 'Comment diriger et suivre le travail de l’équipe ?', 'Rédiger un message pro (WhatsApp ou e-mail)', 'Comment faire une facture ?'];
   const FAQ = [
     [['facture', 'devis', 'bon de commande'], 'Pour faire une facture : menu **Commerce** → onglet Factures → « + Nouvelle facture ». Choisissez le client, ajoutez les lignes (produit, quantité, prix), le mode de paiement (cash, à terme ou versement) puis enregistrez. Le PDF se télécharge depuis la liste. Le stock des produits finis diminue automatiquement.'],
     [['rendez-vous', 'rdv', 'grande surface', 'prospect'], 'Pour noter un rendez-vous : menu **Notes** → onglet Rendez-vous → « + Nouveau rendez-vous ». Indiquez l’objet, la date, l’heure, le lieu, le type (grande surface, client, prospect) et ce que vous voulez proposer. Après le rendez-vous, cliquez sur **Fait** et écrivez le résultat.'],
@@ -23,6 +23,7 @@
     [['atelier', 'facon', 'paiement atelier'], 'Paiement des ateliers : menu **Ateliers** → onglet Paiements ateliers. Indiquez le prix de façon dans la production, puis « Payer » pour enregistrer un paiement et imprimer le bon PDF.'],
     [['inventaire', 'comptage'], 'Inventaire : menu **Inventaire** → créez un inventaire (ex. 2026), saisissez les quantités ; le bouton « Fiche de comptage » génère un PDF à remplir dans l’atelier.'],
     [['sauvegarde', 'copie', 'export'], 'Sauvegarde : bouton **Sauvegarde** en haut de l’écran pour télécharger une copie complète de vos données. Faites-le régulièrement.'],
+    [['message', 'whatsapp', 'email', 'e-mail', 'mail', 'sms', 'relance', 'ecrire'], 'Pour écrire un message professionnel : touchez **✉ Rédiger un message** (en bas de la conversation), choisissez WhatsApp ou e-mail, le destinataire et l’objectif. Le message est prêt à copier-coller avec le bouton **Copier**.'],
     [['contact', 'client', 'fournisseur'], 'Contacts : menu **Contacts** → liste des clients et fournisseurs, avec les onglets Clients/Fournisseurs (classement), Chiffre d’affaires et Paiements (soldes).'],
   ];
   let msgs = [], busy = false, deep = true, big = false;
@@ -85,6 +86,13 @@
     const close = () => { if (ul) { out.push('</ul>'); ul = false; } if (ol) { out.push('</ol>'); ol = false; } };
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
+      if (/^\s*```/.test(l)) {                                                   // message prêt à copier-coller
+        close(); const buf = []; i++;
+        while (i < lines.length && !/^\s*```/.test(lines[i])) { buf.push(lines[i]); i++; }
+        const txt = buf.join('\n').replace(/^\n+|\n+$/g, '');
+        out.push('<div class="zs-copy"><div class="zs-ch"><span>📋 Message prêt à copier</span><button type="button" data-copy="1" data-t="' + esc(txt) + '">Copier</button></div><pre>' + esc(txt) + '</pre></div>');
+        continue;
+      }
       if (/^\s*\|.*\|?\s*$/.test(l) && l.split('|').length > 2) {            // tableau
         close(); const rows = [];
         while (i < lines.length && /^\s*\|/.test(lines[i])) { rows.push(lines[i]); i++; } i--;
@@ -101,6 +109,53 @@
     }
     close(); return out.join('');
   };
+  /* ---------- Copier-coller ---------- */
+  async function copier(txt, btn) {
+    let ok = false;
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(txt); ok = true; } } catch (e) { ok = false; }
+    if (!ok) {   // secours (iPhone / anciens navigateurs)
+      const ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+      document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, txt.length);
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; } ta.remove();
+    }
+    const old = btn.textContent; btn.textContent = ok ? '✓ Copié' : 'Sélectionnez et copiez'; btn.classList.toggle('ok', ok);
+    setTimeout(() => { btn.textContent = old; btn.classList.remove('ok'); }, 2200);
+  }
+
+  /* ---------- Rédiger un message professionnel (WhatsApp / e-mail / SMS) ---------- */
+  const CANAUX = ['WhatsApp', 'E-mail', 'SMS'];
+  const DEST = ['Grande surface', 'Boutique / magasin', 'Client existant', 'Fournisseur', 'Atelier partenaire', 'Autre société'];
+  const OBJ = ['Présenter Maria Bag et proposer un rendez-vous', 'Confirmer un rendez-vous', 'Remercier après un rendez-vous', 'Envoyer ou relancer un devis', 'Relancer une facture impayée', 'Annoncer une nouveauté ou une offre', 'Répondre à une demande de prix', 'Autre (préciser dans les détails)'];
+  const TON = ['Cordial et professionnel', 'Très formel'];
+  let gen = null;
+  const SIG = '[Votre prénom et nom]\nCommerciale — MARIA BAG (Maria Atelier)\nChâteau Rouge – Les Eucalyptus, Alger\nTél : 0540 01 84 40 / 0550 57 50 93';
+  const MOD = {
+    0: (c, n) => c === 'E-mail' ? 'Objet : Présentation de MARIA BAG — maroquinerie fabriquée en Algérie\n\nBonjour ' + n + ',\n\nJe me permets de vous contacter de la part de MARIA BAG, atelier de maroquinerie à Alger (sacs, pochettes, cabas).\n\nNous aimerions vous présenter notre gamme, ses finitions et nos conditions pour les professionnels. Seriez-vous disponible pour un rendez-vous de 20 minutes le [jour] à [heure] ?\n\nJe peux vous apporter des échantillons et notre catalogue.\n\nDans l\'attente de votre retour,\nCordialement,\n' + SIG : 'Bonjour ' + n + ', je suis [Votre prénom] de MARIA BAG, atelier de maroquinerie à Alger (sacs, pochettes, cabas). J\'aimerais vous présenter notre gamme et nos conditions professionnelles. Seriez-vous disponible pour un court rendez-vous le [jour] à [heure] ? Je viens avec des échantillons. Merci et bonne journée.',
+    1: (c, n) => c === 'E-mail' ? 'Objet : Confirmation de notre rendez-vous du [date]\n\nBonjour ' + n + ',\n\nJe vous confirme notre rendez-vous le [jour] à [heure] à [lieu].\nJe vous présenterai notre gamme avec des échantillons.\n\nN\'hésitez pas à me prévenir en cas d\'empêchement.\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', je vous confirme notre rendez-vous le [jour] à [heure] à [lieu]. Je viendrai avec nos échantillons. Prévenez-moi en cas d\'empêchement. À bientôt !',
+    2: (c, n) => c === 'E-mail' ? 'Objet : Merci pour notre rendez-vous\n\nBonjour ' + n + ',\n\nMerci pour le temps que vous m\'avez accordé le [date]. Comme convenu, je vous envoie [devis / catalogue / tarifs].\n\nJe reste à votre disposition pour toute question et je vous recontacte le [date] pour connaître votre avis.\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', merci pour notre rendez-vous. Comme convenu, je vous envoie [devis / catalogue]. Je reste disponible pour toute question et je vous recontacte le [date]. Bonne journée.',
+    3: (c, n) => c === 'E-mail' ? 'Objet : Notre devis n° [numéro] — MARIA BAG\n\nBonjour ' + n + ',\n\nVeuillez trouver ci-joint notre devis n° [numéro] pour [produits et quantités], d\'un montant de [montant] DA, valable jusqu\'au [date].\n\nSi vous souhaitez le valider ou l\'ajuster, je suis à votre disposition. Pouvons-nous en parler cette semaine ?\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', je reviens vers vous au sujet de notre devis n° [numéro] ([montant] DA, valable jusqu\'au [date]). Avez-vous pu le consulter ? Je peux l\'ajuster si besoin. Merci !',
+    4: (c, n) => c === 'E-mail' ? 'Objet : Rappel — facture n° [numéro] en attente de règlement\n\nBonjour ' + n + ',\n\nSauf erreur de notre part, la facture n° [numéro] du [date], d\'un montant de [montant] DA, reste à régler (échéance : [date]).\n\nPourriez-vous nous indiquer la date de paiement prévue ? Si le règlement a déjà été effectué, merci de ne pas tenir compte de ce message.\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', un petit rappel : la facture n° [numéro] de [montant] DA (échéance [date]) n\'apparaît pas encore comme réglée. Pouvez-vous me confirmer la date de paiement ? Si c\'est déjà fait, merci d\'ignorer ce message.',
+    5: (c, n) => c === 'E-mail' ? 'Objet : Nouveauté MARIA BAG — [nom du produit / offre]\n\nBonjour ' + n + ',\n\nNous avons le plaisir de vous présenter [nouveauté / offre] : [2 lignes de description et avantages].\n[Conditions : prix, quantité minimale, validité].\n\nJe peux vous envoyer des photos ou passer vous montrer les échantillons. Quel jour vous conviendrait ?\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', nouveauté chez MARIA BAG : [produit / offre] — [avantage principal]. Conditions : [prix / quantité / validité]. Je vous envoie les photos ou je passe avec des échantillons ?',
+    6: (c, n) => c === 'E-mail' ? 'Objet : Votre demande de prix — MARIA BAG\n\nBonjour ' + n + ',\n\nMerci pour votre demande. Voici nos prix pour [produit] : [prix unitaire] DA à partir de [quantité] pièces, délai de livraison [délai], paiement [conditions].\n\nJe reste à votre disposition pour adapter l\'offre à vos besoins.\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', merci pour votre demande. Pour [produit] : [prix] DA/pièce à partir de [quantité] pièces, livraison sous [délai], paiement [conditions]. Je peux adapter l\'offre si besoin.',
+    7: (c, n) => c === 'E-mail' ? 'Objet : [objet]\n\nBonjour ' + n + ',\n\n[Votre message]\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', [votre message]. Merci et bonne journée.'
+  };
+  function genHtml() {
+    const g = gen, sel = (id, arr, v) => '<select id="' + id + '">' + arr.map((x, i) => '<option value="' + i + '"' + (String(v) === String(i) ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select>';
+    return '<div class="zs-m bot zs-gen"><b>✉ Rédiger un message professionnel</b>' +
+      '<label>Canal ' + sel('zg-c', CANAUX, g.c) + '</label><label>Destinataire ' + sel('zg-d', DEST, g.d) + '</label><label>Objectif ' + sel('zg-o', OBJ, g.o) + '</label>' +
+      '<label>Nom de la personne ou de la société <input id="zg-n" maxlength="80" placeholder="Ex : Mme Karima, Ardis Hydra" value="' + esc(g.n) + '"></label>' +
+      '<label>Détails à préciser (facultatif) <textarea id="zg-x" rows="2" maxlength="500" placeholder="Date, produits, montants, contexte…">' + esc(g.x) + '</textarea></label>' +
+      '<label>Ton ' + sel('zg-t', TON, g.t) + '</label>' +
+      '<div class="zg-b"><button type="button" id="zg-go">Rédiger</button><button type="button" id="zg-cancel" class="alt">Annuler</button></div></div>';
+  }
+  const genLire = () => { if (!gen || !$('#zg-c')) return; gen.c = $('#zg-c').value; gen.d = $('#zg-d').value; gen.o = $('#zg-o').value; gen.n = $('#zg-n').value; gen.x = $('#zg-x').value; gen.t = $('#zg-t').value; };
+  function genEnvoyer() {
+    genLire(); const g = gen, canal = CANAUX[g.c], dest = DEST[g.d], obj = OBJ[g.o], nom = g.n.trim();
+    const prompt = 'Rédige un message ' + canal + ' professionnel, prêt à copier-coller, destiné à : ' + dest + (nom ? ' (' + nom + ')' : '') + '. Objectif : ' + obj + '. Ton : ' + TON[g.t].toLowerCase() + '.' + (g.x.trim() ? ' Détails : ' + g.x.trim() : '') + ' Utilise des [crochets] pour les informations manquantes.';
+    const tpl = () => '```\n' + MOD[g.o](canal, nom || '[Nom]') + '\n```';
+    gen = null; send(prompt, tpl);
+  }
+
   const faq = q => { const n = norm(q); let best = null, sc = 0; FAQ.forEach(([ks, a]) => { const s = ks.filter(k => n.includes(norm(k))).length; if (s > sc) { sc = s; best = a; } }); return best; };
   const page = () => { const b = document.querySelector('nav button.on'); return b ? b.textContent.trim() : ''; };
 
@@ -109,7 +164,7 @@
     const b = document.createElement('button'); b.id = 'zs-btn'; b.type = 'button'; b.innerHTML = '<span class="zs-av">Z</span>ZACKsmart'; b.title = 'Assistant ZACKsmart';
     const p = document.createElement('div'); p.id = 'zs-panel';
     p.innerHTML = '<header><span class="zs-av">Z</span><div><b>ZACKsmart</b><small>Conseiller commercial et guide de la plateforme</small></div><button type="button" id="zs-deep" title="Mode discussion approfondie (réponses détaillées)">🧠</button><button type="button" id="zs-big" title="Agrandir / réduire">⤢</button><button type="button" id="zs-clear" title="Effacer la conversation">🗑</button><button type="button" id="zs-close" title="Fermer">✕</button></header>' +
-      '<div id="zs-msgs"></div><div id="zs-st"></div><form id="zs-form"><textarea id="zs-input" rows="1" maxlength="1000" placeholder="Posez votre question…"></textarea><button id="zs-send" type="submit">Envoyer</button></form>';
+      '<div id="zs-msgs"></div><div id="zs-st"></div><div id="zs-tools"><button type="button" id="zs-msgbtn">✉ Rédiger un message</button></div><form id="zs-form"><textarea id="zs-input" rows="1" maxlength="1000" placeholder="Posez votre question…"></textarea><button id="zs-send" type="submit">Envoyer</button></form>';
     document.body.appendChild(b); document.body.appendChild(p);
     const vue = () => { p.classList.toggle('big', big); $('#zs-deep').classList.toggle('act', deep); $('#zs-deep').title = deep ? 'Discussion approfondie : ACTIVÉE (cliquer pour réponses courtes)' : 'Réponses courtes (cliquer pour activer la discussion approfondie)'; $('#zs-input').placeholder = deep ? 'Décrivez votre situation ou posez votre question…' : 'Posez votre question…'; };
     $('#zs-deep').onclick = () => { deep = !deep; try { localStorage.setItem('zacksmart_deep', deep ? '1' : '0'); } catch (e) { /* ok */ } vue(); };
@@ -136,6 +191,12 @@
       const r = rem(); if (r && navigator.onLine) { try { const q = await r.from(TBL).delete().eq('proprietaire', owner()); if (q.error) { majEtat(false, en(q.error)); return; } } catch (e) { majEtat(false, en(e)); return; } }
       else if (r) { alert('Connexion nécessaire pour effacer la conversation sur tous les appareils.'); return; }
       msgs = []; save(); paint(); };
+    window.ouvrirGen = () => { if (!gen) gen = { c: 0, d: 0, o: 0, n: '', x: '', t: 0 }; paint(); const b = $('#zs-msgs'); if (b) b.scrollTop = b.scrollHeight; };
+    $('#zs-msgbtn').onclick = () => { if (gen) { gen = null; paint(); } else window.ouvrirGen(); };
+    $('#zs-msgs').addEventListener('click', e => {
+      const c = e.target.closest('[data-copy]'); if (c) { copier(c.dataset.t, c); return; }
+      if (e.target.id === 'zg-go') genEnvoyer(); else if (e.target.id === 'zg-cancel') { gen = null; paint(); } });
+    $('#zs-msgs').addEventListener('input', () => genLire());
     $('#zs-form').onsubmit = e => { e.preventDefault(); send($('#zs-input').value); };
     $('#zs-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('#zs-input').value); } });
     paint();
@@ -145,11 +206,12 @@
     let h = '<div class="zs-m bot">Bonjour 👋 Je suis <b>ZACKsmart</b>, développé par l’ingénieur <b>Benouadah Zakaria</b>. Je suis votre agent intelligent pour la société <b>Maria Bag</b> : je vous explique la plateforme et je vous conseille dans votre travail commercial (rendez-vous, prix, relances, organisation du travail…).</div>';
     if (!msgs.length) h += '<div class="zs-chips">' + SUGG.map(s => '<button type="button" data-q="' + esc(s) + '">' + esc(s) + '</button>').join('') + '</div>';
     msgs.forEach(m => { h += '<div class="zs-m ' + (m.role === 'user' ? 'me' : m.note ? 'note' : 'bot') + '">' + (m.role === 'user' ? esc(m.content).replace(/\n/g, '<br>') : md(m.content)) + '</div>'; });
+    if (gen) h += genHtml();
     if (busy) h += '<div class="zs-m bot zs-dots"><span></span><span></span><span></span></div>';
     box.innerHTML = h; box.scrollTop = box.scrollHeight;
-    box.querySelectorAll('[data-q]').forEach(x => x.onclick = () => send(x.dataset.q));
+    box.querySelectorAll('[data-q]').forEach(x => x.onclick = () => { if (x.dataset.q.startsWith('Rédiger un message pro')) window.ouvrirGen(); else send(x.dataset.q); });
   }
-  async function send(text) {
+  async function send(text, tpl) {
     text = String(text || '').trim(); if (!text || busy) return;
     $('#zs-input').value = ''; const mu = { role: 'user', content: text }; msgs.push(mu); busy = true; $('#zs-send').disabled = true; paint(); save();
     mu.envoi = true; ecrire('user', text).then(id => { mu.envoi = false; if (id) mu.id = id; });
@@ -165,7 +227,7 @@
       else if (d.error === 'rate') { rep = 'Vous écrivez très vite 🙂 Patientez quelques secondes puis réessayez.'; note = true; }
       else throw new Error(d.error || 'http ' + r.status);
     } catch (e) {
-      const f = faq(text), off = !navigator.onLine || e.message === 'offline', cfg = e.message === 'not_configured', salut = /^\s*(salut|bonjour|bonsoir|salam|slm|hello|coucou|hi)\b/i.test(text);
+      const f = tpl ? tpl() : faq(text), off = !navigator.onLine || e.message === 'offline', cfg = e.message === 'not_configured', salut = /^\s*(salut|bonjour|bonsoir|salam|slm|hello|coucou|hi)\b/i.test(text);
       rep = (off ? 'Vous êtes hors ligne : réponse de secours.' : cfg ? 'ZACKsmart n’est pas encore activé en mode intelligent : la clé de l’IA n’a pas encore été ajoutée côté serveur (Supabase → Edge Functions → Secrets → AI_API_KEY). En attendant, voici une aide de base.' : 'L’assistant intelligent ne répond pas pour le moment (' + esc(e.message) + ') : réponse de secours.') + '\n' +
         (salut ? 'Bonjour ! Je suis ZACKsmart 😊 Une fois activé, nous pourrons discuter en profondeur de votre travail commercial et de l’organisation du travail.' : f ? f : 'Je n’ai pas de réponse prête pour cette question. Reformulez avec des mots comme « facture », « rendez-vous », « fiche de paie », « stock »…');
       note = false;
