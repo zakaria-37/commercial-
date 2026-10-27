@@ -21,7 +21,7 @@
 
   // Ordre = parents d'abord (important pour envoyer les nouvelles lignes à Supabase)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants', 'productions', 'commandes',
-                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers', 'credits_employes', 'rendez_vous', 'notes_perso'];
+                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers', 'credits_employes', 'rendez_vous', 'notes_perso', 'zacksmart_messages'];
 
   // Valeurs par défaut (les mêmes que dans les fichiers supabase/*.sql)
   var DEFAULTS = {
@@ -49,6 +49,7 @@
     parametres: { valeur: {} },
     remises_hs: { date_op: null, type: 'remise', note: '' },
     credits_employes: { date_op: null, type: 'credit', note: '' },
+    zacksmart_messages: { proprietaire: 'partage', role: 'user' },
     notes_perso: { titre: '', categorie: 'À ne pas oublier', couleur: 'jaune', rappel: null, epingle: false, fait: false },
     rendez_vous: { heure: null, type: 'Client', contact_id: null, contact_nom: '', tel: '', lieu: '', objet: '', statut: 'Prévu', resultat: '', relance: null },
     inventaires: { annee: 0, date_inventaire: null, statut: 'brouillon', debut_periode: null, ventes: 0, achats: 0, valeur_nette: 0, stock_applique: false, notes: '', cloture_le: null },

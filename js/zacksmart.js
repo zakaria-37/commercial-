@@ -28,7 +28,36 @@
   let msgs = [], busy = false, deep = true, big = false;
   try { deep = localStorage.getItem('zacksmart_deep') !== '0'; big = localStorage.getItem('zacksmart_big') === '1'; } catch (e) { /* valeurs par défaut */ }
   try { msgs = JSON.parse(localStorage.getItem(KEY) || '[]').slice(-30); } catch (e) { msgs = []; }
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(msgs.slice(-30))); } catch (e) { /* stockage indisponible */ } };
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(msgs.slice(-30))); } catch (e) { /* stockage indisponible */ } };   // copie locale : affichage immédiat
+  /* Conversation synchronisée : un message = une ligne de la table zacksmart_messages (même profil = même conversation sur PC, téléphone, tablette) */
+  const TBL = 'zacksmart_messages', MAX = 200;
+  const owner = () => (window.APP_USER && window.APP_USER.id) ? String(window.APP_USER.id) : 'partage';
+  let sync = true;   // false si la table n'existe pas encore : on reste en mode local
+  async function lire() {
+    if (!sync) return null;
+    const r = await sb.from(TBL).select('*');
+    if (r.error) { sync = false; return null; }
+    const me = owner();
+    return (r.data || []).filter(x => x.proprietaire === me).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id))).map(x => ({ id: x.id, role: x.role, content: x.content }));
+  }
+  async function ecrire(role, content) {
+    const row = { proprietaire: owner(), role, content, created_at: new Date().toISOString() };
+    if (!sync) return { role, content };
+    const r = await sb.from(TBL).insert([row]).select();
+    if (r.error || !r.data || !r.data[0]) { sync = false; return { role, content }; }
+    return { id: r.data[0].id, role, content };
+  }
+  async function elaguer() {
+    const l = await lire(); if (!l || l.length <= MAX) return;
+    for (const m of l.slice(0, l.length - MAX)) await sb.from(TBL).delete().eq('id', m.id);
+  }
+  async function rafraichir(force) {
+    if (busy && !force) return;
+    if (sync && msgs.some(m => !m.id)) return;   // un message vient d'être envoyé : on attend qu'il soit enregistré
+    const l = await lire(); if (!l) return;
+    const sig = a => a.length + ':' + (a.length ? a[a.length - 1].id : '');
+    if (sig(l) !== sig(msgs.filter(m => m.id))) { msgs = l; save(); paint(); }
+  }
 
   const md = t => { let h = esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); const lines = h.split('\n'), out = []; let ul = false;
     lines.forEach(l => { const m = /^\s*(?:[-•*]|\d+[.)])\s+(.*)$/.exec(l); if (m) { if (!ul) { out.push('<ul>'); ul = true; } out.push('<li>' + m[1] + '</li>'); } else { if (ul) { out.push('</ul>'); ul = false; } out.push(l ? l + '<br>' : '<br>'); } });
@@ -57,14 +86,14 @@
       const r = n.getBoundingClientRect(), pos = getComputedStyle(n).position; if ((pos === 'fixed' || pos === 'sticky') && r.top > window.innerHeight / 2) document.documentElement.style.setProperty('--zs-nav', Math.max(0, Math.round(window.innerHeight - r.top - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sab') || 0))) + 'px'); };
     placeBtn(); window.addEventListener('resize', placeBtn); window.addEventListener('orientationchange', () => setTimeout(placeBtn, 300)); setTimeout(placeBtn, 800);
     const lock = on => document.documentElement.classList.toggle('zs-lock', !!on && mobile());
-    const ouvrir = () => { p.classList.add('on'); lock(true); fit(); paint(); if (!mobile()) $('#zs-input').focus(); };
+    const ouvrir = () => { p.classList.add('on'); lock(true); fit(); paint(); if (!mobile()) $('#zs-input').focus(); if (window.LocalDB && LocalDB.sync) LocalDB.sync().catch(() => {}); rafraichir(); };
     const fermer = () => { p.classList.remove('on'); lock(false); };
     if (vv) { vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); }
     window.addEventListener('orientationchange', () => setTimeout(fit, 250)); window.addEventListener('resize', fit);
     $('#zs-input').addEventListener('focus', () => setTimeout(fit, 300));
     b.onclick = () => { if (p.classList.contains('on')) fermer(); else ouvrir(); };
     $('#zs-close').onclick = fermer;
-    $('#zs-clear').onclick = () => { if (!msgs.length || confirm('Effacer la conversation ?')) { msgs = []; save(); paint(); } };
+    $('#zs-clear').onclick = async () => { if (!msgs.length || confirm('Effacer la conversation sur tous vos appareils ?')) { msgs = []; save(); paint(); if (sync) await sb.from(TBL).delete().eq('proprietaire', owner()); } };
     $('#zs-form').onsubmit = e => { e.preventDefault(); send($('#zs-input').value); };
     $('#zs-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('#zs-input').value); } });
     paint();
@@ -80,7 +109,8 @@
   }
   async function send(text) {
     text = String(text || '').trim(); if (!text || busy) return;
-    $('#zs-input').value = ''; msgs.push({ role: 'user', content: text }); busy = true; $('#zs-send').disabled = true; paint(); save();
+    $('#zs-input').value = ''; const mu = { role: 'user', content: text }; msgs.push(mu); busy = true; $('#zs-send').disabled = true; paint(); save();
+    ecrire('user', text).then(x => { if (x.id) mu.id = x.id; });
     let rep = null, note = false;
     try {
       if (!navigator.onLine) throw new Error('offline');
@@ -98,10 +128,14 @@
         (salut ? 'Bonjour ! Je suis ZACKsmart 😊 Une fois activé, nous pourrons discuter en profondeur de votre travail commercial et de l’organisation du travail.' : f ? f : 'Je n’ai pas de réponse prête pour cette question. Reformulez avec des mots comme « facture », « rendez-vous », « fiche de paie », « stock »…');
       note = false;
     }
-    msgs.push({ role: 'assistant', content: rep, note }); busy = false; $('#zs-send').disabled = false; paint(); save();
+    const ma = { role: 'assistant', content: rep, note }; msgs.push(ma); busy = false; $('#zs-send').disabled = false; paint(); save();
+    ecrire('assistant', rep).then(x => { if (x.id) ma.id = x.id; elaguer(); });
   }
 
-  document.addEventListener('mariabag:authenticated', () => { build(); $('#zs-btn').classList.add('on'); });
+  document.addEventListener('mariabag:authenticated', () => { build(); $('#zs-btn').classList.add('on'); setTimeout(() => rafraichir(true), 1500); });
+  // autres appareils : on relit la conversation régulièrement quand la fenêtre est ouverte, et au retour sur l'application
+  setInterval(() => { const p = $('#zs-panel'); if (p && p.classList.contains('on') && document.visibilityState === 'visible') rafraichir(); }, 6000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && $('#zs-btn')) rafraichir(); });
   // déconnexion : on masque l'assistant quand l'écran de connexion est affiché (la connexion par ancien mot de passe n'a pas de profil)
   document.addEventListener('mariabag:profil', () => setTimeout(() => { const l = $('#login'), b = $('#zs-btn'), p = $('#zs-panel');
     if (l && b && getComputedStyle(l).display !== 'none') { b.classList.remove('on'); if (p) p.classList.remove('on'); document.documentElement.classList.remove('zs-lock'); } }, 60));

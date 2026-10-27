@@ -14,7 +14,7 @@
   // Ordre important pour la restauration (les tables « parents » d'abord)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants',
                 'productions', 'commandes', 'acomptes', 'pointages', 'charges',
-                'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers', 'credits_employes', 'rendez_vous', 'notes_perso'];
+                'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers', 'credits_employes', 'rendez_vous', 'notes_perso', 'zacksmart_messages'];
   var LAST_KEY = 'mariabag_last_backup';
   var KEEP_FILES = 30;                       // nombre de sauvegardes gardées dans le dossier
   var REMIND_DAYS = 7;
