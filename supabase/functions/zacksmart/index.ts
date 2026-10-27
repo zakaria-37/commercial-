@@ -1,6 +1,6 @@
 // ZACKsmart : assistant de la plateforme MARIA BAG (aide à l'utilisation + conseils commerciaux).
 // La clé du fournisseur d'IA reste ici (secret Supabase), jamais dans le navigateur.
-// Secrets : AI_API_KEY (obligatoire), AI_BASE_URL (défaut Groq, compatible OpenAI), AI_MODEL (défaut llama-3.3-70b-versatile).
+// Secrets : AI_API_KEY (obligatoire), AI_BASE_URL (défaut Groq, compatible OpenAI), AI_MODEL (facultatif ; défaut openai/gpt-oss-120b avec modèles de secours).
 // Autre fournisseur gratuit : OpenRouter -> AI_BASE_URL=https://openrouter.ai/api/v1 , AI_MODEL=meta-llama/llama-3.3-70b-instruct:free
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
@@ -64,21 +64,31 @@ Deno.serve(async (req: Request) => {
     .slice(-20).map((m) => ({ role: m.role, content: m.content.slice(0, 3000) }));
   if (!msgs.length || msgs[msgs.length - 1].role !== "user") return json(400, { error: "empty" });
   const base = (Deno.env.get("AI_BASE_URL") || "https://api.groq.com/openai/v1").replace(/\/+$/, "");
-  const model = Deno.env.get("AI_MODEL") || "llama-3.3-70b-versatile";
+  // Modèle choisi (secret AI_MODEL) puis modèles de secours : si l'un est retiré par le fournisseur, on essaie le suivant.
+  const wanted = Deno.env.get("AI_MODEL");
+  const groq = base.includes("groq.com");
+  const models = groq ? [...new Set([wanted, "openai/gpt-oss-120b", "llama-3.1-8b-instant", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"].filter(Boolean) as string[])] : [wanted || "meta-llama/llama-3.3-70b-instruct:free"];
   const deep = body.deep !== false;
   const page = typeof body.page === "string" ? body.page.slice(0, 40) : "";
-  try {
-    const r = await fetch(base + "/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-      body: JSON.stringify({ model, temperature: 0.6, max_tokens: deep ? 1600 : 600, messages: [{ role: "system", content: SYSTEM + (page ? "\nL'utilisateur est actuellement dans la section : " + page + "." : "") + (deep ? "\nMode discussion approfondie activé : approfondis, structure, questionne et fais avancer la réflexion." : "\nMode réponse courte : va droit au but.") }, ...msgs] }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) return json(502, { error: "provider", status: r.status, detail: (d?.error?.message || "").slice(0, 200) });
-    const reply = d?.choices?.[0]?.message?.content;
-    if (!reply) return json(502, { error: "empty_reply" });
-    return json(200, { reply: String(reply).trim() });
-  } catch (e) {
-    return json(502, { error: "network", detail: String(e).slice(0, 120) });
+  const system = SYSTEM + (page ? "\nL'utilisateur est actuellement dans la section : " + page + "." : "") + (deep ? "\nMode discussion approfondie activé : approfondis, structure, questionne et fais avancer la réflexion." : "\nMode réponse courte : va droit au but.");
+  let last: Record<string, unknown> = { error: "provider" };
+  for (const model of models) {
+    try {
+      const payload: Record<string, unknown> = { model, temperature: 0.6, max_tokens: deep ? 2600 : 1200, messages: [{ role: "system", content: system }, ...msgs] };
+      if (model.includes("gpt-oss")) payload.reasoning_effort = "low"; // modèles « raisonneurs » : réflexion courte, réponse plus rapide
+      const r = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(payload) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        const reply = d?.choices?.[0]?.message?.content;
+        if (reply && String(reply).trim()) return json(200, { reply: String(reply).trim(), model });
+        last = { error: "empty_reply", model };
+        continue;
+      }
+      last = { error: "provider", status: r.status, model, detail: (d?.error?.message || "").slice(0, 200) };
+      if (r.status === 401 || r.status === 403 || r.status === 429) break; // clé invalide ou quota : inutile d'essayer un autre modèle
+    } catch (e) {
+      last = { error: "network", detail: String(e).slice(0, 120) };
+    }
   }
+  return json(502, last);
 });
