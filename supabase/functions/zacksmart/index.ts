@@ -21,11 +21,11 @@ STYLE
 - Dans une discussion de fond, pose 1 ou 2 questions de précision utiles (cible, volume, délai, budget, objectif) avant ou après ta proposition, puis fais avancer la conversation en t'appuyant sur ce qui a déjà été dit. Termine par une prochaine action concrète et propose d'approfondir un point.
 - Mise en forme (lue souvent sur téléphone) : évite les tableaux Markdown et tout HTML comme <br> ; préfère de courts titres en gras, des listes à puces et des étapes numérotées. N'utilise un tableau que si on te le demande explicitement.
 - Donne ton avis franchement, signale les risques (marge trop faible, délai de paiement, dépendance à un seul client). Ne remplis pas de généralités : adapte à la maroquinerie algérienne.
-- Si tu n'es pas sûr d'une fonction de la plateforme ou d'une règle locale (douane, fiscalité), dis-le. Ne demande jamais de mot de passe. Tu n'as PAS accès aux données de l'entreprise : demande les chiffres à l'utilisateur ou indique où les trouver dans la plateforme.
+- Si tu n'es pas sûr d'une fonction de la plateforme ou d'une règle locale (douane, fiscalité), dis-le. Ne demande jamais de mot de passe. Tu ne vois que les données de l'entreprise jointes plus bas dans « DONNÉES RÉELLES » (le stock, quand il est fourni). Quand ces données sont présentes, réponds avec ces chiffres exacts (quantité, unité, rouleaux, état, seuil, prix, fournisseur), en citant l'article ; si l'article demandé n'y figure pas, dis qu'il est introuvable et propose de vérifier l'orthographe — n'invente JAMAIS une quantité ou un prix. Pour tout autre chiffre (clients, salaires, ventes, factures), tu n'y as pas accès : demande-le à l'utilisateur ou indique où le trouver dans la plateforme.
 
 MESSAGES PROFESSIONNELS (WhatsApp, e-mail, SMS) — très important
 - Quand on te demande de rédiger un message, un e-mail, un texte WhatsApp, une relance, une présentation, une réponse à un client ou à une société : écris une phrase d'introduction très courte, puis le message COMPLET dans un bloc de code délimité par trois accents graves (\`\`\`), sans aucun commentaire à l'intérieur du bloc, prêt à copier-coller tel quel. Après le bloc, au plus 1 ou 2 conseils courts (moment d'envoi, pièce jointe à joindre). Une seule version par défaut ; propose une variante plus courte ou plus formelle dans un second bloc seulement si c'est utile.
-- Contenu : salutation adaptée (« Bonjour Madame/Monsieur [Nom], » ou « Bonjour [Prénom], »), objet clair, 3 à 6 phrases maximum, une demande d'action précise avec une date ou un délai (rendez-vous, réponse, paiement), formule de politesse, signature : « [Votre prénom et nom] — Commerciale, MARIA BAG (Maria Atelier), Château Rouge – Les Eucalyptus, Alger — Tél : 0540 01 84 40 / 0550 57 50 93 ».
+- Contenu : salutation adaptée (« Bonjour Madame/Monsieur [Nom], » ou « Bonjour [Prénom], »), objet clair, 3 à 6 phrases maximum, une demande d'action précise avec une date ou un délai (rendez-vous, réponse, paiement), formule de politesse, signature : « [Votre prénom et nom] — Commerciale, MARIA BAG (Maria Atelier), Château Rouge – Les Eucalyptus, Alger — Tél : 0549 69 16 54 ».
 - E-mail : première ligne « Objet : … », puis le corps, puis « Cordialement, » et la signature. WhatsApp : plus court (5 à 7 lignes), ton cordial et professionnel, un seul emoji sobre au maximum, pas de mise en forme Markdown (le *gras* WhatsApp avec un seul astérisque est permis). SMS : 2 ou 3 phrases.
 - N'invente jamais de prix, de dates, de chiffres ni de noms : utilise des crochets [comme ceci] pour toute information manquante. Pose une question seulement si une information est indispensable ; sinon rédige avec des crochets.
 - Ton : professionnel, poli, positif, jamais agressif ; pour un impayé, ferme mais courtois. Écris dans la langue du destinataire si on te la précise (français par défaut, arabe ou anglais possibles).
@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
   if (!key) return json(503, { error: "not_configured" });
   const ip = req.headers.get("x-forwarded-for") || "x";
   if (limited(ip)) return json(429, { error: "rate" });
-  let body: { messages?: { role: string; content: string }[]; page?: string; deep?: boolean };
+  let body: { messages?: { role: string; content: string }[]; page?: string; deep?: boolean; contexte?: string };
   try { body = await req.json(); } catch { return json(400, { error: "json" }); }
   const msgs = (Array.isArray(body.messages) ? body.messages : [])
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
@@ -80,7 +80,8 @@ Deno.serve(async (req: Request) => {
   const models = groq ? [...new Set([wanted, "openai/gpt-oss-120b", "llama-3.1-8b-instant", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"].filter(Boolean) as string[])] : [wanted || "meta-llama/llama-3.3-70b-instruct:free"];
   const deep = body.deep !== false;
   const page = typeof body.page === "string" ? body.page.slice(0, 40) : "";
-  const system = SYSTEM + (page ? "\nL'utilisateur est actuellement dans la section : " + page + "." : "") + (deep ? "\nMode discussion approfondie activé : approfondis, structure, questionne et fais avancer la réflexion." : "\nMode réponse courte : va droit au but.");
+  const contexte = typeof body.contexte === "string" ? body.contexte.slice(0, 9000) : "";
+  const system = SYSTEM + (contexte ? "\n\n" + contexte : "") + (page ? "\nL'utilisateur est actuellement dans la section : " + page + "." : "") + (deep ? "\nMode discussion approfondie activé : approfondis, structure, questionne et fais avancer la réflexion." : "\nMode réponse courte : va droit au but.");
   let last: Record<string, unknown> = { error: "provider" };
   for (const model of models) {
     try {

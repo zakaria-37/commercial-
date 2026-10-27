@@ -128,7 +128,7 @@
   const OBJ = ['Présenter Maria Bag et proposer un rendez-vous', 'Confirmer un rendez-vous', 'Remercier après un rendez-vous', 'Envoyer ou relancer un devis', 'Relancer une facture impayée', 'Annoncer une nouveauté ou une offre', 'Répondre à une demande de prix', 'Autre (préciser dans les détails)'];
   const TON = ['Cordial et professionnel', 'Très formel'];
   let gen = null;
-  const SIG = '[Votre prénom et nom]\nCommerciale — MARIA BAG (Maria Atelier)\nChâteau Rouge – Les Eucalyptus, Alger\nTél : 0540 01 84 40 / 0550 57 50 93';
+  const SIG = '[Votre prénom et nom]\nCommerciale — MARIA BAG (Maria Atelier)\nChâteau Rouge – Les Eucalyptus, Alger\nTél : 0549 69 16 54';
   const MOD = {
     0: (c, n) => c === 'E-mail' ? 'Objet : Présentation de MARIA BAG — maroquinerie fabriquée en Algérie\n\nBonjour ' + n + ',\n\nJe me permets de vous contacter de la part de MARIA BAG, atelier de maroquinerie à Alger (sacs, pochettes, cabas).\n\nNous aimerions vous présenter notre gamme, ses finitions et nos conditions pour les professionnels. Seriez-vous disponible pour un rendez-vous de 20 minutes le [jour] à [heure] ?\n\nJe peux vous apporter des échantillons et notre catalogue.\n\nDans l\'attente de votre retour,\nCordialement,\n' + SIG : 'Bonjour ' + n + ', je suis [Votre prénom] de MARIA BAG, atelier de maroquinerie à Alger (sacs, pochettes, cabas). J\'aimerais vous présenter notre gamme et nos conditions professionnelles. Seriez-vous disponible pour un court rendez-vous le [jour] à [heure] ? Je viens avec des échantillons. Merci et bonne journée.',
     1: (c, n) => c === 'E-mail' ? 'Objet : Confirmation de notre rendez-vous du [date]\n\nBonjour ' + n + ',\n\nJe vous confirme notre rendez-vous le [jour] à [heure] à [lieu].\nJe vous présenterai notre gamme avec des échantillons.\n\nN\'hésitez pas à me prévenir en cas d\'empêchement.\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', je vous confirme notre rendez-vous le [jour] à [heure] à [lieu]. Je viendrai avec nos échantillons. Prévenez-moi en cas d\'empêchement. À bientôt !',
@@ -154,6 +154,42 @@
     const prompt = 'Rédige un message ' + canal + ' professionnel, prêt à copier-coller, destiné à : ' + dest + (nom ? ' (' + nom + ')' : '') + '. Objectif : ' + obj + '. Ton : ' + TON[g.t].toLowerCase() + '.' + (g.x.trim() ? ' Détails : ' + g.x.trim() : '') + ' Utilise des [crochets] pour les informations manquantes.';
     const tpl = () => '```\n' + MOD[g.o](canal, nom || '[Nom]') + '\n```';
     gen = null; send(prompt, tpl);
+  }
+
+  /* ---------- Données réelles de la plateforme transmises à ZACKsmart (stock) ---------- */
+  const STOP = new Set(['combien', 'jai', 'est', 'les', 'des', 'une', 'que', 'quel', 'quelle', 'quels', 'quelles', 'pour', 'dans', 'avec', 'mon', 'mes', 'ton', 'stock', 'reste', 'encore', 'matiere', 'matieres', 'article', 'quantite', 'produit', 'produits', 'finis', 'fini', 'tout', 'tous', 'liste', 'donne', 'moi', 'dis', 'sur', 'ceci', 'cela', 'quoi', 'faut', 'dois', 'peux', 'faire', 'avoir', 'suis', 'sont', 'plus', 'moins', 'quand', 'the', 'etat']);
+  const WORDS = /(stock|matiere|tissu|rouleau|metre|yard|fermeture|curseur|doublure|article|quantite|combien|reste|rupture|alerte|commander|acheter|disponible|inventaire|produit fini|produits finis|modele fini|manque)/;
+  const nz = s => norm(s).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const f2 = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ');
+  function contexteStock(question) {
+    try {
+      if (!window.StockAPI || !StockAPI.list) return '';
+      const q = nz(question), toks = q.split(' ').filter(w => w.length >= 3 && !STOP.has(w));
+      const art = StockAPI.list(), pf = (window.PFAPI && PFAPI.list) ? PFAPI.list() : [];
+      const hay = x => nz([x.nom, x.categorie, x.couleur, x.marque, x.note].join(' '));
+      const hit = (arr) => arr.filter(x => { const h = hay(x); return toks.some(t => h.includes(t) || (t.length > 4 && h.includes(t.slice(0, -1)))); });
+      const mA = hit(art), mP = hit(pf.map(p => ({ nom: p.nom, _p: p }))).map(x => x._p);
+      if (!WORDS.test(q) && !mA.length && !mP.length) return '';
+      const cl = id => { const c = (typeof D !== 'undefined' && Array.isArray(D)) ? D.find(x => String(x.id) === String(id)) : null; return c ? (c.societe || [c.prenom, c.nom].filter(Boolean).join(' ')) : ''; };
+      const ligne = a => { const qte = StockAPI.qty(a.id), f = StockAPI.fmtQty(a, qte), e = StockAPI.etat(a), cmd = StockAPI.aCommander(a), seuil = Number(a.seuil_alerte) || 0;
+        return '- ' + a.nom + ' [' + (a.categorie || '') + (a.couleur ? ', ' + a.couleur : '') + '] : ' + f.main + (f.sub ? ' (' + f.sub + ')' : '') + ' — état : ' + e.l + (seuil ? ' (seuil d\'alerte ' + f2(seuil) + ' ' + a.unite + ')' : '') +
+          ' — prix : ' + f2(StockAPI.unitPrice(a)) + ' DA/' + a.unite + (StockAPI.aCond(a) ? ' (' + f2(a.prix_achat) + ' DA le ' + a.cond_nom + ' de ' + f2(StockAPI.condQte(a)) + ' ' + a.unite + ')' : '') +
+          (cmd.qty > 0 ? ' — à commander : ' + f2(cmd.qty) + ' ' + a.unite : '') + (cl(a.contact_id) ? ' — fournisseur : ' + cl(a.contact_id) : '') + (a.marque ? ' — marque : ' + a.marque : ''); };
+      const alertes = art.filter(a => StockAPI.enAlerte(a)).sort((a, b) => StockAPI.etat(a).rank - StockAPI.etat(b).rank);
+      const jour = new Date().toLocaleDateString('fr-FR');
+      let t = 'DONNÉES RÉELLES DU STOCK, lues dans la plateforme (au ' + jour + ') — seule source valable pour les quantités et prix :\n' +
+        'MATIÈRES : ' + art.length + ' articles en tout, dont ' + alertes.length + ' en alerte (rupture, négatif ou stock bas).\n';
+      const choisis = mA.length ? mA.slice(0, 40) : art.slice().sort((a, b) => StockAPI.etat(a).rank - StockAPI.etat(b).rank || String(a.nom).localeCompare(String(b.nom))).slice(0, 60);
+      t += (mA.length ? 'Articles correspondant à la question :\n' : 'Articles (triés : alertes d\'abord) :\n') + (choisis.length ? choisis.map(ligne).join('\n') : '(aucun article)') + '\n';
+      if (mA.length && alertes.length) t += 'Autres articles en alerte :\n' + alertes.filter(a => !mA.includes(a)).slice(0, 12).map(ligne).join('\n') + '\n';
+      if (!mA.length && art.length > choisis.length) t += '(… ' + (art.length - choisis.length) + ' autres articles non listés : si l\'utilisateur en cherche un précis, demande-lui son nom exact.)\n';
+      if (pf.length) {
+        const lp = p => { const c = window.PFAPI.coutProduit ? PFAPI.coutProduit(p) : null; return '- ' + p.nom + ' : ' + f2(PFAPI.qty(p.id)) + ' pièces en stock' + (c ? ' — coût de revient ' + f2(c) + ' DA' : '') + (Number(p.prix_vente) > 0 ? ' — prix de vente ' + f2(p.prix_vente) + ' DA' : ''); };
+        const sel = mP.length ? mP.slice(0, 30) : pf.slice(0, 40);
+        t += 'PRODUITS FINIS : ' + pf.length + ' produits.\n' + sel.map(lp).join('\n') + '\n';
+      }
+      return t.slice(0, 9000);
+    } catch (e) { return ''; }
   }
 
   const faq = q => { const n = norm(q); let best = null, sc = 0; FAQ.forEach(([ks, a]) => { const s = ks.filter(k => n.includes(norm(k))).length; if (s > sc) { sc = s; best = a; } }); return best; };
@@ -220,7 +256,7 @@
       if (!navigator.onLine) throw new Error('offline');
       const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 60000);
       const r = await fetch(SUPABASE_URL + '/functions/v1/zacksmart', { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
-        body: JSON.stringify({ messages: msgs.filter(m => !m.note).slice(-16).map(m => ({ role: m.role, content: m.content })), page: page(), deep }) });
+        body: JSON.stringify({ messages: msgs.filter(m => !m.note).slice(-16).map(m => ({ role: m.role, content: m.content })), page: page(), deep, contexte: contexteStock(text) }) });
       clearTimeout(t);
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.reply) rep = d.reply;
