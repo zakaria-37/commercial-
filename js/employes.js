@@ -468,12 +468,13 @@ function renderGrid(emp, mois) {
   for (let d = 1; d <= joursDansMois(mois); d++) {
     const date = mois + '-' + String(d).padStart(2, '0');
     const p = map[date], dt = p ? detail(p, emp) : { norm: 0, sup: 0 }, abs = !!(p && p.absent);
+    const ancien = !!(p && !p.absent && !p.heure_debut && !p.heure_fin && Number(p.heures) > 0);   // heures saisies sans horaires (ancienne version)
     const deb = p && p.heure_debut ? String(p.heure_debut).slice(0, 5) : '';
     const fin = p && p.heure_fin ? String(p.heure_fin).slice(0, 5) : '';
-    html += '<tr' + (abs ? ' style="background:#fdecea"' : '') + '><td>' + fdE(date) + '</td><td>' + JOURS[jourSemaine(date)] + '</td><td>S' + semaineDuMois(date) + '</td>' +
+    html += '<tr' + (abs ? ' style="background:#fdecea"' : ancien ? ' style="background:#fff4d6" title="Heures saisies sans horaires : indiquez le d\u00e9but et la fin, ou cliquez sur Effacer"' : '') + '><td>' + fdE(date) + '</td><td>' + JOURS[jourSemaine(date)] + '</td><td>S' + semaineDuMois(date) + '</td>' +
       '<td><input id="pd-' + date + '" type="time" value="' + deb + '" oninput="ptChange(\'' + date + '\')" onchange="ptChange(\'' + date + '\')" onblur="ptFlush(\'' + date + '\')"></td>' +
       '<td><input id="pf-' + date + '" type="time" value="' + fin + '" oninput="ptChange(\'' + date + '\')" onchange="ptChange(\'' + date + '\')" onblur="ptFlush(\'' + date + '\')"></td>' +
-      '<td id="norm-' + date + '">' + (abs ? '<b style="color:#b3261e">Absent</b>' : dt.norm > 0 ? fmtH(dt.norm) : '\u2014') + '</td>' +
+      '<td id="norm-' + date + '">' + (abs ? '<b style="color:#b3261e">Absent</b>' : dt.norm > 0 ? fmtH(dt.norm) + (ancien ? '<small style="display:block;color:#8a5a12">sans horaires</small>' : '') : '\u2014') + '</td>' +
       '<td id="sup-' + date + '">' + (dt.sup > 0 ? fmtH(dt.sup) : '\u2014') + '</td>' +
       '<td id="gain-' + date + '">' + money(p ? round2(gainPointage(p, emp)) : 0) + '</td>' +
       '<td><button class="btn s" type="button" onclick="quickPointage(\'' + date + '\', true)">Pr\u00e9sent</button> ' +
