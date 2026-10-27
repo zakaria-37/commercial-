@@ -10,6 +10,7 @@
 
   /* ---------- Tableaux -> fiches : data-label sur chaque <td> ---------- */
   function labelTable(table) {
+    if (table.closest('#zs-panel')) return;         // les tableaux du chat ZACKsmart restent des tableaux
     const ths = table.querySelectorAll('thead th');
     if (!ths.length) return;                       // petits tableaux du tableau de bord : inchangés
     table.classList.add('m-cards');

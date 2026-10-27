@@ -59,9 +59,34 @@
     if (sig(l) !== sig(msgs.filter(m => m.id))) { msgs = l; save(); paint(); }
   }
 
-  const md = t => { let h = esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); const lines = h.split('\n'), out = []; let ul = false;
-    lines.forEach(l => { const m = /^\s*(?:[-•*]|\d+[.)])\s+(.*)$/.exec(l); if (m) { if (!ul) { out.push('<ul>'); ul = true; } out.push('<li>' + m[1] + '</li>'); } else { if (ul) { out.push('</ul>'); ul = false; } out.push(l ? l + '<br>' : '<br>'); } });
-    if (ul) out.push('</ul>'); return out.join('').replace(/(<br>)+$/, ''); };
+  /* Mise en forme des réponses : tableaux, titres, listes, gras/italique, code, sauts de ligne (<br> écrits par l'IA compris) */
+  const inline = x => esc(x).replace(/\u0001/g, '<br>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s).,;:!?]|$)/g, '$1<i>$2</i>');
+  const cells = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  const isSep = l => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l) && l.includes('-');
+  const md = t => {
+    // <br> écrit par l'IA : dans une ligne de tableau il reste un saut de ligne DANS la cellule, ailleurs c'est une vraie nouvelle ligne
+    const lines = []; String(t).split('\n').forEach(l => { if (/^\s*\|/.test(l)) lines.push(l.replace(/<br\s*\/?>/gi, '\u0001')); else l.split(/<br\s*\/?>/i).forEach(x => lines.push(x)); });
+    const out = [];
+    let ul = false, ol = false;
+    const close = () => { if (ul) { out.push('</ul>'); ul = false; } if (ol) { out.push('</ol>'); ol = false; } };
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (/^\s*\|.*\|?\s*$/.test(l) && l.split('|').length > 2) {            // tableau
+        close(); const rows = [];
+        while (i < lines.length && /^\s*\|/.test(lines[i])) { rows.push(lines[i]); i++; } i--;
+        const hasHead = rows.length > 1 && isSep(rows[1]), head = hasHead ? cells(rows[0]) : null, body = rows.filter((r, k) => !(hasHead && k < 2) && !isSep(r)).map(cells);
+        out.push('<div class="zs-tw"><table>' + (head ? '<thead><tr>' + head.map(c => '<th>' + inline(c) + '</th>').join('') + '</tr></thead>' : '') + '<tbody>' + body.map(r => '<tr>' + r.map(c => '<td>' + inline(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>');
+        continue;
+      }
+      let m;
+      if ((m = /^\s*#{1,4}\s+(.*)$/.exec(l))) { close(); out.push('<div class="zs-h">' + inline(m[1]) + '</div>'); }
+      else if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) { close(); out.push('<hr>'); }
+      else if ((m = /^\s*[-•*]\s+(.*)$/.exec(l))) { if (ol) { out.push('</ol>'); ol = false; } if (!ul) { out.push('<ul>'); ul = true; } out.push('<li>' + inline(m[1]) + '</li>'); }
+      else if ((m = /^\s*\d+[.)]\s+(.*)$/.exec(l))) { if (ul) { out.push('</ul>'); ul = false; } if (!ol) { out.push('<ol>'); ol = true; } out.push('<li>' + inline(m[1]) + '</li>'); }
+      else { close(); out.push(l.trim() ? '<p>' + inline(l) + '</p>' : ''); }
+    }
+    close(); return out.join('');
+  };
   const faq = q => { const n = norm(q); let best = null, sc = 0; FAQ.forEach(([ks, a]) => { const s = ks.filter(k => n.includes(norm(k))).length; if (s > sc) { sc = s; best = a; } }); return best; };
   const page = () => { const b = document.querySelector('nav button.on'); return b ? b.textContent.trim() : ''; };
 
