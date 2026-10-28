@@ -26,7 +26,9 @@
   // wide : pleine largeur par défaut
   const WIDGETS = [
     { id: 'apercu',   t: 'Vue d’ensemble (chiffres clés)', wide: true },
+    { id: 'ventes',   t: 'Ventes et encaissements', wide: true },
     { id: 'notif',    t: 'À faire aujourd’hui' },
+    { id: 'agenda',   t: 'Prochains rendez-vous' },
     { id: 'relances', t: 'Relances à effectuer' },
     { id: 'contacts', t: 'Chiffres contacts', wide: true },
     { id: 'statuts',  t: 'Statut des contacts' },
@@ -42,8 +44,8 @@
   // Par défaut : l'essentiel en haut ; les chiffres détaillés sont masqués (réactivables)
   const DEFAULT_HIDDEN = ['contacts', 'ateliers'];
   const PRESETS = {
-    'Essentiel':  { show: ['apercu', 'notif', 'relances', 'prod', 'cmd', 'stock', 'pf', 'finance'] },
-    'Commercial': { show: ['apercu', 'notif', 'relances', 'contacts', 'statuts'] },
+    'Essentiel':  { show: ['apercu', 'ventes', 'notif', 'agenda', 'relances', 'prod', 'cmd', 'stock', 'pf', 'finance'] },
+    'Commercial': { show: ['apercu', 'ventes', 'agenda', 'notif', 'relances', 'contacts', 'statuts'] },
     'Production': { show: ['apercu', 'notif', 'ateliers', 'prod', 'charge', 'cmd', 'stock', 'pf', 'produits'] },
     'Tout afficher': { show: WIDGETS.map(w => w.id) }
   };
@@ -51,7 +53,7 @@
   /* ---------- Préférences ---------- */
   function defaults() {
     const hidden = {}; DEFAULT_HIDDEN.forEach(i => { hidden[i] = 1; });
-    return { order: WIDGETS.map(w => w.id), hidden, collapsed: {}, wide: {} };
+    return { order: WIDGETS.map(w => w.id), hidden, collapsed: {}, wide: {}, size: {} };
   }
   let P = defaults();
   try {
@@ -62,7 +64,9 @@
   WIDGETS.forEach(w => { if (!P.order.includes(w.id)) P.order.push(w.id); });
   P.order = P.order.filter(id => WIDGETS.some(w => w.id === id));
   function save() { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} }
-  const isWide = w => (P.wide[w.id] !== undefined ? !!P.wide[w.id] : !!w.wide);
+  // Taille d'un bloc : s = petit (1/3), m = moyen (1/2), l = large (toute la ligne)
+  const SIZES = { s: 'Petit', m: 'Moyen', l: 'Large' }, NEXT = { s: 'm', m: 'l', l: 's' };
+  const sizeOf = w => P.size && P.size[w.id] ? P.size[w.id] : (P.wide[w.id] !== undefined ? (P.wide[w.id] ? 'l' : 'm') : (w.wide ? 'l' : 'm'));
 
   /* ---------- Application de l'affichage ---------- */
   function applyLayout() {
@@ -72,7 +76,8 @@
       const w = WIDGETS.find(x => x.id === id);
       grid.appendChild(el);                                   // réordonne dans le DOM
       el.hidden = !!P.hidden[id];
-      el.classList.toggle('w2', isWide(w));
+      const sz = sizeOf(w);
+      el.classList.toggle('w2', sz === 'l'); el.classList.toggle('w1', sz === 's');
       el.classList.toggle('collapsed', !!P.collapsed[id]);
     });
     // bouton de repli sur chaque bloc « carte »
@@ -94,12 +99,38 @@
 
   /* ---------- Bandeau d'accueil ---------- */
   function hello() {
-    const h = new Date().getHours();
+    const now = new Date(), h = now.getHours();
     const salut = h < 5 ? 'Bonsoir' : h < 18 ? 'Bonjour' : 'Bonsoir';
     const t = $q('#d-hello'); if (t) t.textContent = salut + ' Khalida';
-    const sub = $q('#d-sub');
-    if (sub) sub.textContent = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-      .replace(/^./, c => c.toUpperCase()) + ' — voici l’essentiel de votre journée.';
+    const d = $q('#d-date');
+    if (d) d.textContent = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase());
+    clock();
+  }
+  function clock() {
+    const c = $q('#d-clock'); if (c) c.textContent = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  }
+  // Résumé de la journée en pastilles cliquables (rouge = urgent, vert = tout va bien)
+  function renderPulse() {
+    const box = $q('#d-pulse'), sub = $q('#d-sub'); if (!box) return;
+    const today = iso(new Date()), D_ = typeof D !== 'undefined' ? D : [];
+    const late = D_.filter(c => rel(c).k === 'late').length;
+    const prodLate = typeof PRODUCTIONS !== 'undefined' ? PRODUCTIONS.filter(prodActive).filter(p => p.date_reception_prevue && p.date_reception_prevue < today).length : 0;
+    const cmdLate = typeof COMMANDES !== 'undefined' ? COMMANDES.filter(cmdOuverte).filter(c => c.date_reception_prevue && c.date_reception_prevue < today).length : 0;
+    const rup = stockOk() ? StockAPI.list().filter(a => StockAPI.enAlerte(a) && StockAPI.etat(a).rank <= 1).length : 0;
+    const rdvAuj = RDV.filter(r => r.date_rdv === today).length;
+    const imp = ventes ? ventes.impayeN : 0;
+    const items = [
+      [late, late + ' relance' + (late > 1 ? 's' : '') + ' en retard', 'rel'],
+      [rdvAuj, rdvAuj + ' rendez-vous aujourd’hui', 'notes', 'i'],
+      [prodLate, prodLate + ' production' + (prodLate > 1 ? 's' : '') + ' en retard', 'prod'],
+      [cmdLate, cmdLate + ' commande' + (cmdLate > 1 ? 's' : '') + ' en retard', 'cmd'],
+      [rup, rup + ' article' + (rup > 1 ? 's' : '') + ' en rupture', 'stock'],
+      [imp, imp + ' facture' + (imp > 1 ? 's' : '') + ' impayée' + (imp > 1 ? 's' : ''), 'factures']
+    ].filter(x => x[0] > 0);
+    const urg = items.filter(x => x[3] !== 'i').length;
+    if (sub) sub.textContent = urg ? urg + ' point' + (urg > 1 ? 's' : '') + ' demande' + (urg > 1 ? 'nt' : '') + ' votre attention aujourd’hui.' : 'Tout est sous contrôle. Belle journée et bonnes ventes !';
+    box.innerHTML = items.length ? items.map(x => '<button type="button" class="dpl' + (x[3] === 'i' ? ' i' : '') + '" data-dgo="' + x[2] + '">' + esc(x[1]) + '</button>').join('')
+      : '<span class="dpl ok">✔ Aucune urgence</span>';
   }
 
   /* ---------- Raccourcis ---------- */
@@ -134,12 +165,30 @@
       try { if (window.StockAPI) await StockAPI.load(); } catch (e) { /* stock non installé */ }
       try { if (window.PFAPI) await PFAPI.load(); } catch (e) { /* stock produits finis non installé */ }
       pointesAuj = p.error ? null : (p.data || []).filter(x => Number(x.heures) > 0 || (x.heure_debut && x.heure_fin)).length;
+      const r = await sb.from('rendez_vous').select('*').gte('date_rdv', today).order('date_rdv', { ascending: true });
+      RDV = r.error ? [] : (r.data || []).filter(x => x.statut === 'Prévu' || x.statut === 'Reporté');
+      await loadVentes();
       dataErr = false;
     } catch (e) { dataErr = true; }
   }
 
+  const ICONS = { rel: '☎', prod: '✂', cmd: '📦', charges: '💸', stock: '🧵', pf: '👜', pointage: '⏱', factures: '🧾' };
   function kpi(cls, label, big, sub, go) {
-    return '<button type="button" class="card kpi dk ' + cls + '" data-dgo="' + go + '"><span>' + label + '</span><b>' + big + '</b><i>' + sub + '</i></button>';
+    return '<button type="button" class="card kpi dk ' + cls + '" data-dgo="' + go + '"><span><em class="dki">' + (ICONS[go] || '•') + '</em>' + label + '</span><b>' + big + '</b><i>' + sub + '</i></button>';
+  }
+  // Animation des chiffres : seulement quand la valeur change (pas à chaque actualisation)
+  const LAST = {};
+  function countUp(root) {
+    if (!root || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    root.querySelectorAll('.kpi.dk b, .fbig b').forEach((b, i) => {
+      const txt = b.textContent, m = txt.match(/^([\d\s\u202f\u00a0]+)(.*)$/); if (!m) return;
+      const to = Number(m[1].replace(/\D/g, '')), key = root.id + i, from = LAST[key] === undefined ? 0 : LAST[key];
+      LAST[key] = to; if (from === to || !isFinite(to)) return;
+      const t0 = performance.now(), dur = 700, suf = m[2];
+      const step = t => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+        b.textContent = Math.round(from + (to - from) * e).toLocaleString('fr-FR') + suf; if (k < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    });
   }
   function renderApercu() {
     const el = $q('#kpis-all'); if (!el) return;
@@ -275,6 +324,66 @@
       '</tbody></table>' + (Number(rows.some(x => !Number(x.p.mo_pieces))) ? '<p class="dhint">⚠ Main d’œuvre non renseignée sur certains produits : coût incomplet.</p>' : '');
   }
 
+  /* ---------- Ventes : 6 derniers mois (factures) + encaissements ---------- */
+  let RDV = [], ventes = null, comT = 0;
+  const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  async function loadVentes() {
+    if (!window.CommerceAPI || !CommerceAPI.docs) { ventes = null; return; }
+    try { if (!CommerceAPI.docs().length && Date.now() - comT > 60000) { comT = Date.now(); await CommerceAPI.load(); } } catch (e) { /* commerce non installé */ }
+    const now = new Date(), mois = [];
+    for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); mois.push({ k: iso(d).slice(0, 7), l: MOIS[d.getMonth()], v: 0, n: 0 }); }
+    const fac = CommerceAPI.docs().filter(d => d.type === 'facture' && d.statut !== 'annulee');
+    let impaye = 0, impayeN = 0, encMois = 0;
+    const cur = mois[5].k;
+    fac.forEach(d => {
+      const ttc = CommerceAPI.totaux(d, CommerceAPI.lignesDe(d.id)).ttc, m = mois.find(x => x.k === String(d.date_doc || '').slice(0, 7));
+      if (m) { m.v += ttc; m.n++; }
+      const e = CommerceAPI.etatFacture(d);
+      if ((e.reste || 0) > 0.004) { impaye += e.reste; impayeN++; }
+    });
+    try {
+      const pr = await sb.from('paiements').select('montant,sens,date_paiement').gte('date_paiement', cur + '-01');
+      if (!pr.error) encMois = (pr.data || []).filter(x => x.sens === 'encaissement').reduce((s, x) => s + Number(x.montant || 0), 0);
+    } catch (e) {}
+    ventes = { mois, impaye, impayeN, encMois, nbFac: fac.length };
+  }
+  function renderVentes() {
+    const box = $q('#d-ventes'); if (!box) return;
+    if (!ventes) { box.innerHTML = '<div class="empty" style="padding:22px">Module Commerce non chargé.</div>'; return; }
+    const m = ventes.mois, cur = m[5], prev = m[4], max = Math.max(1, ...m.map(x => x.v));
+    const evo = prev.v ? Math.round((cur.v - prev.v) / prev.v * 100) : null;
+    const tot6 = m.reduce((s, x) => s + x.v, 0);
+    let h = '<div class="vk">' +
+      '<div class="vki"><span>Facturé ce mois</span><b>' + money(cur.v) + '</b><i class="' + (evo === null ? '' : evo >= 0 ? 'up' : 'down') + '">' + (evo === null ? cur.n + ' facture(s)' : (evo >= 0 ? '▲ +' : '▼ ') + evo + ' % vs ' + prev.l) + '</i></div>' +
+      '<div class="vki"><span>Encaissé ce mois</span><b>' + money(ventes.encMois) + '</b><i>paiements reçus</i></div>' +
+      '<div class="vki' + (ventes.impayeN ? ' warn' : '') + '" data-dgo="factures"><span>Reste à encaisser</span><b>' + money(ventes.impaye) + '</b><i>' + ventes.impayeN + ' facture(s) non soldée(s)</i></div>' +
+      '</div>';
+    if (!tot6) h += '<div class="empty" style="padding:18px">Aucune facture sur les 6 derniers mois. <button type="button" class="more" data-dgo="factures">Créer une facture →</button></div>';
+    else {
+      // histogramme : une barre par mois, le mois en cours mis en avant ; survol = détail
+      h += '<div class="vchart" role="img" aria-label="Chiffre d’affaires facturé des 6 derniers mois">' + m.map((x, i) =>
+        '<div class="vcol' + (i === 5 ? ' cur' : '') + '" data-tip="' + esc(x.l + ' : ' + money(x.v) + ' · ' + x.n + ' facture(s)') + '">' +
+        '<em>' + (x.v ? (x.v >= 1e6 ? (x.v / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' M' : Math.round(x.v / 1000).toLocaleString('fr-FR') + ' k') : '') + '</em>' +
+        '<i style="height:' + Math.max(x.v ? 4 : 0, x.v / max * 100) + '%"></i><span>' + esc(x.l) + '</span></div>').join('') + '<div class="vtip" hidden></div></div>' +
+        '<p class="dhint">Total sur 6 mois : <b>' + money(tot6) + '</b> · moyenne ' + money(tot6 / 6) + ' / mois</p>';
+    }
+    box.innerHTML = h + '<button type="button" class="more" data-dgo="factures">Ouvrir les factures →</button>';
+  }
+
+  /* ---------- Prochains rendez-vous (section Notes) ---------- */
+  function renderAgenda() {
+    const box = $q('#d-agenda'); if (!box) return;
+    if (!RDV.length) { box.innerHTML = '<div class="empty" style="padding:22px">Aucun rendez-vous prévu. <button type="button" class="more" data-dgo="notes">Planifier un rendez-vous →</button></div>'; return; }
+    const today = iso(new Date()), dem = new Date(); dem.setDate(dem.getDate() + 1);
+    const quand = d => d === today ? 'Aujourd’hui' : d === iso(dem) ? 'Demain' : new Date(d + 'T00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+    box.innerHTML = '<div class="ag">' + RDV.slice(0, 5).map(r => {
+      const d = new Date(r.date_rdv + 'T00:00');
+      return '<div class="agr" data-dgo="notes"><div class="agd' + (r.date_rdv === today ? ' auj' : '') + '"><b>' + d.getDate() + '</b><span>' + MOIS[d.getMonth()] + '</span></div>' +
+        '<div class="agt"><b>' + esc(r.titre) + '</b><small>' + esc(quand(r.date_rdv)) + (r.heure ? ' · ' + esc(String(r.heure).slice(0, 5)) : '') + (r.contact_nom ? ' · ' + esc(r.contact_nom) : '') + (r.lieu ? ' · ' + esc(r.lieu) : '') + '</small></div>' +
+        '<span class="bd ' + (r.statut === 'Reporté' ? 'o' : 'g') + '">' + esc(r.type || r.statut) + '</span></div>';
+    }).join('') + '</div>' + (RDV.length > 5 ? '<button type="button" class="more" data-dgo="notes">Voir les ' + RDV.length + ' rendez-vous →</button>' : '<button type="button" class="more" data-dgo="notes">Ouvrir les notes →</button>');
+  }
+
   /* ---------- Rendu global ---------- */
   let timer = null;
   function render() {
@@ -284,7 +393,10 @@
       hello();
       if (dash.classList.contains('on')) {
         await loadExtras();
-        renderApercu(); renderRelances(); renderFinance(); renderProduits(); renderStock(); renderPF();
+        renderApercu(); renderVentes(); renderAgenda(); renderPulse(); renderRelances(); renderFinance(); renderProduits(); renderStock(); renderPF();
+        countUp($q('#kpis-all')); countUp($q('#d-ventes'));
+        const u = $q('#d-upd'); if (u) u.textContent = 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        $q('#d-refresh') && $q('#d-refresh').classList.remove('spin');
       }
     }, 120);
   }
@@ -294,12 +406,12 @@
     const rows = P.order.map((id, i) => {
       const w = WIDGETS.find(x => x.id === id);
       return '<div class="cr" data-id="' + id + '"><label class="cv"><input type="checkbox" data-c="vis"' + (P.hidden[id] ? '' : ' checked') + '> ' + esc(w.t) + '</label>' +
-        '<span class="cb"><button type="button" class="ib" data-c="wide" title="Pleine largeur / demi-largeur">' + (isWide(w) ? '◧ Demi' : '▭ Large') + '</button>' +
+        '<span class="cb"><button type="button" class="ib" data-c="wide" title="Changer la taille : petit, moyen, large">Taille : ' + SIZES[sizeOf(w)] + '</button>' +
         '<button type="button" class="ib" data-c="up"' + (i === 0 ? ' disabled' : '') + ' title="Monter">▲</button>' +
         '<button type="button" class="ib" data-c="down"' + (i === P.order.length - 1 ? ' disabled' : '') + ' title="Descendre">▼</button></span></div>';
     }).join('');
     return '<div class="ch"><h2>Personnaliser le tableau de bord</h2><button type="button" class="btn s" data-c="close">Fermer</button></div>' +
-      '<p class="dhint" style="margin-top:0">Cochez les blocs à afficher, changez leur ordre avec ▲▼ ou en les glissant, puis choisissez leur largeur. Vos choix sont gardés sur cet ordinateur.</p>' +
+      '<p class="dhint" style="margin-top:0">Cochez les blocs à afficher, changez leur ordre avec ▲▼ ou en les glissant, puis choisissez leur taille (petit = 1/3, moyen = 1/2, large = toute la ligne). Vos choix sont gardés sur cet ordinateur.</p>' +
       '<div class="presets">' + Object.keys(PRESETS).map(k => '<button type="button" class="chip" data-p="' + esc(k) + '">' + esc(k) + '</button>').join('') +
       '<button type="button" class="chip" data-c="reset">Réinitialiser</button></div><div class="cl">' + rows + '</div>';
   }
@@ -327,6 +439,15 @@
       const b = e.target.closest('[data-q]'); if (b && QUICK[b.dataset.q]) QUICK[b.dataset.q]();
     });
     $q('#d-edit').addEventListener('click', () => openCust($q('#d-cust').hidden));
+    $q('#d-refresh').addEventListener('click', e => { e.currentTarget.classList.add('spin'); render(); });
+    setInterval(clock, 15000);
+    // infobulle de l'histogramme des ventes
+    const vb = $q('#d-ventes');
+    vb.addEventListener('mouseover', e => { const c = e.target.closest('.vcol'), tip = vb.querySelector('.vtip'); if (!c || !tip) return;
+      tip.textContent = c.dataset.tip; tip.hidden = false; tip.style.left = (c.offsetLeft + c.offsetWidth / 2) + 'px'; });
+    vb.addEventListener('mouseout', e => { const tip = vb.querySelector('.vtip'); if (tip && !e.relatedTarget?.closest?.('.vcol')) tip.hidden = true; });
+    vb.addEventListener('click', e => { const c = e.target.closest('.vcol'), tip = vb.querySelector('.vtip'); if (!c || !tip) return;
+      tip.textContent = c.dataset.tip; tip.hidden = false; tip.style.left = (c.offsetLeft + c.offsetWidth / 2) + 'px'; });
 
     // panneau de personnalisation
     $q('#d-cust').addEventListener('click', e => {
@@ -339,7 +460,7 @@
       if (b.dataset.c === 'reset') { P = defaults(); return changed(); }
       if (b.dataset.c === 'up') { move(id, -1); return changed(); }
       if (b.dataset.c === 'down') { move(id, 1); return changed(); }
-      if (b.dataset.c === 'wide') { const w = WIDGETS.find(x => x.id === id); P.wide[id] = !isWide(w); return changed(); }
+      if (b.dataset.c === 'wide') { const w = WIDGETS.find(x => x.id === id); P.size = P.size || {}; P.size[id] = NEXT[sizeOf(w)]; return changed(); }
     });
     $q('#d-cust').addEventListener('change', e => {
       const c = e.target.closest('[data-c="vis"]'); if (!c) return;
@@ -379,6 +500,8 @@
         if (k === 'produits') return go('produits');
         if (k === 'stock') return go('stock');
         if (k === 'pf') { go('stock'); if (window.PFAPI) PFAPI.open(); return; }
+        if (k === 'notes') return go('notes');
+        if (k === 'factures') { go('commerce'); const t = $q('#cm-tabs [data-t="facture"]'); if (t) t.click(); return; }
       }
     }, true);   // phase de capture ; nos blocs utilisent data-dgo (les lignes ateliers gardent data-go, géré par ateliers.js)
 

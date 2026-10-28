@@ -91,7 +91,19 @@
 </header>
 <main>
 <section id="v-dash" class="on">
-  <div class="hello"><span class="fl">&#10047;</span><div><h2 id="d-hello">Bonjour Khalida</h2><p id="d-sub">Chaque échange compte, chaque relance peut devenir une commande. Belle journée et bonnes ventes !</p></div></div>
+  <div class="dhero" id="d-hero">
+    <div class="dhero-l">
+      <span class="dhero-date" id="d-date"></span>
+      <h2 id="d-hello">Bonjour Khalida</h2>
+      <p id="d-sub">Voici l’essentiel de votre journée.</p>
+      <div class="dpulse" id="d-pulse"></div>
+    </div>
+    <div class="dhero-r">
+      <div class="dclock" id="d-clock">--:--</div>
+      <button class="dref" type="button" id="d-refresh" title="Actualiser les chiffres"><span>↻</span> Actualiser</button>
+      <small id="d-upd"></small>
+    </div>
+  </div>
 
   <!-- Raccourcis : les actions du quotidien en un clic -->
   <div class="dbar" id="d-quick">
@@ -111,6 +123,8 @@
 
   <div class="dgrid" id="d-grid">
     <div class="dw dw-plain" data-w="apercu" data-t="Vue d’ensemble"><div class="kpis dkpis" id="kpis-all"></div></div>
+    <div class="dw card" data-w="ventes" data-t="Ventes"><div class="dh"><h2>Ventes et encaissements</h2></div><div class="db"><div id="d-ventes"></div></div></div>
+    <div class="dw card" data-w="agenda" data-t="Rendez-vous"><div class="dh"><h2>Prochains rendez-vous</h2></div><div class="db"><div id="d-agenda"></div></div></div>
     <div class="dw card" data-w="notif" data-t="À faire aujourd’hui"><div class="dh"><h2>À faire aujourd’hui<span class="ncount" id="notif-count" style="display:none"></span></h2></div><div class="db"><div class="nlist" id="notif"></div></div></div>
     <div class="dw card" data-w="relances" data-t="Relances à effectuer"><div class="dh"><h2>Relances à effectuer</h2></div><div class="db"><div id="urg"></div></div></div>
     <div class="dw dw-plain" data-w="contacts" data-t="Chiffres contacts"><div class="kpis dkpis" id="kpis"></div></div>
