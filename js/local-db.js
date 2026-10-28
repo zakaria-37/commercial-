@@ -519,10 +519,46 @@
     if (txt) txt.title = title + ' Cliquez pour synchroniser maintenant.';
   }
 
+  /* ---------- Horloge de l'ordinateur décalée : protection contre les déconnexions ----------
+     Si l'heure de l'ordinateur est fausse de plus d'une heure, la bibliothèque de connexion croit que la session est expirée à chaque
+     requête et redemande un jeton en boucle jusqu'au blocage du serveur (429) : « Votre session a expiré ». On date donc la session
+     avec l'horloge LOCALE (les durées restent exactes, seul le décalage disparaît), et un 429 n'efface plus la session. */
+  function avertirHorloge(skew) {
+    try {
+      if (document.getElementById('skew-banner')) return;
+      var min = Math.round(Math.abs(skew) / 60000), txt = (min >= 60 ? Math.floor(min / 60) + ' h ' + (min % 60 ? (min % 60) + ' min ' : '') : min + ' min ') + (skew > 0 ? 'en avance' : 'en retard');
+      var b = document.createElement('div'); b.id = 'skew-banner';
+      b.style.cssText = 'position:fixed;left:12px;right:12px;top:12px;z-index:3000;background:#fff4d6;color:#6b4a00;border:1px solid #e6c36a;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.45;max-width:640px;margin:0 auto;box-shadow:0 8px 30px rgba(0,0,0,.25)';
+      b.innerHTML = '<b>⚠ L’heure de cet ordinateur est fausse (' + txt + ').</b> Réglez la date, l’heure et le <b>fuseau horaire en automatique</b> (Windows : Paramètres → Heure et langue → « Régler l’heure automatiquement » et « Synchroniser maintenant »). Sinon des déconnexions peuvent survenir. <button type="button" style="float:right;border:0;background:transparent;font-size:18px;cursor:pointer">×</button>';
+      b.querySelector('button').onclick = function () { b.remove(); };
+      document.body.appendChild(b);
+    } catch (e) { /* sans importance */ }
+  }
+  function guardFetch(input, init) {
+    var url = typeof input === 'string' ? input : (input && input.url) || '';
+    if (url.indexOf('/auth/v1/token') === -1) return fetch(input, init);
+    return fetch(input, init).then(function (resp) {
+      if (resp.status === 429) {                                         // trop de demandes : réponse « réessayez plus tard » (la session est gardée)
+        return resp.text().then(function (t) { return new Response(t, { status: 503, statusText: 'Service Unavailable', headers: resp.headers }); });
+      }
+      if (!resp.ok) return resp;
+      return resp.clone().json().then(function (j) {
+        if (!j || !j.access_token || !j.expires_in) return resp;
+        try {
+          var pl = JSON.parse(atob(j.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+          if (pl.iat) { var skew = Date.now() - pl.iat * 1000; window.CLOCK_SKEW_MS = skew; if (Math.abs(skew) > 5 * 60000) avertirHorloge(skew); }
+        } catch (e) { /* jeton illisible : ignoré */ }
+        j.expires_at = Math.floor(Date.now() / 1000) + Number(j.expires_in);   // échéance calculée avec l'horloge locale
+        var h = new Headers(resp.headers); h.delete('content-length'); h.set('content-type', 'application/json');
+        return new Response(JSON.stringify(j), { status: resp.status, statusText: resp.statusText, headers: h });
+      }).catch(function () { return resp; });
+    });
+  }
+
   /* ---------- Client exposé à l'application ---------- */
   function createClient(url, key) {
     try {
-      if (url && key && window.supabase && window.supabase.createClient) remote = window.supabase.createClient(url, key);
+      if (url && key && window.supabase && window.supabase.createClient) remote = window.supabase.createClient(url, key, { global: { fetch: guardFetch } });
     } catch (e) { remote = null; }
     return { from: function (t) { return new Query(t); } };
   }
