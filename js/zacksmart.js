@@ -254,18 +254,21 @@
     let rep = null, note = false;
     try {
       if (!navigator.onLine) throw new Error('offline');
-      const plus = window.ZSData ? await ZSData.contexte(text) : '', st = contexteStock(text), ctxt = (plus ? st.slice(0, 3400) + '\n' + plus : st).slice(0, 9000);
+      const plus = window.ZSData ? await ZSData.contexte(text) : '', st = contexteStock(text), ctxt = (plus ? st.slice(0, 2400) + '\n' + plus : st).slice(0, 6500);
       const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 60000);
       const r = await fetch(SUPABASE_URL + '/functions/v1/zacksmart', { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
-        body: JSON.stringify({ messages: msgs.filter(m => !m.note).slice(-16).map(m => ({ role: m.role, content: m.content })), page: page(), deep, contexte: ctxt }) });
+        body: JSON.stringify({ messages: msgs.filter(m => !m.note).slice(-8).map(m => ({ role: m.role, content: m.content.slice(0, 1500) })), page: page(), deep, contexte: ctxt }) });
       clearTimeout(t);
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.reply) rep = d.reply;
       else if (d.error === 'rate') { rep = 'Vous écrivez très vite 🙂 Patientez quelques secondes puis réessayez.'; note = true; }
-      else throw new Error(d.error || 'http ' + r.status);
+      else { const er = new Error(d.error || 'http ' + r.status); er.status = d.status; er.detail = d.detail; throw er; }
     } catch (e) {
       const f = tpl ? tpl() : faq(text), off = !navigator.onLine || e.message === 'offline', cfg = e.message === 'not_configured', salut = /^\s*(salut|bonjour|bonsoir|salam|slm|hello|coucou|hi)\b/i.test(text);
-      rep = (off ? 'Vous êtes hors ligne : réponse de secours.' : cfg ? 'ZACKsmart n’est pas encore activé en mode intelligent : la clé de l’IA n’a pas encore été ajoutée côté serveur (Supabase → Edge Functions → Secrets → AI_API_KEY). En attendant, voici une aide de base.' : 'L’assistant intelligent ne répond pas pour le moment (' + esc(e.message) + ') : réponse de secours.') + '\n' +
+      const sat = e.status === 429 || e.status === 413 || /rate|token|too large|quota/i.test(e.detail || '');
+      rep = (off ? 'Vous êtes hors ligne : réponse de secours.' : cfg ? 'ZACKsmart n’est pas encore activé en mode intelligent : la clé de l’IA n’a pas encore été ajoutée côté serveur (Supabase → Edge Functions → Secrets → AI_API_KEY). En attendant, voici une aide de base.' :
+        sat ? 'Le service d’IA gratuit est saturé (limite de requêtes par minute atteinte). Patientez environ une minute puis renvoyez votre question. En attendant, voici une aide de base.' :
+        'L’assistant intelligent ne répond pas pour le moment (' + esc(e.message) + (e.status ? ' ' + e.status : '') + (e.detail ? ' — ' + esc(String(e.detail).slice(0, 120)) : '') + ') : réponse de secours.') + '\n' +
         (salut ? 'Bonjour ! Je suis ZACKsmart 😊 Une fois activé, nous pourrons discuter en profondeur de votre travail commercial et de l’organisation du travail.' : f ? f : 'Je n’ai pas de réponse prête pour cette question. Reformulez avec des mots comme « facture », « rendez-vous », « fiche de paie », « stock »…');
       note = false;
     }
