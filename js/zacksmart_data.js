@@ -19,6 +19,10 @@
   const lbl = c => window.PartAPI ? PartAPI.label(c) : (c.societe || [c.prenom, c.nom].filter(Boolean).join(' '));
   const toks = q => nz(q).split(' ').filter(w => w.length >= 3 && !STOP.has(w));
   const matchTxt = (tk, txt) => { const h = nz(txt); return tk.some(t => h.includes(t) || (t.length > 4 && h.includes(t.slice(0, -1)))); };
+  /* Tolérance aux fautes de frappe : « bougofa » trouve « Bougoffa » */
+  function lev(a, b) { if (a === b) return 0; const m = a.length, n = b.length; if (!m || !n) return Math.max(m, n); let p = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) { const c = [i]; for (let j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; } return p[n]; }
+  const flou = (tk, txt) => { const mots = nz(txt).split(' ').filter(Boolean); return tk.some(t => mots.some(w => w === t || (t.length >= 4 && (w.startsWith(t) || t.startsWith(w) && w.length >= 4)) || (t.length >= 5 && w.length >= 4 && lev(t, w) <= (t.length >= 8 ? 2 : 1)))); };
   const contactsAll = () => (typeof D !== 'undefined' && Array.isArray(D)) ? D : [];
   const admin = () => { const u = window.APP_USER; return !u || u.role === 'admin'; };   // sans compte (ancien mot de passe) : pas de rôle connu
 
@@ -35,9 +39,23 @@
     if (cl.length) t += 'Clients qui doivent de l\'argent (total à encaisser : ' + f2(cl.reduce((s, x) => s + x.solde, 0)) + ' DA) :\n' + cl.slice(0, 15).map(x => '- ' + x.nom + ' : vendu ' + f2(x.facture + x.report) + ' DA, payé ' + f2(x.paye) + ' DA, SOLDE DÛ ' + f2(x.solde) + ' DA').join('\n') + '\n';
     else t += 'Soldes clients (livraisons moins encaissements) : aucun solde dû enregistré ; regarde aussi la section FACTURES pour les factures impayées.\n';
     if (fo.length) t += 'Fournisseurs à payer (total : ' + f2(fo.reduce((s, x) => s + x.solde, 0)) + ' DA) :\n' + fo.slice(0, 10).map(x => '- ' + x.nom + ' : acheté ' + f2(x.facture + x.report) + ' DA, payé ' + f2(x.paye) + ' DA, reste à payer ' + f2(x.solde) + ' DA').join('\n') + '\n';
-    const m = tk.length ? all.filter(c => matchTxt(tk, [lbl(c), c.nom, c.prenom, c.societe, c.ville].join(' '))).slice(0, 6) : [];
+    const m = tk.length ? all.filter(c => flou(tk, [lbl(c), c.nom, c.prenom, c.societe].join(' '))).slice(0, 6) : [];
     if (m.length) t += 'Contacts correspondant à la question :\n' + m.map(c => '- ' + lbl(c) + ' (' + (c.type || '') + (c.statut ? ', ' + c.statut : '') + ')' + (c.tel ? ' — tél ' + c.tel : '') + (c.email ? ' — ' + c.email : '') + (c.ville ? ' — ' + c.ville : '') + (c.notes ? ' — notes : ' + String(c.notes).slice(0, 120) : '')).join('\n') + '\n';
     return lim(t, 3000);
+  }
+
+  /* Détail complet d'un contact (pour personnaliser un message) */
+  const fiche = c => '- ' + [c.prenom, c.nom].filter(Boolean).join(' ') + (c.poste ? ' — poste : ' + c.poste : '') + (c.societe ? ' — société : ' + c.societe : '') + ' — type : ' + (c.type || '?') + (c.statut ? ' — statut : ' + c.statut : '') +
+    (c.tel ? ' — tél : ' + c.tel : '') + (c.email ? ' — e-mail : ' + c.email : '') + (c.ville ? ' — ville : ' + c.ville : '') + (c.produits ? ' — produits d\'intérêt : ' + c.produits : '') + (c.source ? ' — source : ' + c.source : '') + (c.derniere ? ' — dernière action : ' + fd(c.derniere) : '') + (c.notes ? ' — notes : ' + String(c.notes).slice(0, 200) : '');
+  function sectionContactsMessage(q, tk) {
+    const all = contactsAll(); if (!all.length) return '';
+    const m = tk.length ? all.filter(c => flou(tk, [c.nom, c.prenom, c.societe].join(' '))).slice(0, 4) : [];
+    const veutFour = /fournisseur/.test(q), veutCli = /client/.test(q);
+    let t = '== CONTACTS ENREGISTRÉS (pour rédiger le message) ==\nCONSIGNE : le destinataire se trouve dans cette liste. Utilise ses informations RÉELLES (prénom et nom, poste, société, produits d\'intérêt, notes) pour personnaliser la salutation et le contenu du message. Ne dis JAMAIS que tu n\'as pas accès aux contacts. Si le nom demandé ne correspond exactement à personne, propose les contacts les plus proches ci-dessous ou rédige avec [crochets].\n';
+    if (m.length) t += 'Contact(s) correspondant à la demande :\n' + m.map(fiche).join('\n') + '\n';
+    const pool = all.filter(c => !m.includes(c) && (!(veutFour || veutCli) || (veutFour && /fournisseur/i.test(c.type || '')) || (veutCli && /client/i.test(c.type || '')))).slice(0, m.length ? 15 : 35);
+    if (pool.length) t += (m.length ? 'Autres contacts' : 'Annuaire') + (veutFour ? ' (fournisseurs)' : veutCli ? ' (clients)' : '') + ' :\n' + pool.map(c => '- ' + [c.prenom, c.nom].filter(Boolean).join(' ') + (c.societe ? ' — ' + c.societe : '') + ' (' + (c.type || '?') + (c.ville ? ', ' + c.ville : '') + ')').join('\n') + '\n';
+    return lim(t, 3300);
   }
 
   function sectionFactures(tk) {
@@ -95,14 +113,18 @@
       Object.keys(TOP).forEach(k => { want[k] = TOP[k].test(q); });
       // un nom propre cité (client, employé) déclenche le sujet correspondant
       if (tk.length) {
-        if (contactsAll().some(c => matchTxt(tk, [lbl(c), c.nom, c.societe].join(' ')))) want.contacts = true;
+        if (contactsAll().some(c => flou(tk, [c.nom, c.prenom, c.societe].join(' ')))) want.contacts = true;
         if (typeof EMPLOYES !== 'undefined' && EMPLOYES.some(e => matchTxt(tk, [e.nom, e.prenom].join(' ')))) want.employes = true;
         if (typeof COMMANDES !== 'undefined' && COMMANDES.some(c => c.commande_numero && q.includes(nz(c.commande_numero)))) want.commandes = true;
       }
       if (want.contacts && /(doit|doivent|impay|creance|solde|dette|reste|retard)/.test(q)) want.factures = true;   // « qui me doit de l'argent ? » : soldes ET factures
-      if (!want.contacts && !want.factures && !want.commandes && !want.employes) return '';
+      const ecrire = /(ecri|redig|message|e-?mail|\bmail\b|whatsapp|\bsms\b|relanc|contacter|envoy|courrier|devis a)/.test(q);
+      const dest = /(fournisseur|client|societe|contact|prospect|entreprise)/.test(q) || (tk.length && contactsAll().some(c => flou(tk, [c.nom, c.prenom, c.societe].join(' '))));
+      if (ecrire && dest) { want.contacts = false; want.msgContact = true; }
+      if (!want.msgContact && !want.contacts && !want.factures && !want.commandes && !want.employes) return '';
       if (want.factures || want.contacts) await chargerCommerce();
       let t = '';
+      if (want.msgContact) t += sectionContactsMessage(q, tk) + '\n';
       if (want.contacts) t += sectionContacts(tk) + '\n';
       if (want.factures) t += sectionFactures(tk) + '\n';
       if (want.commandes) t += sectionCommandes(tk) + '\n';

@@ -71,3 +71,5 @@ html.zs-lock,html.zs-lock body{overflow:hidden!important;overscroll-behavior:non
 .zg-b button{flex:1;border:0;border-radius:10px;background:#1a1a1a;color:#fff;padding:10px;font-weight:600;cursor:pointer}
 .zg-b button.alt{background:#eee;color:#333}
 @media(max-width:700px){#zs-tools button{font-size:14px;min-height:40px;padding:8px 14px}.zs-gen select,.zs-gen input,.zs-gen textarea{font-size:16px}.zs-ch button{min-height:40px;padding:8px 16px;font-size:14px}}
+
+.zg-info{background:#f6eee9;border-radius:10px;padding:8px 10px;font-size:12.5px;line-height:1.45;color:#4a3a34;word-break:break-word}

@@ -125,7 +125,7 @@
   /* ---------- Rédiger un message professionnel (WhatsApp / e-mail / SMS) ---------- */
   const CANAUX = ['WhatsApp', 'E-mail', 'SMS'];
   const DEST = ['Grande surface', 'Boutique / magasin', 'Client existant', 'Fournisseur', 'Atelier partenaire', 'Autre société'];
-  const OBJ = ['Présenter Maria Bag et proposer un rendez-vous', 'Confirmer un rendez-vous', 'Remercier après un rendez-vous', 'Envoyer ou relancer un devis', 'Relancer une facture impayée', 'Annoncer une nouveauté ou une offre', 'Répondre à une demande de prix', 'Autre (préciser dans les détails)'];
+  const OBJ = ['Présenter Maria Bag et proposer un rendez-vous', 'Confirmer un rendez-vous', 'Remercier après un rendez-vous', 'Envoyer ou relancer un devis', 'Relancer une facture impayée', 'Annoncer une nouveauté ou une offre', 'Répondre à une demande de prix', 'Demander un devis ou un prix (fournisseur)', 'Passer une commande (fournisseur)', 'Relancer une livraison ou un retard (fournisseur)', 'Demander des échantillons ou un catalogue', 'Négocier un prix ou des délais', 'Autre (préciser dans le besoin)'];
   const TON = ['Cordial et professionnel', 'Très formel'];
   let gen = null;
   const SIG = '[Votre prénom et nom]\nCommerciale — MARIA BAG (Maria Atelier)\nChâteau Rouge – Les Eucalyptus, Alger\nTél : 0549 69 16 54';
@@ -137,21 +137,36 @@
     4: (c, n) => c === 'E-mail' ? 'Objet : Rappel — facture n° [numéro] en attente de règlement\n\nBonjour ' + n + ',\n\nSauf erreur de notre part, la facture n° [numéro] du [date], d\'un montant de [montant] DA, reste à régler (échéance : [date]).\n\nPourriez-vous nous indiquer la date de paiement prévue ? Si le règlement a déjà été effectué, merci de ne pas tenir compte de ce message.\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', un petit rappel : la facture n° [numéro] de [montant] DA (échéance [date]) n\'apparaît pas encore comme réglée. Pouvez-vous me confirmer la date de paiement ? Si c\'est déjà fait, merci d\'ignorer ce message.',
     5: (c, n) => c === 'E-mail' ? 'Objet : Nouveauté MARIA BAG — [nom du produit / offre]\n\nBonjour ' + n + ',\n\nNous avons le plaisir de vous présenter [nouveauté / offre] : [2 lignes de description et avantages].\n[Conditions : prix, quantité minimale, validité].\n\nJe peux vous envoyer des photos ou passer vous montrer les échantillons. Quel jour vous conviendrait ?\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', nouveauté chez MARIA BAG : [produit / offre] — [avantage principal]. Conditions : [prix / quantité / validité]. Je vous envoie les photos ou je passe avec des échantillons ?',
     6: (c, n) => c === 'E-mail' ? 'Objet : Votre demande de prix — MARIA BAG\n\nBonjour ' + n + ',\n\nMerci pour votre demande. Voici nos prix pour [produit] : [prix unitaire] DA à partir de [quantité] pièces, délai de livraison [délai], paiement [conditions].\n\nJe reste à votre disposition pour adapter l\'offre à vos besoins.\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', merci pour votre demande. Pour [produit] : [prix] DA/pièce à partir de [quantité] pièces, livraison sous [délai], paiement [conditions]. Je peux adapter l\'offre si besoin.',
-    7: (c, n) => c === 'E-mail' ? 'Objet : [objet]\n\nBonjour ' + n + ',\n\n[Votre message]\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', [votre message]. Merci et bonne journée.'
+    7: (c, n) => c === 'E-mail' ? 'Objet : Demande de devis — [produit / référence]\n\nBonjour ' + n + ',\n\nNous sommes MARIA BAG, atelier de maroquinerie à Alger. Nous souhaiterions recevoir votre meilleur prix pour [produit / référence], quantité [quantité], avec vos délais de livraison et vos conditions de paiement.\n\nPourriez-vous nous répondre avant le [date] ?\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', ici [Votre prénom] de MARIA BAG (atelier de maroquinerie, Alger). Pouvez-vous m\'envoyer votre prix pour [produit / référence], quantité [quantité], avec le délai et les conditions de paiement ? Merci d\'avance.',
+    8: (c, n) => c === 'E-mail' ? 'Objet : Commande — [produit / référence]\n\nBonjour ' + n + ',\n\nSuite à votre offre du [date], nous passons commande de [quantité] × [produit / référence] au prix de [prix] DA, livraison souhaitée le [date] à [adresse].\n\nMerci de nous confirmer la réception de cette commande et la date de livraison.\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', je confirme notre commande : [quantité] × [produit / référence] à [prix] DA, livraison souhaitée le [date]. Pouvez-vous me confirmer la réception et la date de livraison ? Merci.',
+    9: (c, n) => c === 'E-mail' ? 'Objet : Relance — commande n° [numéro] (livraison prévue le [date])\n\nBonjour ' + n + ',\n\nNous n\'avons pas encore reçu la commande n° [numéro] prévue le [date]. Pouvez-vous nous confirmer la date de livraison exacte ? Ce retard pénalise notre production.\n\nMerci de votre retour rapide.\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', un point sur la commande n° [numéro] prévue le [date] : elle n\'est pas encore arrivée. Pouvez-vous me confirmer la date de livraison ? Ce retard bloque notre production. Merci.',
+    10: (c, n) => c === 'E-mail' ? 'Objet : Demande d\'échantillons et de catalogue\n\nBonjour ' + n + ',\n\nNous sommes intéressés par [produits / matières]. Pourriez-vous nous envoyer votre catalogue, vos tarifs et des échantillons de [référence / couleur] ?\n\nNous pouvons passer les récupérer ou donner une adresse de livraison.\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', pouvez-vous m\'envoyer votre catalogue et vos tarifs, ainsi que des échantillons de [référence / couleur] ? Merci !',
+    11: (c, n) => c === 'E-mail' ? 'Objet : Proposition de conditions — [produit / commande]\n\nBonjour ' + n + ',\n\nMerci pour votre offre. Pour une commande de [quantité] pièces, pouvons-nous convenir d\'un prix de [prix proposé] DA et d\'un délai de [délai] ? Nous pouvons garantir [engagement : commandes régulières / paiement rapide].\n\nDans l\'attente de votre réponse,\nCordialement,\n' + SIG : 'Bonjour ' + n + ', merci pour votre offre. Pour [quantité] pièces, serait-il possible d\'avoir [prix proposé] DA et un délai de [délai] ? Nous pouvons [engagement]. Qu\'en pensez-vous ?',
+    12: (c, n) => c === 'E-mail' ? 'Objet : [objet]\n\nBonjour ' + n + ',\n\n[Votre message]\n\nCordialement,\n' + SIG : 'Bonjour ' + n + ', [votre message]. Merci et bonne journée.'
   };
+  const annuaire = () => ((typeof D !== 'undefined' && Array.isArray(D)) ? D : []).slice().sort((x, y) => String(x.type).localeCompare(String(y.type)) || String(x.nom).localeCompare(String(y.nom), 'fr'));
+  const nomC = c => [c.prenom, c.nom].filter(Boolean).join(' ') + (c.societe ? ' — ' + c.societe : '');
+  const contactParId = id => annuaire().find(c => String(c.id) === String(id));
+  const ficheTxt = c => [[c.prenom, c.nom].filter(Boolean).join(' ') && 'nom : ' + [c.prenom, c.nom].filter(Boolean).join(' '), c.poste && 'poste : ' + c.poste, c.societe && 'société : ' + c.societe, c.type && 'type : ' + c.type, c.tel && 'tél : ' + c.tel, c.email && 'e-mail : ' + c.email, c.ville && 'ville : ' + c.ville, c.produits && 'produits d\'intérêt : ' + c.produits, c.notes && 'notes : ' + String(c.notes).slice(0, 200)].filter(Boolean).join(' ; ');
   function genHtml() {
     const g = gen, sel = (id, arr, v) => '<select id="' + id + '">' + arr.map((x, i) => '<option value="' + i + '"' + (String(v) === String(i) ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select>';
+    const ann = annuaire(), c = g.k ? contactParId(g.k) : null;
     return '<div class="zs-m bot zs-gen"><b>✉ Rédiger un message professionnel</b>' +
-      '<label>Canal ' + sel('zg-c', CANAUX, g.c) + '</label><label>Destinataire ' + sel('zg-d', DEST, g.d) + '</label><label>Objectif ' + sel('zg-o', OBJ, g.o) + '</label>' +
-      '<label>Nom de la personne ou de la société <input id="zg-n" maxlength="80" placeholder="Ex : Mme Karima, Ardis Hydra" value="' + esc(g.n) + '"></label>' +
-      '<label>Détails à préciser (facultatif) <textarea id="zg-x" rows="2" maxlength="500" placeholder="Date, produits, montants, contexte…">' + esc(g.x) + '</textarea></label>' +
+      '<label>Canal ' + sel('zg-c', CANAUX, g.c) + '</label>' +
+      '<label>Contact enregistré (fournisseur, client…) <select id="zg-k"><option value="">— Je saisis le nom moi-même —</option>' + ann.map(x => '<option value="' + esc(x.id) + '"' + (String(g.k) === String(x.id) ? ' selected' : '') + '>' + esc((x.type ? x.type + ' · ' : '') + nomC(x)) + '</option>').join('') + '</select></label>' +
+      (c ? '<div class="zg-info">📇 ' + esc(ficheTxt(c)) + '</div>' : '') +
+      '<label>Destinataire ' + sel('zg-d', DEST, g.d) + '</label><label>Objectif ' + sel('zg-o', OBJ, g.o) + '</label>' +
+      (c ? '' : '<label>Nom de la personne ou de la société <input id="zg-n" maxlength="80" placeholder="Ex : Mme Karima, Ardis Hydra" value="' + esc(g.n) + '"></label>') +
+      '<label>Votre besoin : ce que vous voulez dire ou demander <textarea id="zg-x" rows="3" maxlength="600" placeholder="Ex : 500 m de toile Kawi noire, prix et délai, livraison avant le 15…">' + esc(g.x) + '</textarea></label>' +
       '<label>Ton ' + sel('zg-t', TON, g.t) + '</label>' +
       '<div class="zg-b"><button type="button" id="zg-go">Rédiger</button><button type="button" id="zg-cancel" class="alt">Annuler</button></div></div>';
   }
-  const genLire = () => { if (!gen || !$('#zg-c')) return; gen.c = $('#zg-c').value; gen.d = $('#zg-d').value; gen.o = $('#zg-o').value; gen.n = $('#zg-n').value; gen.x = $('#zg-x').value; gen.t = $('#zg-t').value; };
+  const genLire = () => { if (!gen || !$('#zg-c')) return; gen.c = $('#zg-c').value; gen.k = $('#zg-k') ? $('#zg-k').value : ''; gen.d = $('#zg-d').value; gen.o = $('#zg-o').value; if ($('#zg-n')) gen.n = $('#zg-n').value; gen.x = $('#zg-x').value; gen.t = $('#zg-t').value; };
   function genEnvoyer() {
-    genLire(); const g = gen, canal = CANAUX[g.c], dest = DEST[g.d], obj = OBJ[g.o], nom = g.n.trim();
-    const prompt = 'Rédige un message ' + canal + ' professionnel, prêt à copier-coller, destiné à : ' + dest + (nom ? ' (' + nom + ')' : '') + '. Objectif : ' + obj + '. Ton : ' + TON[g.t].toLowerCase() + '.' + (g.x.trim() ? ' Détails : ' + g.x.trim() : '') + ' Utilise des [crochets] pour les informations manquantes.';
+    genLire(); const g = gen, canal = CANAUX[g.c], dest = DEST[g.d], obj = OBJ[g.o], c = g.k ? contactParId(g.k) : null, nom = c ? ([c.prenom, c.nom].filter(Boolean).join(' ') || c.societe || '') : g.n.trim();
+    const prompt = 'Rédige un message ' + canal + ' professionnel, prêt à copier-coller, destiné à : ' + dest + (nom ? ' (' + nom + ')' : '') + '. Objectif : ' + obj + '. Ton : ' + TON[g.t].toLowerCase() + '.' +
+      (c ? ' Contact enregistré dans la plateforme — ' + ficheTxt(c) + '. Personnalise le message avec ces informations réelles (salutation avec son nom et son poste, société, produits concernés).' : '') +
+      (g.x.trim() ? ' Mon besoin : ' + g.x.trim() + '.' : '') + ' Utilise des [crochets] pour les informations manquantes.';
     const tpl = () => '```\n' + MOD[g.o](canal, nom || '[Nom]') + '\n```';
     gen = null; send(prompt, tpl);
   }
@@ -227,12 +242,14 @@
       const r = rem(); if (r && navigator.onLine) { try { const q = await r.from(TBL).delete().eq('proprietaire', owner()); if (q.error) { majEtat(false, en(q.error)); return; } } catch (e) { majEtat(false, en(e)); return; } }
       else if (r) { alert('Connexion nécessaire pour effacer la conversation sur tous les appareils.'); return; }
       msgs = []; save(); paint(); };
-    window.ouvrirGen = () => { if (!gen) gen = { c: 0, d: 0, o: 0, n: '', x: '', t: 0 }; paint(); const b = $('#zs-msgs'); if (b) b.scrollTop = b.scrollHeight; };
+    window.ouvrirGen = () => { if (!gen) gen = { c: 0, k: '', d: 0, o: 0, n: '', x: '', t: 0 }; paint(); const b = $('#zs-msgs'); if (b) b.scrollTop = b.scrollHeight; };
     $('#zs-msgbtn').onclick = () => { if (gen) { gen = null; paint(); } else window.ouvrirGen(); };
     $('#zs-msgs').addEventListener('click', e => {
       const c = e.target.closest('[data-copy]'); if (c) { copier(c.dataset.t, c); return; }
       if (e.target.id === 'zg-go') genEnvoyer(); else if (e.target.id === 'zg-cancel') { gen = null; paint(); } });
     $('#zs-msgs').addEventListener('input', () => genLire());
+    $('#zs-msgs').addEventListener('change', e => { if (e.target.id !== 'zg-k' || !gen) return; genLire(); const c = gen.k ? contactParId(gen.k) : null;
+      if (c) { const t = String(c.type || '').toLowerCase(); gen.d = /fournisseur/.test(t) ? 3 : /client/.test(t) ? 2 : /grande|surface/.test(t) ? 0 : /atelier/.test(t) ? 4 : gen.d; if (/fournisseur/.test(t) && gen.o < 7) gen.o = 7; } paint(); });
     $('#zs-form').onsubmit = e => { e.preventDefault(); send($('#zs-input').value); };
     $('#zs-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('#zs-input').value); } });
     paint();
