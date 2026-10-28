@@ -529,7 +529,7 @@
       var min = Math.round(Math.abs(skew) / 60000), txt = (min >= 60 ? Math.floor(min / 60) + ' h ' + (min % 60 ? (min % 60) + ' min ' : '') : min + ' min ') + (skew > 0 ? 'en avance' : 'en retard');
       var b = document.createElement('div'); b.id = 'skew-banner';
       b.style.cssText = 'position:fixed;left:12px;right:12px;top:12px;z-index:3000;background:#fff4d6;color:#6b4a00;border:1px solid #e6c36a;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.45;max-width:640px;margin:0 auto;box-shadow:0 8px 30px rgba(0,0,0,.25)';
-      b.innerHTML = '<b>⚠ L’heure de cet ordinateur est fausse (' + txt + ').</b> Réglez la date, l’heure et le <b>fuseau horaire en automatique</b> (Windows : Paramètres → Heure et langue → « Régler l’heure automatiquement » et « Synchroniser maintenant »). Sinon des déconnexions peuvent survenir. <button type="button" style="float:right;border:0;background:transparent;font-size:18px;cursor:pointer">×</button>';
+      b.innerHTML = '<b>⚠ L’horloge interne de cet ordinateur est décalée (' + txt + ').</b> Même si l’heure affichée semble juste, c’est souvent le <b>fuseau horaire</b> qui est faux (Algérie = UTC+01:00). Windows : Paramètres → Heure et langue → Date et heure → activez « Régler l’heure automatiquement » et « Régler le fuseau horaire automatiquement », puis « Synchroniser maintenant ». L’application fonctionne quand même. <button type="button" style="float:right;border:0;background:transparent;font-size:18px;cursor:pointer">×</button>';
       b.querySelector('button').onclick = function () { b.remove(); };
       document.body.appendChild(b);
     } catch (e) { /* sans importance */ }
