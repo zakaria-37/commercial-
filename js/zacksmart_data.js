@@ -32,16 +32,23 @@
 
   function sectionContacts(tk) {
     const all = contactsAll(); let t = '== CONTACTS ET SOLDES ==\n';
+    const sol = v => { try { return window.PayAPI ? PayAPI.soldes(v) : []; } catch (e) { return []; } };
+    const sc = sol('client'), sf = sol('fournisseur');
+    const m = tk.length ? all.filter(c => flou(tk, [c.nom, c.prenom, c.societe].join(' '))).slice(0, 5) : [];
+    // le contact demandé EN PREMIER (la fin du texte est tronquée si la liste est longue)
+    if (m.length) {
+      t += 'CONTACT(S) TROUVÉ(S) dans la plateforme — réponds avec ces informations exactes (ne dis jamais qu\'il est introuvable) :\n' + m.map(c => {
+        const x = sc.concat(sf).find(y => String(y.id) === String(c.id)), solde = x ? ' — solde : ' + (x.solde > 0.004 ? (/client/i.test(c.type || '') ? 'DOIT ' : 'nous lui devons ') + f2(x.solde) + ' DA (vendu/acheté ' + f2(x.facture + x.report) + ' DA, payé ' + f2(x.paye) + ' DA)' : 'à jour (0 DA)') : '';
+        return fiche(c) + solde; }).join('\n') + '\n';
+    }
     const nb = {}; all.forEach(c => { nb[c.type || 'Autre'] = (nb[c.type || 'Autre'] || 0) + 1; });
     t += 'Contacts : ' + all.length + ' (' + Object.keys(nb).map(k => nb[k] + ' ' + k).join(', ') + ').\n';
-    const sol = v => { try { return window.PayAPI ? PayAPI.soldes(v) : []; } catch (e) { return []; } };
-    const cl = sol('client').filter(x => x.solde > 0.004), fo = sol('fournisseur').filter(x => x.solde > 0.004);
-    if (cl.length) t += 'Clients qui doivent de l\'argent (total à encaisser : ' + f2(cl.reduce((s, x) => s + x.solde, 0)) + ' DA) :\n' + cl.slice(0, 15).map(x => '- ' + x.nom + ' : vendu ' + f2(x.facture + x.report) + ' DA, payé ' + f2(x.paye) + ' DA, SOLDE DÛ ' + f2(x.solde) + ' DA').join('\n') + '\n';
+    const nbS = m.length ? 5 : 15;
+    const cl = sc.filter(x => x.solde > 0.004), fo = sf.filter(x => x.solde > 0.004);
+    if (cl.length) t += 'Clients qui doivent de l\'argent (total à encaisser : ' + f2(cl.reduce((s, x) => s + x.solde, 0)) + ' DA) :\n' + cl.slice(0, nbS).map(x => '- ' + x.nom + ' : vendu ' + f2(x.facture + x.report) + ' DA, payé ' + f2(x.paye) + ' DA, SOLDE DÛ ' + f2(x.solde) + ' DA').join('\n') + '\n';
     else t += 'Soldes clients (livraisons moins encaissements) : aucun solde dû enregistré ; regarde aussi la section FACTURES pour les factures impayées.\n';
-    if (fo.length) t += 'Fournisseurs à payer (total : ' + f2(fo.reduce((s, x) => s + x.solde, 0)) + ' DA) :\n' + fo.slice(0, 10).map(x => '- ' + x.nom + ' : acheté ' + f2(x.facture + x.report) + ' DA, payé ' + f2(x.paye) + ' DA, reste à payer ' + f2(x.solde) + ' DA').join('\n') + '\n';
-    const m = tk.length ? all.filter(c => flou(tk, [lbl(c), c.nom, c.prenom, c.societe].join(' '))).slice(0, 6) : [];
-    if (m.length) t += 'Contacts correspondant à la question :\n' + m.map(c => '- ' + lbl(c) + ' (' + (c.type || '') + (c.statut ? ', ' + c.statut : '') + ')' + (c.tel ? ' — tél ' + c.tel : '') + (c.email ? ' — ' + c.email : '') + (c.ville ? ' — ' + c.ville : '') + (c.notes ? ' — notes : ' + String(c.notes).slice(0, 120) : '')).join('\n') + '\n';
-    return lim(t, 3000);
+    if (fo.length) t += 'Fournisseurs à payer (total : ' + f2(fo.reduce((s, x) => s + x.solde, 0)) + ' DA) :\n' + fo.slice(0, m.length ? 4 : 10).map(x => '- ' + x.nom + ' : acheté ' + f2(x.facture + x.report) + ' DA, payé ' + f2(x.paye) + ' DA, reste à payer ' + f2(x.solde) + ' DA').join('\n') + '\n';
+    return lim(t, 3300);
   }
 
   /* Détail complet d'un contact (pour personnaliser un message) */
@@ -58,7 +65,7 @@
     return lim(t, 3300);
   }
 
-  function sectionFactures(tk) {
+  function sectionFactures(tk, strict) {
     if (!window.CommerceAPI || !CommerceAPI.docs) return '';
     const docs = CommerceAPI.docs(), ttc = d => CommerceAPI.totaux(d, CommerceAPI.lignesDe(d.id)).ttc;
     const fac = docs.filter(d => d.type === 'facture' && d.statut !== 'annulee').sort((a, b) => String(b.date_doc).localeCompare(String(a.date_doc)));
@@ -68,7 +75,8 @@
     const sum = l => l.reduce((s, d) => s + ttc(d), 0), imp = fac.map(d => ({ d, e: CommerceAPI.etatFacture(d) })).filter(x => (x.e.reste || 0) > 0.004);
     t += 'Factures : ' + fac.length + ' ; facturé en ' + an + ' : ' + f2(sum(fac.filter(d => String(d.date_doc).startsWith(String(an))))) + ' DA TTC ; ce mois-ci : ' + f2(sum(fac.filter(d => String(d.date_doc).startsWith(mois)))) + ' DA TTC.\n';
     t += 'Impayées ou partiellement payées : ' + imp.length + ', reste à encaisser ' + f2(imp.reduce((s, x) => s + x.e.reste, 0)) + ' DA.\n';
-    const m = tk.length ? fac.filter(d => matchTxt(tk, [d.contact_nom, d.numero].join(' '))) : [];
+    const m = tk.length ? fac.filter(d => flou(tk, [d.contact_nom, d.numero].join(' '))) : [];
+    if (strict && !m.length) return t + 'Aucune facture enregistrée pour ce contact.\n';
     const sel = (m.length ? m : fac).slice(0, m.length ? 25 : 18);
     t += (m.length ? 'Factures correspondant à la question :\n' : 'Dernières factures :\n') + sel.map(d => { const e = CommerceAPI.etatFacture(d); return '- ' + d.numero + ' · ' + fd(d.date_doc) + ' · ' + (d.contact_nom || 'client ?') + ' · ' + f2(ttc(d)) + ' DA TTC · payé ' + f2(e.p || 0) + ' · reste ' + f2(e.reste || 0) + ' · ' + e.l + (d.echeance ? ' · échéance ' + fd(d.echeance) : ''); }).join('\n') + '\n';
     const dv = docs.filter(d => d.type === 'devis' && d.statut !== 'annulee').sort((a, b) => String(b.date_doc).localeCompare(String(a.date_doc))).slice(0, 6);
@@ -76,11 +84,12 @@
     return lim(t, 3200);
   }
 
-  function sectionCommandes(tk) {
+  function sectionCommandes(tk, strict) {
     let t = '== COMMANDES ET PRODUCTIONS ==\n';
     const cmds = (typeof COMMANDES !== 'undefined') ? COMMANDES : [], prods = (typeof PRODUCTIONS !== 'undefined') ? PRODUCTIONS : [];
     const ouv = c => c.statut !== 'Reçue' && c.statut !== 'Annulée';
-    const m = tk.length ? cmds.filter(c => matchTxt(tk, [c.commande_numero, c.modele_nom, c.contact_nom].join(' '))) : [];
+    const m = tk.length ? cmds.filter(c => flou(tk, [c.commande_numero, c.modele_nom, c.contact_nom].join(' '))) : [];
+    if (strict && !m.length) return t + 'Aucune commande enregistrée pour ce contact.\n';
     const lst = (m.length ? m : cmds.filter(ouv)).slice(0, 20);
     t += 'Commandes : ' + cmds.length + ' en tout, ' + cmds.filter(ouv).length + ' à livrer/en cours.\n';
     if (lst.length) t += (m.length ? 'Commandes correspondant à la question :\n' : 'Commandes en cours :\n') + lst.map(c => '- ' + (c.commande_numero || '—') + ' · ' + (c.modele_nom || '') + ' · client ' + (c.contact_nom && c.contact_nom !== 'N/A' ? c.contact_nom : 'non indiqué') + ' · ' + (Number(c.quantite_recue) || 0) + '/' + (Number(c.quantite_commandee) || 0) + ' livrées · ' + (c.statut || '') + (c.date_reception_prevue ? ' · prévue le ' + fd(c.date_reception_prevue) : '') +
@@ -113,7 +122,7 @@
       Object.keys(TOP).forEach(k => { want[k] = TOP[k].test(q); });
       // un nom propre cité (client, employé) déclenche le sujet correspondant
       if (tk.length) {
-        if (contactsAll().some(c => flou(tk, [c.nom, c.prenom, c.societe].join(' ')))) want.contacts = true;
+        if (contactsAll().some(c => flou(tk, [c.nom, c.prenom, c.societe].join(' ')))) { want.contacts = true; if (!want.factures) want.nomFact = true; if (!want.commandes) want.nomCmd = true; }
         if (typeof EMPLOYES !== 'undefined' && EMPLOYES.some(e => matchTxt(tk, [e.nom, e.prenom].join(' ')))) want.employes = true;
         if (typeof COMMANDES !== 'undefined' && COMMANDES.some(c => c.commande_numero && q.includes(nz(c.commande_numero)))) want.commandes = true;
       }
@@ -122,12 +131,12 @@
       const dest = /(fournisseur|client|societe|contact|prospect|entreprise)/.test(q) || (tk.length && contactsAll().some(c => flou(tk, [c.nom, c.prenom, c.societe].join(' '))));
       if (ecrire && dest) { want.contacts = false; want.msgContact = true; }
       if (!want.msgContact && !want.contacts && !want.factures && !want.commandes && !want.employes) return '';
-      if (want.factures || want.contacts) await chargerCommerce();
+      if (want.factures || want.contacts || want.nomFact) await chargerCommerce();
       let t = '';
       if (want.msgContact) t += sectionContactsMessage(q, tk) + '\n';
       if (want.contacts) t += sectionContacts(tk) + '\n';
-      if (want.factures) t += sectionFactures(tk) + '\n';
-      if (want.commandes) t += sectionCommandes(tk) + '\n';
+      if (want.factures) t += sectionFactures(tk) + '\n'; else if (want.nomFact) t += sectionFactures(tk, true) + '\n';
+      if (want.commandes) t += sectionCommandes(tk) + '\n'; else if (want.nomCmd) t += sectionCommandes(tk, true) + '\n';
       if (want.employes) t += sectionEmployes(tk) + '\n';
       return t;
     } catch (e) { return ''; }
