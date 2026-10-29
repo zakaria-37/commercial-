@@ -12,7 +12,7 @@
     const f = document.querySelector('footer'); if (!f) return;
     let s = document.getElementById('appver');
     if (!s) { s = document.createElement('small'); s.id = 'appver'; s.style.cssText = 'display:block;color:#9a9a9a;font-size:11px;margin-top:6px;cursor:pointer'; s.title = 'Cliquez pour vérifier et charger la dernière version'; f.appendChild(s); s.addEventListener('click', () => majMaintenant()); }
-    s.textContent = 'Version ' + court(chargee) + ' · actualiser';
+    s.textContent = 'Version ' + court(chargee) + (location.protocol === 'app:' ? ' · logiciel PC' : ' · actualiser');
   }
   async function majMaintenant() {
     try { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); } catch (e) {}
