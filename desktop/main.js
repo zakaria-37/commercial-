@@ -52,10 +52,13 @@ async function verifierMiseAJour(manuel) {
   try {
     const r = await net.fetch(SITE + '/sw.js?t=' + Date.now(), { cache: 'no-store' });
     const enLigne = ((await r.text()).match(/CACHE_VERSION = '([^']+)'/) || [])[1];
-    if (enLigne && numero(enLigne) > numero(loc)) {
-      const c = await dialog.showMessageBox(win, { type: 'info', title: 'Mise à jour disponible', buttons: ['Télécharger', 'Plus tard'], defaultId: 0, cancelId: 1,
-        message: 'Une nouvelle version de MARIA BAG est disponible.', detail: 'Version installée : ' + loc + '\nNouvelle version : ' + enLigne + '\n\nTéléchargez le nouvel installateur et lancez-le : vos données sont conservées.' });
+    const IGN = path.join(app.getPath('userData'), 'version-ignoree.txt');
+    let ignoree = ''; try { ignoree = fs.readFileSync(IGN, 'utf8').trim(); } catch (e) {}
+    if (enLigne && numero(enLigne) > numero(loc) && (manuel || enLigne !== ignoree)) {
+      const c = await dialog.showMessageBox(win, { type: 'info', title: 'Mise à jour disponible', buttons: ['Télécharger', 'Plus tard', 'Ignorer cette version'], defaultId: 0, cancelId: 1,
+        message: 'Une nouvelle version de MARIA BAG est disponible.', detail: 'Version installée : ' + loc + '\nNouvelle version : ' + enLigne + '\n\nInstallez le nouvel installateur par-dessus l’ancien : vos données sont conservées.' });
       if (c.response === 0) shell.openExternal(TELECHARGEMENT);
+      if (c.response === 2) try { fs.writeFileSync(IGN, enLigne); } catch (e) {}
     } else if (manuel) dialog.showMessageBox(win, { type: 'info', title: 'MARIA BAG', message: 'Vous avez la dernière version (' + loc + ').' });
   } catch (e) {
     if (manuel) dialog.showMessageBox(win, { type: 'warning', title: 'MARIA BAG', message: 'Pas de connexion Internet : impossible de vérifier les mises à jour.', detail: 'Le logiciel fonctionne normalement hors ligne.' });
