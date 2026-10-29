@@ -1,0 +1,65 @@
+{
+  "name": "mariabag-erp",
+  "productName": "MARIA BAG",
+  "version": "1.0.0",
+  "description": "MARIA BAG — logiciel de gestion commerciale et atelier (fonctionne hors ligne)",
+  "author": "Benouadah Zakaria",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "copier": "node copier.js",
+    "start": "node copier.js && electron .",
+    "build": "node copier.js && electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.mariabag.erp",
+    "productName": "MARIA BAG",
+    "copyright": "© MARIA BAG — développé par Benouadah Zakaria",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "app/**/*",
+      "build/icon.png"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false,
+      "artifactName": "MARIA-BAG-Installation-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "MARIA BAG",
+      "uninstallDisplayName": "MARIA BAG",
+      "installerLanguages": [
+        "fr_FR"
+      ],
+      "language": "1036",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": null
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zakaria-37/commercial-"
+  }
+}

@@ -4,3 +4,9 @@ Thumbs.db
 node_modules/
 .env
 "*.zip" 
+
+# Logiciel de bureau : fichiers générés
+desktop/node_modules/
+desktop/dist/
+desktop/app/
+desktop/build/
