@@ -40,6 +40,27 @@
   const cached = id => { try { const p = JSON.parse(localStorage.getItem(PROFIL_KEY) || 'null'); return p && p.id === id && Date.now() - p.t < PROFIL_TTL ? p : null; } catch (e) { return null; } };
   const uncache = () => { try { localStorage.removeItem(PROFIL_KEY); } catch (e) {} };
 
+  /* ----- Connexion SANS Internet -----
+     Après une connexion réussie en ligne, une empreinte du mot de passe (SHA-256 salée, jamais le mot de passe)
+     est gardée sur cet appareil : la même adresse e-mail et le même mot de passe ouvrent ensuite l'application hors ligne.
+     Première fois sur un appareil sans Internet : le mot de passe d'accès de secours (APP_PASSWORD) est accepté. */
+  const HL_KEY = 'mariabag_hors_ligne';
+  async function empreinte(sel, em, mdp){
+    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sel + ':' + em.toLowerCase() + ':' + mdp));
+    return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
+  }
+  async function memoriser(em, mdp, p){
+    try { const t = JSON.parse(localStorage.getItem(HL_KEY) || '{}'), sel = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(x => x.toString(16).padStart(2, '0')).join('');
+      t[em.toLowerCase()] = { sel, h: await empreinte(sel, em, mdp), profil: p }; localStorage.setItem(HL_KEY, JSON.stringify(t)); } catch (e) {}
+  }
+  async function horsLigne(em, mdp){
+    try { const x = JSON.parse(localStorage.getItem(HL_KEY) || '{}')[em.toLowerCase()];
+      if (x) return (await empreinte(x.sel, em, mdp)) === x.h ? { ok: true, profil: x.profil } : { ok: false };
+    } catch (e) {}
+    if (!REQUIRED && mdp === APP_PASSWORD) return { ok: true, profil: null, secours: true };
+    return { ok: false, inconnu: true };
+  }
+
   /* Lit le profil (rôle) du compte connecté ; null si introuvable */
   async function lireProfil(user){
     const r = remote(); if (!r) return null;
@@ -210,12 +231,23 @@
         else { setMode('login'); err.style.color = '#17632a'; err.textContent = 'Compte créé. Confirmez votre e-mail (lien reçu), puis connectez-vous. L’administrateur doit ensuite approuver votre accès.'; }
         return;
       }
-      const x = await r.auth.signInWithPassword({ email: em, password: val });
+      const connexionLocale = async () => {
+        const h = await horsLigne(em, val);
+        if (!h.ok) { echec(h.inconnu ? 'Pas de connexion Internet : la première connexion de ce compte sur cet appareil doit se faire en ligne.' : 'E-mail ou mot de passe incorrect.'); return; }
+        if (h.secours) sessionStorage.setItem(SESSION_KEY, '1');
+        reussi(h.profil); setTimeout(() => { if (typeof toast === 'function') toast('Connecté hors ligne : vos données se synchroniseront dès le retour d’Internet.'); }, 1500);
+      };
+      if (!navigator.onLine) { await connexionLocale(); return; }
+      let x;
+      try { x = await r.auth.signInWithPassword({ email: em, password: val }); } catch (e3) { x = { error: e3 }; }
+      if (x.error && /fetch|network|failed|load|timeout|abort|503|502/i.test(String(x.error.message || x.error))) { await connexionLocale(); return; }
       if (x.error) { echec(traduire(x.error.message)); return; }
+      memoriser(em, val, null);
       const p = await lireProfil(x.data.user);
       if (p === 'reseau') { await entrer(x.data.user); return; }
       if (!p || p.role === 'en_attente' || p.role === 'desactive') { await entrer(x.data.user); return; }
       reussi({ id: p.id, email: p.email, nom: p.nom || '', role: p.role }); cache({ id: p.id, email: p.email, nom: p.nom || '', role: p.role });
+      memoriser(em, val, { id: p.id, email: p.email, nom: p.nom || '', role: p.role });
       try { r.rpc('touch_login'); } catch (e2) {}
     } finally { btn.disabled = false; }
   });
