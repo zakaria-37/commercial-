@@ -4,14 +4,15 @@
    - Les données sont enregistrées sur ce PC (dossier du logiciel dans AppData) ;
      quand Internet est disponible, elles se synchronisent avec la base en ligne
      (téléphone, tablette et autres PC voient les mêmes données).
-   - Vérifie s'il existe une nouvelle version et propose de la télécharger.
+   - MISE À JOUR AUTOMATIQUE : dès qu'Internet est disponible, le logiciel télécharge la dernière
+     version de l'application depuis le site en ligne, la garde sur le PC et l'utilise au démarrage
+     suivant (ou tout de suite si on accepte de redémarrer). Aucune réinstallation nécessaire.
    ============================================================ */
 const { app, BrowserWindow, Menu, protocol, net, shell, dialog } = require('electron');
 const path = require('path'), fs = require('fs'), { pathToFileURL } = require('url');
 
 const APP_DIR = path.join(__dirname, 'app');
-const SITE = 'https://commercial-tf07.onrender.com';
-const TELECHARGEMENT = 'https://github.com/zakaria-37/commercial-/releases';
+const SITE = process.env.MARIABAG_SITE || 'https://commercial-tf07.onrender.com';
 let win = null, splash = null;
 
 // Un seul MARIA BAG ouvert à la fois : un 2e double-clic ramène la fenêtre existante
@@ -21,8 +22,19 @@ app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(
 // Origine fixe « app://mariabag » : les données locales (IndexedDB, réglages) restent au même endroit d'une version à l'autre
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 
-const versionLocale = () => { try { return (fs.readFileSync(path.join(APP_DIR, 'sw.js'), 'utf8').match(/CACHE_VERSION = '([^']+)'/) || [])[1] || ''; } catch (e) { return ''; } };
+const versionDe = dir => { try { return (fs.readFileSync(path.join(dir, 'sw.js'), 'utf8').match(/CACHE_VERSION = '([^']+)'/) || [])[1] || ''; } catch (e) { return ''; } };
 const numero = v => Number(String(v).replace(/\D/g, '')) || 0;
+
+/* Version utilisée : celle téléchargée automatiquement si elle est plus récente que celle livrée avec l'installateur */
+const MAJ_DIR = () => path.join(app.getPath('userData'), 'mises-a-jour');
+let RACINE = APP_DIR;
+function choisirRacine() {
+  try {
+    const v = fs.readFileSync(path.join(MAJ_DIR(), 'actuelle.txt'), 'utf8').trim(), d = path.join(MAJ_DIR(), v);
+    if (v && numero(v) > numero(versionDe(APP_DIR)) && fs.existsSync(path.join(d, 'index.html')) && versionDe(d) === v) RACINE = d;
+  } catch (e) { /* aucune mise à jour téléchargée */ }
+}
+const versionLocale = () => versionDe(RACINE);
 
 /* Taille et position de la fenêtre gardées d'une ouverture à l'autre */
 const ETAT = () => path.join(app.getPath('userData'), 'fenetre.json');
@@ -58,23 +70,44 @@ function creerFenetre() {
   win.loadURL('app://mariabag/index.html');
 }
 
-/* Nouvelle version publiée en ligne ? (silencieux sans Internet) */
+/* Mise à jour automatique : télécharge tous les fichiers de la nouvelle version, puis l'active.
+   Si un seul fichier échoue, rien n'est changé (la version actuelle reste utilisée). */
+let majEnCours = false, majPrete = '';
+async function texte(url) { const r = await net.fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(url + ' : ' + r.status); return r; }
 async function verifierMiseAJour(manuel) {
-  const loc = versionLocale();
+  if (majEnCours) return; majEnCours = true;
+  const loc = majPrete || versionLocale();
   try {
-    const r = await net.fetch(SITE + '/sw.js?t=' + Date.now(), { cache: 'no-store' });
-    const enLigne = ((await r.text()).match(/CACHE_VERSION = '([^']+)'/) || [])[1];
-    const IGN = path.join(app.getPath('userData'), 'version-ignoree.txt');
-    let ignoree = ''; try { ignoree = fs.readFileSync(IGN, 'utf8').trim(); } catch (e) {}
-    if (enLigne && numero(enLigne) > numero(loc) && (manuel || enLigne !== ignoree)) {
-      const c = await dialog.showMessageBox(win, { type: 'info', title: 'Mise à jour disponible', buttons: ['Télécharger', 'Plus tard', 'Ignorer cette version'], defaultId: 0, cancelId: 1,
-        message: 'Une nouvelle version de MARIA BAG est disponible.', detail: 'Version installée : ' + loc + '\nNouvelle version : ' + enLigne + '\n\nInstallez le nouvel installateur par-dessus l’ancien : vos données sont conservées.' });
-      if (c.response === 0) shell.openExternal(TELECHARGEMENT);
-      if (c.response === 2) try { fs.writeFileSync(IGN, enLigne); } catch (e) {}
-    } else if (manuel) dialog.showMessageBox(win, { type: 'info', title: 'MARIA BAG', message: 'Vous avez la dernière version (' + loc + ').' });
+    const sw = await (await texte(SITE + '/sw.js?t=' + Date.now())).text();
+    const enLigne = (sw.match(/CACHE_VERSION = '([^']+)'/) || [])[1];
+    if (!enLigne || numero(enLigne) <= numero(loc)) {
+      if (manuel) dialog.showMessageBox(win, { type: 'info', title: 'MARIA BAG', message: 'Vous avez la dernière version (' + loc.replace('mariabag-', '') + ').' });
+      return;
+    }
+    // liste des fichiers : ceux du service worker + tous ceux cités par index.html
+    const index = await (await texte(SITE + '/index.html?t=' + Date.now())).text();
+    if (!/MARIA BAG/i.test(index)) throw new Error('index.html inattendu');
+    const fichiers = new Set(['index.html', 'sw.js']);
+    (sw.match(/'\.\/[^']+'/g) || []).forEach(x => { const f = x.slice(3, -1); if (f) fichiers.add(f); });
+    (index.match(/(?:src|href)="([^"#?:]+)"/g) || []).forEach(x => { const f = x.replace(/^(src|href)="/, '').replace(/"$/, '').replace(/^\.\//, ''); if (f && !f.startsWith('data') && !f.startsWith('//')) fichiers.add(f); });
+    const tmp = path.join(MAJ_DIR(), enLigne + '.tmp'), dest = path.join(MAJ_DIR(), enLigne);
+    fs.rmSync(tmp, { recursive: true, force: true });
+    for (const f of fichiers) {
+      const c = path.normalize(path.join(tmp, f)); if (!c.startsWith(tmp)) continue;
+      const buf = f === 'index.html' ? Buffer.from(index) : f === 'sw.js' ? Buffer.from(sw) : Buffer.from(await (await texte(SITE + '/' + f + '?v=' + enLigne)).arrayBuffer());
+      fs.mkdirSync(path.dirname(c), { recursive: true }); fs.writeFileSync(c, buf);
+    }
+    fs.rmSync(dest, { recursive: true, force: true }); fs.renameSync(tmp, dest);
+    fs.writeFileSync(path.join(MAJ_DIR(), 'actuelle.txt'), enLigne);
+    // on garde seulement la version utilisée et la nouvelle
+    for (const d of fs.readdirSync(MAJ_DIR())) if (d !== enLigne && d !== path.basename(RACINE) && d !== 'actuelle.txt') fs.rmSync(path.join(MAJ_DIR(), d), { recursive: true, force: true });
+    majPrete = enLigne;
+    const c = await dialog.showMessageBox(win, { type: 'info', title: 'Mise à jour installée', buttons: ['Redémarrer maintenant', 'Au prochain démarrage'], defaultId: 0, cancelId: 1,
+      message: 'La nouvelle version de MARIA BAG (' + enLigne.replace('mariabag-', '') + ') est installée.', detail: 'Elle a été téléchargée automatiquement. Vos données sont conservées.' });
+    if (c.response === 0) { app.relaunch(); app.exit(0); }
   } catch (e) {
-    if (manuel) dialog.showMessageBox(win, { type: 'warning', title: 'MARIA BAG', message: 'Pas de connexion Internet : impossible de vérifier les mises à jour.', detail: 'Le logiciel fonctionne normalement hors ligne.' });
-  }
+    if (manuel) dialog.showMessageBox(win, { type: 'warning', title: 'MARIA BAG', message: 'Impossible de vérifier les mises à jour (pas de connexion Internet ?).', detail: 'Le logiciel fonctionne normalement hors ligne et réessaiera tout seul.' });
+  } finally { majEnCours = false; }
 }
 
 function menu() {
@@ -106,15 +139,19 @@ function menu() {
 }
 
 app.whenReady().then(() => {
+  choisirRacine();
   protocol.handle('app', req => {
     const u = new URL(req.url);
-    let f = path.normalize(path.join(APP_DIR, decodeURIComponent(u.pathname)));
-    if (!f.startsWith(APP_DIR)) return new Response('Interdit', { status: 403 });
-    if (fs.existsSync(f) && fs.statSync(f).isDirectory()) f = path.join(f, 'index.html');
+    const rel = decodeURIComponent(u.pathname) === '/' ? '/index.html' : decodeURIComponent(u.pathname);
+    let f = path.normalize(path.join(RACINE, rel));
+    if (!f.startsWith(RACINE)) return new Response('Interdit', { status: 403 });
+    if (!fs.existsSync(f)) f = path.normalize(path.join(APP_DIR, rel));     // fichier absent de la mise à jour : copie livrée avec le logiciel
+    if (!f.startsWith(APP_DIR) && !f.startsWith(RACINE)) return new Response('Interdit', { status: 403 });
     return net.fetch(pathToFileURL(f).toString());
   });
   app.setAppUserModelId('com.mariabag.erp');
   menu(); creerSplash(); creerFenetre();
   setTimeout(() => verifierMiseAJour(false), 8000);
+  setInterval(() => verifierMiseAJour(false), 30 * 60 * 1000);     // puis toutes les 30 minutes
 });
 app.on('window-all-closed', () => app.quit());
