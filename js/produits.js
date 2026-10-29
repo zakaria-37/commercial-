@@ -693,18 +693,19 @@ async function calculerMo(mode) {
   if (mode !== 'verif') hint.textContent = 'Calcul automatique en cours…';
 
   // 1) Salaires d'après le pointage
-  let sal = null, nEmp = 0;
+  let sal = null, nEmp = 0, supT = 0, normT = 0;
+  const avecHS = !!($d('#pd-mo-hs') && $d('#pd-mo-hs').checked);
   const pt = await sb.from('pointages').select('*').eq('date_pointage', date);
   if (!pt.error && typeof gainPointage === 'function' && typeof hrs === 'function') {
     let emps = (typeof EMPLOYES !== 'undefined' && EMPLOYES.length) ? EMPLOYES : null;
     if (!emps) { const e = await sb.from('employes').select('*'); emps = e.error ? [] : (e.data || []); }
-    let t = 0;
     (pt.data || []).forEach(p => {
       const e = emps.find(x => String(x.id) === String(p.employe_id));
       if (!e || hrs(p) <= 0) return;
-      nEmp++; t += gainPointage(p, e);
+      const d = detail(p, e);
+      nEmp++; normT += d.norm * Number(e.taux_horaire || 0); supT += d.sup * tauxSup(e);
     });
-    if (nEmp) sal = r2D(t);
+    if (nEmp) { normT = r2D(normT); supT = r2D(supT); sal = r2D(normT + (avecHS ? supT : 0)); }
   }
 
   // 2) Charges FIXES du jour (réglées une seule fois dans l'onglet Charges)
@@ -717,7 +718,7 @@ async function calculerMo(mode) {
   const totAutres = r2D(fx.total);
 
   let srcSal;
-  if (sal !== null) srcSal = 'salaires calculés d’après le pointage de ' + nEmp + ' employé' + (nEmp > 1 ? 's' : '');
+  if (sal !== null) srcSal = 'pointage de ' + nEmp + ' employé' + (nEmp > 1 ? 's' : '') + ' : heures normales ' + moneyD(normT) + (supT > 0 ? ' + heures sup ' + moneyD(supT) + (avecHS ? ' (comptées)' : ' (non comptées : payées à part)') : '');
   else if (paieSaisie > 0) { sal = paieSaisie; srcSal = 'salaires repris de la charge « Paie des employés » du jour'; }
   else { sal = 0; srcSal = 'aucun pointage ni paie enregistré ce jour-là : saisissez les salaires à la main'; }
 
@@ -888,6 +889,10 @@ $d('#pd-lcat').addEventListener('change', () => { majExempleCat(true); fillNomsS
 ['#pd-lqte', '#pd-lprix', '#pd-lperte'].forEach(s => $d(s).addEventListener('input', majApercuLigne));
 $d('#pd-lunite').addEventListener('change', majApercuLigne);
 ['#pd-mo-sal', '#pd-mo-ch', '#pd-mo-pcs'].forEach(s => $d(s).addEventListener('input', renderMoResultat));
+if ($d('#pd-mo-hs')) {
+  try { $d('#pd-mo-hs').checked = localStorage.getItem('mariabag_mo_hs') === '1'; } catch (e) {}
+  $d('#pd-mo-hs').addEventListener('change', () => { try { localStorage.setItem('mariabag_mo_hs', $d('#pd-mo-hs').checked ? '1' : '0'); } catch (e) {} calculerMo('auto'); });
+}
 $d('#pd-mo-date').addEventListener('change', () => { $d('#pd-mo-hint').textContent = ''; renderMoResultat(); calculerMo('auto'); });   // nouveau jour : salaires et charges fixes se recalculent seuls
 $d('#pd-qte').addEventListener('input', () => { if (produitCourant()) renderCout(); });
 // Recharge à chaque ouverture de l'onglet (les prix des modèles / charges ont pu changer)

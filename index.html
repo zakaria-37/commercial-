@@ -687,6 +687,7 @@
         <label>Charges fixes du jour (DA)<input id="pd-mo-ch" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Dîner, loyer, électricité…"></label>
         <label>Pièces fabriquées ce jour-là *<input id="pd-mo-pcs" type="number" min="1" step="1" inputmode="numeric" placeholder="Ex : 120"></label>
       </div>
+      <label class="st-check" style="margin-top:8px"><input id="pd-mo-hs" type="checkbox"> Compter aussi les heures supplémentaires dans la main d’œuvre (par défaut : non, elles sont payées à part)</label>
       <div id="pd-mo-hint"></div>
       <div id="pd-mo-res"></div>
       <div class="at-actions"><button class="btn" type="button" onclick="calculerMo()">Calculer depuis le pointage et les charges du jour</button><button id="pd-mo-save" class="btn" type="button" onclick="saveMo()">Enregistrer la main d’œuvre</button></div>
