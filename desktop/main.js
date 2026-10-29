@@ -30,8 +30,8 @@ const MAJ_DIR = () => path.join(app.getPath('userData'), 'mises-a-jour');
 let RACINE = APP_DIR;
 function choisirRacine() {
   try {
-    const v = fs.readFileSync(path.join(MAJ_DIR(), 'actuelle.txt'), 'utf8').trim(), d = path.join(MAJ_DIR(), v);
-    if (v && numero(v) > numero(versionDe(APP_DIR)) && fs.existsSync(path.join(d, 'index.html')) && versionDe(d) === v) RACINE = d;
+    const dossier = fs.readFileSync(path.join(MAJ_DIR(), 'actuelle.txt'), 'utf8').trim(), d = path.join(MAJ_DIR(), dossier);
+    if (dossier && fs.existsSync(path.join(d, 'index.html')) && numero(versionDe(d)) > numero(versionDe(APP_DIR))) RACINE = d;
   } catch (e) { /* aucune mise à jour téléchargée */ }
 }
 const versionLocale = () => versionDe(RACINE);
@@ -74,6 +74,7 @@ function creerFenetre() {
    Si un seul fichier échoue, rien n'est changé (la version actuelle reste utilisée). */
 let majEnCours = false, majPrete = '';
 async function texte(url) { const r = await net.fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(url + ' : ' + r.status); return r; }
+function journal(t) { try { fs.mkdirSync(MAJ_DIR(), { recursive: true }); fs.appendFileSync(path.join(MAJ_DIR(), 'journal.txt'), new Date().toLocaleString('fr-FR') + ' — ' + t + '\n'); } catch (e) {} }
 async function verifierMiseAJour(manuel) {
   if (majEnCours) return; majEnCours = true;
   const loc = majPrete || versionLocale();
@@ -81,6 +82,7 @@ async function verifierMiseAJour(manuel) {
     const sw = await (await texte(SITE + '/sw.js?t=' + Date.now())).text();
     const enLigne = (sw.match(/CACHE_VERSION = '([^']+)'/) || [])[1];
     if (!enLigne || numero(enLigne) <= numero(loc)) {
+      journal('à jour (' + loc + ', en ligne : ' + enLigne + ')');
       if (manuel) dialog.showMessageBox(win, { type: 'info', title: 'MARIA BAG', message: 'Vous avez la dernière version (' + loc.replace('mariabag-', '') + ').' });
       return;
     }
@@ -90,23 +92,25 @@ async function verifierMiseAJour(manuel) {
     const fichiers = new Set(['index.html', 'sw.js']);
     (sw.match(/'\.\/[^']+'/g) || []).forEach(x => { const f = x.slice(3, -1); if (f) fichiers.add(f); });
     (index.match(/(?:src|href)="([^"#?:]+)"/g) || []).forEach(x => { const f = x.replace(/^(src|href)="/, '').replace(/"$/, '').replace(/^\.\//, ''); if (f && !f.startsWith('data') && !f.startsWith('//')) fichiers.add(f); });
-    const tmp = path.join(MAJ_DIR(), enLigne + '.tmp'), dest = path.join(MAJ_DIR(), enLigne);
-    fs.rmSync(tmp, { recursive: true, force: true });
+    // dossier neuf pour chaque téléchargement (pas de renommage : l'antivirus de Windows bloque souvent les fichiers qui viennent d'être écrits)
+    const nom = enLigne + '-' + Date.now(), tmp = path.join(MAJ_DIR(), nom);
     for (const f of fichiers) {
       const c = path.normalize(path.join(tmp, f)); if (!c.startsWith(tmp)) continue;
       const buf = f === 'index.html' ? Buffer.from(index) : f === 'sw.js' ? Buffer.from(sw) : Buffer.from(await (await texte(SITE + '/' + f + '?v=' + enLigne)).arrayBuffer());
       fs.mkdirSync(path.dirname(c), { recursive: true }); fs.writeFileSync(c, buf);
     }
-    fs.rmSync(dest, { recursive: true, force: true }); fs.renameSync(tmp, dest);
-    fs.writeFileSync(path.join(MAJ_DIR(), 'actuelle.txt'), enLigne);
+    if (versionDe(tmp) !== enLigne) throw new Error('fichiers téléchargés incomplets');
+    fs.writeFileSync(path.join(MAJ_DIR(), 'actuelle.txt'), nom);
+    journal('mise à jour ' + enLigne + ' téléchargée (' + fichiers.size + ' fichiers)');
     // on garde seulement la version utilisée et la nouvelle
-    for (const d of fs.readdirSync(MAJ_DIR())) if (d !== enLigne && d !== path.basename(RACINE) && d !== 'actuelle.txt') fs.rmSync(path.join(MAJ_DIR(), d), { recursive: true, force: true });
+    for (const d of fs.readdirSync(MAJ_DIR())) if (d !== nom && d !== path.basename(RACINE) && !d.endsWith('.txt')) { try { fs.rmSync(path.join(MAJ_DIR(), d), { recursive: true, force: true }); } catch (e) { /* fichier bloqué : supprimé une autre fois */ } }
     majPrete = enLigne;
     const c = await dialog.showMessageBox(win, { type: 'info', title: 'Mise à jour installée', buttons: ['Redémarrer maintenant', 'Au prochain démarrage'], defaultId: 0, cancelId: 1,
       message: 'La nouvelle version de MARIA BAG (' + enLigne.replace('mariabag-', '') + ') est installée.', detail: 'Elle a été téléchargée automatiquement. Vos données sont conservées.' });
     if (c.response === 0) { app.relaunch(); app.exit(0); }
   } catch (e) {
-    if (manuel) dialog.showMessageBox(win, { type: 'warning', title: 'MARIA BAG', message: 'Impossible de vérifier les mises à jour (pas de connexion Internet ?).', detail: 'Le logiciel fonctionne normalement hors ligne et réessaiera tout seul.' });
+    journal('échec : ' + (e && e.message));
+    if (manuel) dialog.showMessageBox(win, { type: 'warning', title: 'MARIA BAG', message: 'La mise à jour n’a pas pu se faire.', detail: 'Raison : ' + (e && e.message) + '\n\nLe logiciel fonctionne normalement et réessaiera tout seul (au démarrage puis toutes les 30 minutes).' });
   } finally { majEnCours = false; }
 }
 
@@ -128,6 +132,7 @@ function menu() {
     ] },
     { label: 'Aide', submenu: [
       { label: 'Rechercher une mise à jour', click: () => verifierMiseAJour(true) },
+      { label: 'Journal des mises à jour', click: () => { journal('journal ouvert'); shell.openPath(path.join(MAJ_DIR(), 'journal.txt')); } },
       { label: 'Ouvrir la version en ligne', click: () => shell.openExternal(SITE) },
       { type: 'separator' },
       { label: 'Outils de diagnostic', accelerator: 'Ctrl+Shift+I', click: () => win && win.webContents.toggleDevTools() },
