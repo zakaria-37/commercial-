@@ -434,7 +434,7 @@
     if (!remote || pulling || !navigator.onLine) return false;
     if (!(await allowed())) return false;
     pulling = true; status();
-    var changedAny = false;
+    var changedAny = false, protege = [];
     try {
       for (var ti = 0; ti < TABLES.length; ti++) {
         var t = TABLES[ti], all = [], from = 0, failed = false;
@@ -463,10 +463,16 @@
           if (!old || !sameRow(old, row)) changedAny = true;      // vrai changement (autre appareil) : écrans à rafraîchir
           M.set(id, row); puts.push([t, row]);                     // sinon : simple mise au format de Supabase
         });
-        M.forEach(function (row, id) { if (!seen[id] && !pending[id]) { M.delete(id); dels.push([t, id]); changedAny = true; } });
+        // PROTECTION : si la base en ligne renvoie beaucoup moins de lignes que ce PC (incident, projet restauré vide,
+        // accès refusé…), on n'efface RIEN ici. Seules quelques suppressions faites sur un autre appareil sont reprises.
+        var absents = []; M.forEach(function (row, id) { if (!seen[id] && !pending[id]) absents.push(id); });
+        if (absents.length && ((!all.length) || (absents.length > 5 && absents.length > M.size * 0.3))) {
+          protege.push(t + ' (' + absents.length + ')');
+        } else absents.forEach(function (id) { M.delete(id); dels.push([t, id]); changedAny = true; });
         if (puts.length || dels.length) await persist(puts, dels);
       }
       META.lastPull = Date.now();
+      if (protege.length) { lastError = 'La base en ligne contient moins de données que ce PC — rien n’a été effacé sur ce PC (' + protege.join(', ') + ')'; console.warn('Maria Bag —', lastError); }
       await persist([], []);
       if (!first && changedAny) refreshScreens();
       return changedAny;
@@ -474,8 +480,10 @@
   }
 
   var syncing = null;
+  var SYNC_OFF_KEY = 'mariabag_sync_suspendue';
+  function syncOff() { try { return localStorage.getItem(SYNC_OFF_KEY) === '1'; } catch (e) { return false; } }
   function sync(withPull) {
-    if (!remote) { status(); return Promise.resolve(); }
+    if (!remote || syncOff()) { status(); return Promise.resolve(); }
     if (syncing) return syncing;
     syncing = (async function () {
       try {
@@ -510,6 +518,7 @@
     var n = OUTBOX.length, txt = document.getElementById('sync');
     var title = 'Données enregistrées sur cet ordinateur.';
     if (!remote) { setSync('ok', 'Enregistré sur ce PC'); }
+    else if (syncOff()) { setSync('warn', 'Local uniquement' + (n ? ' · ' + n + ' en attente' : '')); title += ' Synchronisation en ligne suspendue (Sauvegarde › Reprendre) : tout fonctionne sur ce PC.'; }
     else if (!navigator.onLine) { setSync('warn', 'Hors ligne' + (n ? ' · ' + n + ' en attente' : '')); title += ' Pas d’internet : les changements seront envoyés à la base en ligne au retour de la connexion.'; }
     else if (flushing || pulling) { setSync('warn', 'Synchronisation…'); }
     else if (lastError) { setSync('err', n ? n + ' non envoyé' + (n > 1 ? 's' : '') : 'À vérifier'); title += ' ' + lastError; }
@@ -534,10 +543,18 @@
       document.body.appendChild(b);
     } catch (e) { /* sans importance */ }
   }
+  // Délai maximal : un serveur Supabase bloqué ne doit jamais figer la synchronisation ni la connexion
+  function avecDelai(input, init) {
+    init = Object.assign({}, init || {});
+    if (init.signal || typeof AbortController === 'undefined') return fetch(input, init);
+    var c = new AbortController(), t = setTimeout(function () { c.abort(); }, 25000);
+    init.signal = c.signal;
+    return fetch(input, init).finally(function () { clearTimeout(t); });
+  }
   function guardFetch(input, init) {
     var url = typeof input === 'string' ? input : (input && input.url) || '';
-    if (url.indexOf('/auth/v1/token') === -1) return fetch(input, init);
-    return fetch(input, init).then(function (resp) {
+    if (url.indexOf('/auth/v1/token') === -1) return avecDelai(input, init);
+    return avecDelai(input, init).then(function (resp) {
       if (resp.status === 429) {                                         // trop de demandes : réponse « réessayez plus tard » (la session est gardée)
         return resp.text().then(function (t) { return new Response(t, { status: 503, statusText: 'Service Unavailable', headers: resp.headers }); });
       }
@@ -570,6 +587,8 @@
     ready: ready,
     tables: TABLES,
     sync: function () { return sync(true); },
+    syncSuspendue: syncOff,
+    suspendreSync: function (oui) { try { localStorage.setItem(SYNC_OFF_KEY, oui ? '1' : '0'); } catch (e) {} status(); if (!oui) return sync(true); },
     status: status,
     pending: function () { return OUTBOX.length; },
     rejected: function () { return REJECTED.slice(); },

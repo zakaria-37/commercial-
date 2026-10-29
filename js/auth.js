@@ -240,7 +240,8 @@
       if (!navigator.onLine) { await connexionLocale(); return; }
       let x;
       try { x = await r.auth.signInWithPassword({ email: em, password: val }); } catch (e3) { x = { error: e3 }; }
-      if (x.error && /fetch|network|failed|load|timeout|abort|503|502/i.test(String(x.error.message || x.error))) { await connexionLocale(); return; }
+      // Supabase injoignable, lent ou en panne (erreur serveur) : connexion avec l'empreinte gardée sur cet appareil
+      if (x.error && (/fetch|network|failed|load|timeout|abort|50\d|unavailable|gateway|database error|unexpected/i.test(String(x.error.message || x.error)) || Number(x.error.status) >= 500 || Number(x.error.status) === 0)) { await connexionLocale(); return; }
       if (x.error) { echec(traduire(x.error.message)); return; }
       memoriser(em, val, null);
       const p = await lireProfil(x.data.user);

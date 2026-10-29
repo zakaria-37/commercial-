@@ -188,6 +188,7 @@
       '<button class="bk" id="bkNow">Sauvegarder maintenant (JSON + Excel)</button>' +
       (canFolder ? '<button class="bk o" id="bkDir">' + (dir ? 'Changer le dossier automatique' : 'Choisir un dossier automatique (copie à chaque changement + 1 par jour)') + '</button>' : '') +
       '<button class="bk o" id="bkRes">Restaurer depuis un fichier .json</button>' +
+      (window.LocalDB && LocalDB.suspendreSync ? '<button class="bk o" id="bkSync">' + (LocalDB.syncSuspendue() ? '▶ Reprendre la synchronisation en ligne' : '⏸ Suspendre la synchronisation en ligne (travailler uniquement sur ce PC)') + '</button>' : '') +
       '<input type="file" id="bkFile" accept=".json,application/json" hidden>' +
       '<button class="bk o" id="bkClose">Fermer</button><div id="bkMsg"></div></div>';
     document.body.appendChild(bg);
@@ -196,6 +197,13 @@
     var busy = function (b) { bg.querySelectorAll('.bk').forEach(function (x) { x.disabled = b; }); };
     var close = function () { bg.remove(); };
     $('#bkClose').onclick = close;
+    if ($('#bkSync')) $('#bkSync').onclick = async function () {
+      var off = !LocalDB.syncSuspendue();
+      if (off && !confirm('Suspendre la synchronisation ?\n\nLe logiciel continue de fonctionner normalement sur ce PC. Vos changements restent en attente et seront envoyés quand vous reprendrez la synchronisation.')) return;
+      await LocalDB.suspendreSync(off);
+      $('#bkSync').textContent = off ? '▶ Reprendre la synchronisation en ligne' : '⏸ Suspendre la synchronisation en ligne (travailler uniquement sur ce PC)';
+      msg(off ? 'Synchronisation suspendue : tout est enregistré sur ce PC.' : 'Synchronisation reprise.');
+    };
     bg.addEventListener('click', function (e) { if (e.target === bg) close(); });
 
     $('#bkNow').onclick = async function () {
