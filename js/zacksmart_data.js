@@ -1,5 +1,5 @@
 /* ============================================================
-   ZACKsmart : données réelles de la plateforme (clients, soldes, factures, commandes, employés)
+   ZACKsmart : données réelles de toute la plateforme (clients, soldes, factures, commandes, paie par jour ou par mois, charges, ateliers, rendez-vous, notes, tendances, coût des produits, inventaire, bilan)
    transmises à l'assistant UNIQUEMENT quand la question concerne le sujet (le stock est géré dans zacksmart.js).
    Les salaires ne sont transmis qu'à l'administrateur (ou sans compte, avec l'ancien mot de passe).
    ============================================================ */
@@ -116,6 +116,181 @@
     return lim(t, 3600);
   }
 
+
+  /* ---------- Période citée dans la question : jour, semaine, mois ---------- */
+  const MOISN = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+  const isoD = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const finMois = m => m + '-' + String(new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate()).padStart(2, '0');
+  const moisTxt = m => MOISN[+m.slice(5, 7) - 1] + ' ' + m.slice(0, 4);
+  function periode(question) {
+    const q = String(question || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/['’]/g, ' ');
+    const now = new Date(), y = now.getFullYear(), jour = (yy, mm, dd) => { const d = new Date(yy, mm - 1, dd); return isNaN(d) || d.getDate() !== dd ? null : { du: isoD(d), au: isoD(d), l: 'le ' + fd(isoD(d)) }; };
+    let m = q.match(/\b(\d{4})-(\d{2})-(\d{2})\b/); if (m) { const r = jour(+m[1], +m[2], +m[3]); if (r) return r; }
+    m = q.match(/\b(\d{1,2})\s*[\/.\-]\s*(\d{1,2})(?:\s*[\/.\-]\s*(\d{2,4}))?\b/);
+    if (m && +m[2] >= 1 && +m[2] <= 12) { const yy = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : y; const r = jour(yy, +m[2], +m[1]); if (r) return r; }
+    m = q.match(new RegExp('\\b(\\d{1,2}|1er)\\s+(' + MOISN.join('|') + ')(?:\\s+(\\d{4}))?'));
+    if (m) { const r = jour(m[3] ? +m[3] : y, MOISN.indexOf(m[2]) + 1, m[1] === '1er' ? 1 : +m[1]); if (r) return r; }
+    const dec = k => { const d = new Date(now); d.setDate(d.getDate() + k); return { du: isoD(d), au: isoD(d), l: 'le ' + fd(isoD(d)) }; };
+    if (/avant[ -]?hier/.test(q)) return dec(-2);
+    if (/\bhier\b/.test(q)) return dec(-1);
+    if (/aujourd ?hui|\bce jour\b|journee d aujourd|\bauj\b/.test(q)) return dec(0);
+    if (/\bdemain\b/.test(q)) return dec(1);
+    if (/semaine (derniere|passee|precedente)/.test(q)) { const d = new Date(now); d.setDate(d.getDate() - ((d.getDay() + 1) % 7) - 7); const f = new Date(d); f.setDate(f.getDate() + 6); return { du: isoD(d), au: isoD(f), l: 'la semaine du ' + fd(isoD(d)) + ' au ' + fd(isoD(f)) }; }
+    if (/cette semaine|semaine en cours/.test(q)) { const d = new Date(now); d.setDate(d.getDate() - ((d.getDay() + 1) % 7)); return { du: isoD(d), au: isoD(now), l: 'cette semaine (du ' + fd(isoD(d)) + ' au ' + fd(isoD(now)) + ')' }; }
+    m = q.match(new RegExp('\\b(' + MOISN.join('|') + ')(?:\\s+(\\d{4}))?'));
+    if (m) { const mm = (m[2] || y) + '-' + String(MOISN.indexOf(m[1]) + 1).padStart(2, '0'); return { du: mm + '-01', au: finMois(mm), mois: mm, l: moisTxt(mm) }; }
+    if (/mois (dernier|passe|precedent)/.test(q)) { const d = new Date(y, now.getMonth() - 1, 1), mm = isoD(d).slice(0, 7); return { du: mm + '-01', au: finMois(mm), mois: mm, l: moisTxt(mm) }; }
+    if (/ce mois|mois en cours|mois actuel/.test(q)) { const mm = isoD(now).slice(0, 7); return { du: mm + '-01', au: finMois(mm), mois: mm, l: moisTxt(mm) }; }
+    return null;
+  }
+  const rows = async (table, col, du, au) => { try { const r = await sb.from(table).select('*').gte(col, du).lte(col, au); return r.error ? [] : (r.data || []); } catch (e) { return []; } };
+  const somme = (l, k) => l.reduce((s, x) => s + (Number(x[k]) || 0), 0);
+  const hm = t => t ? String(t).slice(0, 5) : '';
+
+  /* ---------- Paie et pointage sur une période (jour = détail par employé) ---------- */
+  async function sectionPaiePeriode(P) {
+    const unJour = P.du === P.au;
+    if (!admin()) return '== PAIE ET POINTAGE (' + P.l + ') ==\nLes salaires sont réservés à l\'administrateur : ne donne aucun chiffre de paie, dis-le poliment.\n';
+    if (typeof detail !== 'function' || typeof EMPLOYES === 'undefined') return '';
+    const pts = await rows('pointages', 'date_pointage', P.du, P.au), acs = await rows('acomptes', 'date_acompte', P.du, P.au);
+    let t = '== PAIE ET POINTAGE DES EMPLOYÉS — ' + P.l + ' ==\nRÈGLE : paie normale = heures normales (jusqu\'à la fin normale, pause de midi déduite) × taux horaire. Les heures sup sont payées À PART (mises de côté) : donne-les séparément, jamais ajoutées à la paie normale, sauf si on te demande explicitement le « coût total ».\n';
+    let tn = 0, ts = 0, thn = 0, ths = 0; const lignes = [], absents = [];
+    EMPLOYES.forEach(e => {
+      const mine = pts.filter(p => String(p.employe_id) === String(e.id));
+      let hn = 0, hs = 0, pn = 0, ps = 0, j = 0, abs = 0; const det = [];
+      mine.forEach(p => { if (p.absent && !(hrs(p) > 0)) { abs++; return; } const d = detail(p, e); if (d.norm + d.sup <= 0) return; j++; hn += d.norm; hs += d.sup; pn += d.norm * Number(e.taux_horaire || 0); ps += d.sup * tauxSup(e); if (unJour) det.push(hm(p.heure_debut) && hm(p.heure_fin) ? hm(p.heure_debut) + '–' + hm(p.heure_fin) : f2(hrs(p)) + ' h'); });
+      const ac = somme(acs.filter(a => String(a.employe_id) === String(e.id)), 'montant');
+      if (abs && !j) { absents.push(e.nom); return; }
+      if (!j && !ac) return;
+      tn += pn; ts += ps; thn += hn; ths += hs;
+      const rt = unJour || typeof CREDITS === 'undefined' ? 0 : somme(CREDITS.filter(r => String(r.employe_id) === String(e.id) && r.type === 'retenue' && r.date_op >= P.du && r.date_op <= P.au), 'montant');
+      lignes.push('- ' + e.nom + (unJour ? ' (' + (det.join(', ') || '—') + ')' : ' (' + j + ' jour' + (j > 1 ? 's' : '') + ')') + ' : ' + f2(hn) + ' h normales = ' + f2(pn) + ' DA' + (hs > 0 ? ' ; heures sup ' + f2(hs) + ' h = ' + f2(ps) + ' DA (à part)' : '') + (ac ? ' ; acompte' + (unJour ? ' versé ' : 's ') + f2(ac) + ' DA' : '') + (rt ? ' ; retenue crédit ' + f2(rt) + ' DA' : '') + (unJour ? '' : ' ; SALAIRE FINAL À PAYER ' + f2(pn - ac - rt) + ' DA'));
+    });
+    if (!lignes.length && !absents.length) return t + 'Aucun pointage enregistré pour cette période.\n';
+    t += lignes.join('\n') + '\n';
+    if (absents.length) t += 'Absents : ' + absents.join(', ') + '.\n';
+    t += 'TOTAL ' + P.l + ' (' + lignes.length + ' employé(s) pointé(s)) : PAIE NORMALE ' + f2(tn) + ' DA (' + f2(thn) + ' h) ; heures sup à part ' + f2(ts) + ' DA (' + f2(ths) + ' h) ; coût total de main d\'œuvre si on inclut les heures sup ' + f2(tn + ts) + ' DA ; acomptes versés ' + f2(somme(acs, 'montant')) + ' DA.\n';
+    return lim(t, 3200);
+  }
+
+  /* ---------- Activité d'une journée ou d'une période (hors paie) ---------- */
+  async function sectionActivite(P) {
+    const unJour = P.du === P.au;
+    const [ch, pay, pfm, pa, rdv] = await Promise.all([rows('charges', 'date_charge', P.du, P.au), rows('paiements', 'date_paiement', P.du, P.au), rows('pf_mouvements', 'date_mvt', P.du, P.au), rows('paiements_ateliers', 'date_paiement', P.du, P.au), rows('rendez_vous', 'date_rdv', P.du, P.au)]);
+    let t = '== ACTIVITÉ — ' + P.l + ' ==\n';
+    let fx = null; if (unJour && window.ChargesAPI) { try { fx = await ChargesAPI.fixesDuJour(P.du); } catch (e) { fx = null; } }
+    const chv = ch.filter(c => !(admin() ? false : c.categorie === 'Paie des employés'));
+    t += 'Charges saisies : ' + (chv.length ? f2(somme(chv, 'montant')) + ' DA — ' + chv.slice(0, 10).map(c => (c.libelle || c.categorie || 'charge') + ' ' + f2(c.montant) + ' DA').join(', ') : 'aucune') + (fx && fx.total ? ' ; charges fixes du jour ' + f2(fx.total) + ' DA (' + fx.lignes.map(l => l.libelle + ' ' + f2(l.montant)).join(', ') + ')' : '') + '.\n';
+    const enc = pay.filter(x => x.sens === 'encaissement'), reg = pay.filter(x => x.sens !== 'encaissement');
+    t += 'Encaissements clients : ' + f2(somme(enc, 'montant')) + ' DA' + (enc.length ? ' (' + enc.slice(0, 8).map(x => (x.contact_nom || '?') + ' ' + f2(x.montant)).join(', ') + ')' : '') + ' ; règlements fournisseurs : ' + f2(somme(reg, 'montant')) + ' DA' + (reg.length ? ' (' + reg.slice(0, 6).map(x => (x.contact_nom || '?') + ' ' + f2(x.montant)).join(', ') + ')' : '') + '.\n';
+    if (pa.length) t += 'Paiements aux ateliers : ' + f2(somme(pa.filter(x => x.type !== 'report'), 'montant')) + ' DA (' + pa.filter(x => x.type !== 'report').slice(0, 6).map(x => { const a = (typeof ATELIERS !== 'undefined' ? ATELIERS : []).find(y => String(y.id) === String(x.atelier_id)); return (a ? a.nom : 'atelier') + ' ' + f2(x.montant); }).join(', ') + ').\n';
+    if (window.CommerceAPI && CommerceAPI.docs) {
+      const fac = CommerceAPI.docs().filter(d => d.type === 'facture' && d.statut !== 'annulee' && d.date_doc >= P.du && d.date_doc <= P.au);
+      t += 'Factures émises : ' + fac.length + (fac.length ? ' pour ' + f2(fac.reduce((s, d) => s + CommerceAPI.totaux(d, CommerceAPI.lignesDe(d.id)).ttc, 0)) + ' DA TTC (' + fac.slice(0, 6).map(d => d.numero + ' ' + (d.contact_nom || '')).join(', ') + ')' : '') + '.\n';
+    }
+    const liv = pfm.filter(m => m.type === 'livraison'), ent = pfm.filter(m => m.type === 'entree');
+    if (pfm.length) t += 'Produits finis : ' + somme(ent, 'quantite') + ' pièces entrées en stock, ' + somme(liv, 'quantite') + ' pièces livrées' + (liv.length ? ' (' + liv.slice(0, 6).map(m => (m.client_nom || 'client') + ' ' + m.quantite + ' pcs').join(', ') + ')' : '') + '.\n';
+    const prods = typeof PRODUCTIONS !== 'undefined' ? PRODUCTIONS : [];
+    const lanc = prods.filter(p => p.date_lancement >= P.du && p.date_lancement <= P.au), recu = prods.filter(p => p.date_reception_reelle && p.date_reception_reelle >= P.du && p.date_reception_reelle <= P.au);
+    if (lanc.length || recu.length) t += 'Productions lancées : ' + (lanc.map(p => p.modele_nom + ' ' + p.quantite_lancee + ' pcs (' + (p.atelier_nom || 'atelier') + ')').join(', ') || 'aucune') + ' ; reçues : ' + (recu.map(p => p.modele_nom + ' ' + p.quantite_lancee + ' pcs').join(', ') || 'aucune') + '.\n';
+    if (rdv.length) t += 'Rendez-vous : ' + rdv.slice(0, 8).map(r => fd(r.date_rdv) + (r.heure ? ' ' + hm(r.heure) : '') + ' ' + r.titre + (r.contact_nom ? ' avec ' + r.contact_nom : '') + ' [' + r.statut + ']').join(' ; ') + '.\n';
+    return lim(t, 2400);
+  }
+
+  /* ---------- Charges du mois ---------- */
+  async function sectionCharges(P) {
+    const mm = P && P.mois ? P.mois : isoD(new Date()).slice(0, 7), du = P ? P.du : mm + '-01', au = P ? P.au : finMois(mm), l = P ? P.l : moisTxt(mm);
+    const ch = (await rows('charges', 'date_charge', du, au)).filter(c => admin() || c.categorie !== 'Paie des employés');
+    let fx = { total: 0 }; if (window.ChargesAPI && ChargesAPI.moisFixes && (!P || P.mois)) { try { fx = await ChargesAPI.moisFixes(mm); } catch (e) {} }
+    const cats = {}; ch.forEach(c => { cats[c.categorie || 'Autre'] = (cats[c.categorie || 'Autre'] || 0) + Number(c.montant || 0); });
+    let t = '== CHARGES — ' + l + ' ==\nTotal des charges saisies : ' + f2(somme(ch, 'montant')) + ' DA' + (fx.total ? ' + charges fixes calculées ' + f2(fx.total) + ' DA (' + (fx.jours || 0) + ' jours travaillés) = ' + f2(somme(ch, 'montant') + fx.total) + ' DA' : '') + '.\n';
+    if (Object.keys(cats).length) t += 'Par catégorie : ' + Object.keys(cats).sort((a, b) => cats[b] - cats[a]).map(k => k + ' ' + f2(cats[k]) + ' DA').join(' ; ') + '.\n';
+    const fixes = window.ChargesAPI ? ChargesAPI.list() : [];
+    if (fixes.length) t += 'Charges fixes définies (par jour travaillé) : ' + fixes.slice(0, 10).map(f => f.libelle + ' ' + f2(f.montant) + ' DA').join(', ') + '.\n';
+    const top = ch.slice().sort((a, b) => Number(b.montant) - Number(a.montant)).slice(0, 10);
+    if (top.length) t += 'Plus grosses charges : ' + top.map(c => fd(c.date_charge) + ' ' + (c.libelle || c.categorie) + ' ' + f2(c.montant) + ' DA').join(' ; ') + '.\n';
+    return lim(t, 1800);
+  }
+
+  /* ---------- Ateliers : productions, façon due, payée, reste ---------- */
+  async function sectionAteliers(tk) {
+    const ats = typeof ATELIERS !== 'undefined' ? ATELIERS : [], prods = typeof PRODUCTIONS !== 'undefined' ? PRODUCTIONS : [];
+    if (!ats.length) return '== ATELIERS ==\nAucun atelier enregistré.\n';
+    let pay = []; try { const r = await sb.from('paiements_ateliers').select('*'); pay = r.error ? [] : (r.data || []); } catch (e) {}
+    const m = tk.length ? ats.filter(a => flou(tk, a.nom)) : [], lst = m.length ? m : ats;
+    let t = '== ATELIERS (sous-traitants payés à la façon) ==\n', tot = { du: 0, paye: 0 };
+    t += lst.slice(0, 15).map(a => {
+      const ps = prods.filter(p => String(p.atelier_id) === String(a.id) && p.statut !== 'Annulée'), mine = pay.filter(x => String(x.atelier_id) === String(a.id));
+      const du = ps.reduce((s, p) => s + (Number(p.prix_facon) || 0) * (Number(p.quantite_lancee) || 0), 0) + somme(mine.filter(x => x.type === 'report'), 'montant'), paye = somme(mine.filter(x => x.type !== 'report'), 'montant');
+      tot.du += du; tot.paye += paye;
+      const enc = ps.filter(p => p.statut !== 'Terminée' && !p.date_reception_reelle);
+      return '- ' + a.nom + (a.responsable ? ' (' + a.responsable + ')' : '') + (a.statut ? ' [' + a.statut + ']' : '') + (a.tel ? ' tél ' + a.tel : '') + ' : ' + ps.length + ' production(s), ' + enc.length + ' en cours (' + enc.reduce((s, p) => s + (Number(p.quantite_lancee) || 0), 0) + ' pcs) ; façon due ' + f2(du) + ' DA, payé ' + f2(paye) + ' DA, RESTE À PAYER ' + f2(du - paye) + ' DA' +
+        (m.length ? '\n  Productions : ' + ps.slice(0, 8).map(p => p.modele_nom + ' ' + p.quantite_lancee + ' pcs · ' + p.statut + ' · lancée ' + fd(p.date_lancement) + (p.date_reception_prevue ? ' · prévue ' + fd(p.date_reception_prevue) : '') + (Number(p.prix_facon) ? ' · façon ' + f2(p.prix_facon) + ' DA/pc' : ' · façon non renseignée')).join(' | ') : '');
+    }).join('\n') + '\n';
+    if (!m.length) t += 'TOTAL ateliers : dû ' + f2(tot.du) + ' DA, payé ' + f2(tot.paye) + ' DA, reste à payer ' + f2(tot.du - tot.paye) + ' DA.\n';
+    return lim(t, 2400);
+  }
+
+  /* ---------- Notes : rendez-vous et notes personnelles ---------- */
+  async function sectionNotes(tk) {
+    const today = isoD(new Date());
+    let rdv = [], np = [];
+    try { const r = await sb.from('rendez_vous').select('*').order('date_rdv', { ascending: true }); rdv = r.error ? [] : (r.data || []); } catch (e) {}
+    try { const r = await sb.from('notes_perso').select('*'); np = r.error ? [] : (r.data || []); } catch (e) {}
+    const m = tk.length ? rdv.filter(r => flou(tk, [r.titre, r.contact_nom, r.lieu, r.objet].join(' '))) : [];
+    const futurs = rdv.filter(r => r.date_rdv >= today && (r.statut === 'Prévu' || r.statut === 'Reporté')), passes = rdv.filter(r => r.date_rdv < today).slice(-6).reverse();
+    const fr = r => '- ' + fd(r.date_rdv) + (r.heure ? ' ' + hm(r.heure) : '') + ' · ' + r.titre + ' · ' + (r.type || '') + (r.contact_nom ? ' · ' + r.contact_nom : '') + (r.tel ? ' · tél ' + r.tel : '') + (r.lieu ? ' · ' + r.lieu : '') + (r.objet ? ' · objet : ' + String(r.objet).slice(0, 120) : '') + ' · ' + r.statut + (r.resultat ? ' · résultat : ' + String(r.resultat).slice(0, 120) : '') + (r.relance ? ' · relance ' + fd(r.relance) : '');
+    let t = '== NOTES : RENDEZ-VOUS ET NOTES PERSONNELLES ==\n';
+    if (m.length) t += 'Rendez-vous correspondant à la question :\n' + m.slice(0, 8).map(fr).join('\n') + '\n';
+    t += 'Rendez-vous à venir (' + futurs.length + ') :\n' + (futurs.slice(0, 10).map(fr).join('\n') || 'aucun') + '\n';
+    if (passes.length && !m.length) t += 'Derniers rendez-vous passés :\n' + passes.map(fr).join('\n') + '\n';
+    const act = np.filter(n => !n.fait).sort((a, b) => (b.epingle ? 1 : 0) - (a.epingle ? 1 : 0) || String(a.rappel || '9').localeCompare(String(b.rappel || '9')));
+    if (act.length) t += 'Notes personnelles non faites (' + act.length + ') :\n' + act.slice(0, 12).map(n => '- ' + (n.epingle ? '📌 ' : '') + '[' + (n.categorie || '') + '] ' + (n.titre ? n.titre + ' : ' : '') + String(n.contenu).slice(0, 160) + (n.rappel ? ' (rappel ' + fd(n.rappel) + ')' : '')).join('\n') + '\n';
+    return lim(t, 2600);
+  }
+
+  /* ---------- Tendances ---------- */
+  async function sectionTendances() {
+    let l = []; try { const r = await sb.from('tendances').select('*'); l = r.error ? [] : (r.data || []); } catch (e) {}
+    if (!l.length) return '';
+    l.sort((a, b) => (b.potentiel || 0) - (a.potentiel || 0));
+    return lim('== TENDANCES ENREGISTRÉES DANS LA PLATEFORME ==\n' + l.slice(0, 12).map(x => '- ' + x.titre + ' (' + x.type + (x.categorie ? ', ' + x.categorie : '') + (x.region ? ', ' + x.region : '') + ') potentiel ' + x.potentiel + '/5 · ' + x.statut + (x.prix_indicatif ? ' · prix ' + x.prix_indicatif : '') + (x.idee_maria ? ' · idée Maria Bag : ' + String(x.idee_maria).slice(0, 140) : '')).join('\n') + '\n', 2200);
+  }
+
+  /* ---------- Produits : coût de revient, prix de vente, marge ---------- */
+  function sectionProduits(tk) {
+    if (typeof PRODUITS === 'undefined' || typeof recap !== 'function' || !PRODUITS.length) return '';
+    const m = tk.length ? PRODUITS.filter(p => flou(tk, p.nom)) : [], lst = (m.length ? m : PRODUITS).slice(0, 15);
+    let t = '== PRODUITS : COÛT DE REVIENT D\'UNE PIÈCE ==\n';
+    t += lst.map(p => { const r = recap(p), pv = Number(p.prix_vente) || 0;
+      return '- ' + p.nom + ' : coût ' + f2(r.total) + ' DA (matières ' + f2(r.mat) + ' DA' + (Number(p.mo_pieces) ? ', main d\'œuvre ' + f2(r.mo) + ' DA' : ', main d\'œuvre NON renseignée') + ')' + (pv ? ' ; prix de vente ' + f2(pv) + ' DA ; marge ' + f2(pv - r.total) + ' DA/pc (' + Math.round((pv - r.total) / pv * 100) + ' %)' : ' ; prix de vente non renseigné') +
+        (m.length ? '\n  Détail : ' + r.cats.map(c => c.lbl + ' ' + f2(c.v) + ' DA').join(', ') : ''); }).join('\n') + '\n';
+    return lim(t, 2000);
+  }
+
+  /* ---------- Inventaires ---------- */
+  async function sectionInventaire() {
+    let l = []; try { const r = await sb.from('inventaires').select('*').order('date_inventaire', { ascending: false }); l = r.error ? [] : (r.data || []); } catch (e) {}
+    if (!l.length) return '== INVENTAIRE ==\nAucun inventaire enregistré (onglet Inventaire).\n';
+    return '== INVENTAIRES ==\n' + l.slice(0, 4).map(i => '- ' + i.nom + ' (' + fd(i.date_inventaire) + ', ' + (i.statut === 'cloture' ? 'clôturé' : 'brouillon') + ')' + (i.statut === 'cloture' ? ' : ventes ' + f2(i.ventes) + ' DA, achats ' + f2(i.achats) + ' DA, valeur nette ' + f2(i.valeur_nette) + ' DA' : '')).join('\n') + '\n';
+  }
+
+  /* ---------- Bilan général (« comment va l'atelier ? ») ---------- */
+  async function sectionBilan() {
+    const today = isoD(new Date()), mm = today.slice(0, 7);
+    let t = '== BILAN GÉNÉRAL AU ' + fd(today) + ' ==\n';
+    const D_ = contactsAll(); t += 'Contacts : ' + D_.length + '.\n';
+    if (window.CommerceAPI && CommerceAPI.docs) { const fac = CommerceAPI.docs().filter(d => d.type === 'facture' && d.statut !== 'annulee'), ttc = d => CommerceAPI.totaux(d, CommerceAPI.lignesDe(d.id)).ttc;
+      const imp = fac.map(d => CommerceAPI.etatFacture(d)).filter(e => (e.reste || 0) > 0.004);
+      t += 'Ventes : facturé ce mois ' + f2(fac.filter(d => String(d.date_doc).startsWith(mm)).reduce((s, d) => s + ttc(d), 0)) + ' DA TTC ; reste à encaisser ' + f2(imp.reduce((s, e) => s + e.reste, 0)) + ' DA (' + imp.length + ' factures).\n'; }
+    const cmds = typeof COMMANDES !== 'undefined' ? COMMANDES.filter(c => c.statut !== 'Reçue' && c.statut !== 'Annulée') : [], prods = typeof PRODUCTIONS !== 'undefined' ? PRODUCTIONS.filter(p => p.statut !== 'Terminée' && p.statut !== 'Annulée' && !p.date_reception_reelle) : [];
+    t += 'Commandes à livrer : ' + cmds.length + ' (' + cmds.filter(c => c.date_reception_prevue && c.date_reception_prevue < today).length + ' en retard) ; productions en cours : ' + prods.length + ' (' + prods.filter(p => p.date_reception_prevue && p.date_reception_prevue < today).length + ' en retard).\n';
+    if (window.StockAPI) { try { const al = StockAPI.list().filter(StockAPI.enAlerte); t += 'Stock matières : ' + StockAPI.list().length + ' articles, ' + al.length + ' en alerte (' + al.slice(0, 6).map(a => a.nom).join(', ') + ').\n'; } catch (e) {} }
+    if (window.PFAPI) { try { const s = PFAPI.summary(); t += 'Produits finis : ' + s.pieces + ' pièces en stock, ' + s.aLivrer + ' à livrer.\n'; } catch (e) {} }
+    t += (await sectionCharges(null)).replace(/^== [^\n]*\n/, 'Charges du mois : ');
+    return lim(t, 2200);
+  }
+
   async function contexte(question) {
     try {
       const q = nz(question), tk = toks(question), want = {};
@@ -130,15 +305,38 @@
       const ecrire = /(ecri|redig|message|e-?mail|\bmail\b|whatsapp|\bsms\b|relanc|contacter|envoy|courrier|devis a)/.test(q);
       const dest = /(fournisseur|client|societe|contact|prospect|entreprise)/.test(q) || (tk.length && contactsAll().some(c => flou(tk, [c.nom, c.prenom, c.societe].join(' '))));
       if (ecrire && dest) { want.contacts = false; want.msgContact = true; }
-      if (!want.msgContact && !want.contacts && !want.factures && !want.commandes && !want.employes) return '';
-      if (want.factures || want.contacts || want.nomFact) await chargerCommerce();
+      // autres sections de la plateforme
+      const P = periode(question);
+      want.paieJour = !!P && /(paie|salaire|employe|pointage|heure|ouvrier|equipe|travaill|presence|present|absent|main d oeuvre|acompte)/.test(q);
+      want.activite = !!P && !want.paieJour && !want.employes || (!!P && /(journee|activite|bilan|resume|qu est ce qui|que s est|fait|recap)/.test(q));
+      want.charges = /(charge|depense|loyer|electricite|diner|frais)/.test(q);
+      want.ateliers = /(atelier|facon|sous trait|soustrait)/.test(q) || (tk.length && typeof ATELIERS !== 'undefined' && ATELIERS.some(a => flou(tk, a.nom)));
+      want.notes = /(rdv|rendez|rendez vous|agenda|planning|note|rappel|pense bete|prospect a contacter|a ne pas oublier)/.test(q);
+      want.tendances = /(tendance|winner|trend|a la mode|modele populaire)/.test(q);
+      want.produits = /(cout de revient|prix de revient|cout d une piece|cout de production|main d oeuvre|rentab|marge par|marge du|marge sur|prix de vente)/.test(q) || (tk.length && typeof PRODUITS !== 'undefined' && PRODUITS.some(p => flou(tk, p.nom)) && !want.employes);
+      want.inventaire = /inventaire/.test(q);
+      want.bilan = /(bilan|situation|resume general|vue d ensemble|tableau de bord|comment va|etat general|rapport|point sur l atelier|point global)/.test(q) && !P;
+      if (want.paieJour) want.employes = false;                       // la période demandée remplace le mois affiché
+      if (P && P.mois && !P.au.startsWith(isoD(new Date()).slice(0, 7)) && /(salaire|paie|employe|acompte)/.test(q)) { want.paieJour = true; want.employes = false; }
+      if (!['msgContact', 'contacts', 'factures', 'commandes', 'employes', 'paieJour', 'activite', 'charges', 'ateliers', 'notes', 'tendances', 'produits', 'inventaire', 'bilan'].some(k => want[k])) return '';
+      if (want.factures || want.contacts || want.nomFact || want.activite || want.bilan) await chargerCommerce();
       let t = '';
+      if (P) t += 'DATE DU JOUR : ' + fd(isoD(new Date())) + '. Période demandée : ' + P.l + ' (du ' + fd(P.du) + ' au ' + fd(P.au) + ').\n';
+      if (want.paieJour) t += await sectionPaiePeriode(P) + '\n';
+      if (want.activite) t += await sectionActivite(P) + '\n';
+      if (want.bilan) t += await sectionBilan() + '\n';
+      if (want.notes) t += await sectionNotes(tk) + '\n';
+      if (want.ateliers) t += await sectionAteliers(tk) + '\n';
+      if (want.charges && !want.bilan) t += await sectionCharges(P && P.du !== P.au ? P : (P ? { du: P.du, au: P.au, l: P.l } : null)) + '\n';
+      if (want.produits) t += sectionProduits(tk) + '\n';
+      if (want.tendances) t += await sectionTendances() + '\n';
+      if (want.inventaire) t += await sectionInventaire() + '\n';
       if (want.msgContact) t += sectionContactsMessage(q, tk) + '\n';
       if (want.contacts) t += sectionContacts(tk) + '\n';
       if (want.factures) t += sectionFactures(tk) + '\n'; else if (want.nomFact) t += sectionFactures(tk, true) + '\n';
       if (want.commandes) t += sectionCommandes(tk) + '\n'; else if (want.nomCmd) t += sectionCommandes(tk, true) + '\n';
       if (want.employes) t += sectionEmployes(tk) + '\n';
-      return t;
+      return t.slice(0, 6800);
     } catch (e) { return ''; }
   }
   window.ZSData = { contexte };
