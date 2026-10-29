@@ -12,7 +12,7 @@ const path = require('path'), fs = require('fs'), { pathToFileURL } = require('u
 const APP_DIR = path.join(__dirname, 'app');
 const SITE = 'https://commercial-tf07.onrender.com';
 const TELECHARGEMENT = 'https://github.com/zakaria-37/commercial-/releases';
-let win = null;
+let win = null, splash = null;
 
 // Un seul MARIA BAG ouvert à la fois : un 2e double-clic ramène la fenêtre existante
 if (!app.requestSingleInstanceLock()) { app.quit(); }
@@ -29,6 +29,14 @@ const ETAT = () => path.join(app.getPath('userData'), 'fenetre.json');
 function lireEtat() { try { return JSON.parse(fs.readFileSync(ETAT(), 'utf8')); } catch (e) { return { width: 1366, height: 860, max: true }; } }
 function garderEtat() { try { if (!win) return; const b = win.getNormalBounds(); fs.writeFileSync(ETAT(), JSON.stringify({ ...b, max: win.isMaximized() })); } catch (e) {} }
 
+/* Animation d'ouverture : logo MARIA BAG en 3D (5 s, un clic pour passer) */
+function creerSplash() {
+  splash = new BrowserWindow({ width: 800, height: 450, frame: false, resizable: false, movable: false, center: true, skipTaskbar: false, alwaysOnTop: true, show: false,
+    backgroundColor: '#ececec', title: 'MARIA BAG', icon: path.join(__dirname, 'build', 'icon.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  splash.once('ready-to-show', () => splash.show());
+  splash.loadFile(path.join(__dirname, 'splash', 'splash.html'));
+}
+
 function creerFenetre() {
   const e = lireEtat();
   win = new BrowserWindow({
@@ -36,8 +44,12 @@ function creerFenetre() {
     title: 'MARIA BAG', icon: path.join(__dirname, 'build', 'icon.png'), backgroundColor: '#000000', show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true }
   });
-  if (e.max) win.maximize();
-  win.once('ready-to-show', () => win.show());
+  // la fenêtre principale se charge derrière l'animation d'ouverture, puis s'affiche à la fin de celle-ci
+  let pret = false, animFinie = !splash;
+  const montrer = () => { if (!pret || !animFinie || win.isVisible()) return; if (e.max) win.maximize(); win.show(); if (splash && !splash.isDestroyed()) splash.close(); splash = null; };
+  win.once('ready-to-show', () => { pret = true; montrer(); });
+  if (splash) splash.webContents.on('did-navigate-in-page', (ev, url) => { if (url.endsWith('#fin')) { animFinie = true; montrer(); } });
+  if (splash) splash.on('closed', () => { if (!animFinie) { animFinie = true; montrer(); } });
   win.on('close', garderEtat);
   win.webContents.session.setSpellCheckerLanguages(['fr']);
   // Liens externes (WhatsApp, e-mail, téléphone, sites) : ouverts dans le navigateur ou l'application du PC
@@ -102,7 +114,7 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(f).toString());
   });
   app.setAppUserModelId('com.mariabag.erp');
-  menu(); creerFenetre();
+  menu(); creerSplash(); creerFenetre();
   setTimeout(() => verifierMiseAJour(false), 8000);
 });
 app.on('window-all-closed', () => app.quit());

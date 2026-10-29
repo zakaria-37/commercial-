@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>MARIA BAG</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#ececec;cursor:default;user-select:none}
+  video{width:100%;height:100%;object-fit:cover;display:block}
+  body{transition:opacity .45s ease}
+  body.fin{opacity:0}
+</style></head>
+<body>
+<video id="v" src="logo.mp4" autoplay muted playsinline></video>
+<script>
+  // Fin de l'animation (ou clic pour passer) : fondu puis ouverture du logiciel
+  const v = document.getElementById('v');
+  let fini = false;
+  const terminer = () => { if (fini) return; fini = true; document.body.classList.add('fin'); setTimeout(() => { location.hash = 'fin'; }, 450); };
+  v.addEventListener('ended', terminer);
+  v.addEventListener('error', terminer);
+  document.addEventListener('click', terminer);
+  setTimeout(terminer, 7000);
+</script>
+</body></html>
