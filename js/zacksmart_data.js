@@ -8,12 +8,12 @@
   const nz = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
   const f2 = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('fr-FR').replace(/[  ]/g, ' ');
   const fd = s => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '';
-  const STOP = new Set(['combien', 'quel', 'quelle', 'quels', 'quelles', 'les', 'des', 'une', 'que', 'pour', 'dans', 'avec', 'mon', 'mes', 'est', 'sont', 'qui', 'moi', 'donne', 'dis', 'liste', 'tout', 'tous', 'toutes', 'sur', 'plus', 'moins', 'mois', 'jai', 'doit', 'doivent', 'reste', 'total', 'etat', 'client', 'clients', 'facture', 'factures', 'commande', 'commandes', 'employe', 'employes', 'salaire', 'salaires', 'solde', 'soldes', 'contact', 'contacts', 'fournisseur', 'fournisseurs', 'vente', 'ventes', 'paie', 'cette', 'cet', 'ses', 'son', 'leur', 'leurs', 'chiffre', 'affaires', 'quand', 'comment', 'faire', 'est-ce', 'peux', 'veux', 'voir', 'avoir', 'faut', 'merci', 'bonjour', 'salut']);
+  const STOP = new Set(['combien', 'quel', 'quelle', 'quels', 'quelles', 'les', 'des', 'une', 'que', 'pour', 'dans', 'avec', 'mon', 'mes', 'est', 'sont', 'qui', 'moi', 'donne', 'dis', 'liste', 'tout', 'tous', 'toutes', 'sur', 'plus', 'moins', 'mois', 'jai', 'doit', 'doivent', 'reste', 'total', 'etat', 'client', 'clients', 'facture', 'factures', 'commande', 'commandes', 'employe', 'employes', 'salaire', 'salaires', 'solde', 'soldes', 'contact', 'contacts', 'fournisseur', 'fournisseurs', 'vente', 'ventes', 'paie', 'cette', 'cet', 'ses', 'son', 'leur', 'leurs', 'chiffre', 'affaires', 'quand', 'comment', 'faire', 'est-ce', 'peux', 'veux', 'voir', 'avoir', 'faut', 'merci', 'bonjour', 'salut', 'salarie', 'salaries', 'salairies', 'employets', 'extrait', 'affiches', 'affiche', 'combient', 'journee']);
   const TOP = {
     contacts: /(client|fournisseur|contact|societe|prospect|solde|credit|dette|doit|doivent|impay|creance|encaiss|reglement|paiement|meilleur|telephone|numero)/,
     factures: /(facture|devis|bon de commande|vente|chiffre d affaires|\bca\b|impay|reste a payer|paye|encaiss)/,
     commandes: /(commande|production|livraison|livrer|retard|atelier|facon|delai|marge)/,
-    employes: /(salaire|paie|employe|pointage|heure|acompte|absent|absence|credit perso|couturier|ouvrier|equipe|retenue)/
+    employes: /(salair|salari|\bpaie\b|\bpaye\b|employe|employ|pointage|pointe|heure|acompte|absent|absence|credit perso|couturier|ouvrier|equipe|retenue|personnel|travailleur|main d oeuvre)/
   };
   const lim = (s, n) => s.length > n ? s.slice(0, n - 20).replace(/\n[^\n]*$/, '') + '\n(… liste tronquée)' : s;
   const lbl = c => window.PartAPI ? PartAPI.label(c) : (c.societe || [c.prenom, c.nom].filter(Boolean).join(' '));
@@ -307,7 +307,7 @@
       if (ecrire && dest) { want.contacts = false; want.msgContact = true; }
       // autres sections de la plateforme
       const P = periode(question);
-      want.paieJour = !!P && /(paie|salaire|employe|pointage|heure|ouvrier|equipe|travaill|presence|present|absent|main d oeuvre|acompte)/.test(q);
+      want.paieJour = !!P && /(paie|paye|salair|salari|employ|pointage|pointe|heure|ouvrier|equipe|travaill|presence|present|absent|main d oeuvre|acompte|personnel)/.test(q);
       want.activite = !!P && !want.paieJour && !want.employes || (!!P && /(journee|activite|bilan|resume|qu est ce qui|que s est|fait|recap)/.test(q));
       want.charges = /(charge|depense|loyer|electricite|diner|frais)/.test(q);
       want.ateliers = /(atelier|facon|sous trait|soustrait)/.test(q) || (tk.length && typeof ATELIERS !== 'undefined' && ATELIERS.some(a => flou(tk, a.nom)));
@@ -317,7 +317,7 @@
       want.inventaire = /inventaire/.test(q);
       want.bilan = /(bilan|situation|resume general|vue d ensemble|tableau de bord|comment va|etat general|rapport|point sur l atelier|point global)/.test(q) && !P;
       if (want.paieJour) want.employes = false;                       // la période demandée remplace le mois affiché
-      if (P && P.mois && !P.au.startsWith(isoD(new Date()).slice(0, 7)) && /(salaire|paie|employe|acompte)/.test(q)) { want.paieJour = true; want.employes = false; }
+      if (P && P.mois && !P.au.startsWith(isoD(new Date()).slice(0, 7)) && /(salair|salari|paie|paye|employ|acompte)/.test(q)) { want.paieJour = true; want.employes = false; }
       if (!['msgContact', 'contacts', 'factures', 'commandes', 'employes', 'paieJour', 'activite', 'charges', 'ateliers', 'notes', 'tendances', 'produits', 'inventaire', 'bilan'].some(k => want[k])) return '';
       if (want.factures || want.contacts || want.nomFact || want.activite || want.bilan) await chargerCommerce();
       let t = '';

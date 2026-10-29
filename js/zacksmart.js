@@ -271,7 +271,10 @@
     let rep = null, note = false;
     try {
       if (!navigator.onLine) throw new Error('offline');
-      const plus = window.ZSData ? await ZSData.contexte(text) : '', st = contexteStock(text), ctxt = (plus ? st.slice(0, 2400) + '\n' + plus : st).slice(0, 6500);
+      let plus = window.ZSData ? await ZSData.contexte(text) : '', st = contexteStock(text);
+      // question de suite (« dans l'extrait », « et pour lui ? ») : on reprend le sujet des questions précédentes
+      if (!plus && !st) { const prev = msgs.filter(m => m.role === 'user' && m !== mu && !m.note).slice(-2).map(m => m.content).join(' \n '); if (prev) { plus = window.ZSData ? await ZSData.contexte(prev + ' \n ' + text) : ''; st = contexteStock(prev + ' ' + text); } }
+      const ctxt = (plus ? st.slice(0, 2400) + '\n' + plus : st).slice(0, 6500);
       const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 60000);
       const r = await fetch(SUPABASE_URL + '/functions/v1/zacksmart', { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
         body: JSON.stringify({ messages: msgs.filter(m => !m.note).slice(-8).map(m => ({ role: m.role, content: m.content.slice(0, 1500) })), page: page(), deep, contexte: ctxt }) });
