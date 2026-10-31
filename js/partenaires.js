@@ -21,7 +21,8 @@
   /* ---------- Contacts ---------- */
   const contacts = () => (typeof D !== 'undefined' && Array.isArray(D)) ? D : [];
   const fullNom = c => [c.prenom, c.nom].filter(Boolean).join(' ').trim();
-  const label = c => (c.societe || fullNom(c) || c.nom || '').trim();
+  // Société et nom différents (ex. « MARIA BAG — HANOUT MARIA BAG ») : les deux sont affichés, pour qu'un changement de nom se voie partout
+  const label = c => { const so = String(c.societe || '').trim(), n = String(fullNom(c) || c.nom || '').trim(); return so && n && norm(so) !== norm(n) ? so + ' — ' + n : (so || n); };
   const byId = id => contacts().find(c => String(c.id) === String(id));
   const trouveParNom = (nom, type) => {
     const n = norm(nom); if (!n) return null;

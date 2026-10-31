@@ -62,6 +62,8 @@
   const cById = id => contacts().find(c => String(c.id) === String(id));
   const lbl = c => window.PartAPI ? PartAPI.label(c) : (c.societe || c.nom);
   const pays = () => window.PayAPI ? PayAPI.list() : [];
+  // nom à jour du contact (s'il a été renommé dans Contacts), sinon le nom enregistré dans le document
+  const nomDoc = d => { const c = d.contact_id ? cById(d.contact_id) : null; return c ? lbl(c) : (d.contact_nom || ''); };
 
   /* ---------- Calculs ---------- */
   function totaux(doc, lignes) {
@@ -133,7 +135,7 @@
   }
 
   function paneListe(type) {
-    const T = TYPES[type], liste = DOCS.filter(d => d.type === type && (!filtre || norm([d.numero, d.contact_nom].join(' ')).includes(norm(filtre))));
+    const T = TYPES[type], liste = DOCS.filter(d => d.type === type && (!filtre || norm([d.numero, d.contact_nom, nomDoc(d)].join(' ')).includes(norm(filtre))));
     const tousType = DOCS.filter(d => d.type === type);
     let h = '';
     if (type === 'facture') {
@@ -157,7 +159,7 @@
     if (fromLiv && type === 'facture') h += formLivraisons();
     h += liste.length ? '<div class="tw"><table class="iv-tbl"><thead><tr><th>N°</th><th>Date</th><th>' + T.cible + '</th><th class="n">Total TTC</th>' + (type === 'facture' ? '<th class="n iv-opt">Payé</th>' : '') + '<th>État</th></tr></thead><tbody>' +
       liste.map(d => { const t = totaux(d, lignesDe(d.id)), e = type === 'facture' ? etatFacture(d) : type === 'bon_commande' ? etatBC(d) : isBon(type) ? etatBon(d) : { l: STATUTS_DEVIS[d.statut] || d.statut, c: d.statut === 'accepte' || d.statut === 'facture' ? 'g' : d.statut === 'refuse' ? 'r' : 'o' };
-        return '<tr class="row" data-open="' + esc(d.id) + '"><td><b>' + esc(d.numero) + '</b></td><td>' + fd(d.date_doc) + '</td><td>' + esc(d.contact_nom || '—') + '</td><td class="n"><b>' + money(t.ttc) + '</b></td>' +
+        return '<tr class="row" data-open="' + esc(d.id) + '"><td><b>' + esc(d.numero) + '</b></td><td>' + fd(d.date_doc) + '</td><td>' + esc(nomDoc(d) || '—') + '</td><td class="n"><b>' + money(t.ttc) + '</b></td>' +
           (type === 'facture' ? '<td class="n iv-opt">' + money(payeDoc(d)) + '</td>' : '') + '<td><span class="cm-bdg ' + e.c + '">' + e.l + '</span></td></tr>'; }).join('') + '</tbody></table></div>'
       : '<div class="iv-empty">Aucun document. Cliquez sur « ' + T.btn + ' ».</div>';
     return h + '</div>';
