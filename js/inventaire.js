@@ -76,6 +76,8 @@
     err = ''; INV = r.data || []; LIG = l.data || [];
     if (sel && !inv(sel)) sel = null;
     render();
+    // inventaires en cours : on ajoute les éléments créés dans le Stock depuis leur création
+    for (const i of INV.filter(x => x.statut !== 'cloture')) await completer(i.id);
   }
 
   /* ---------- Sauvegarde automatique des lignes modifiées ---------- */
@@ -145,6 +147,33 @@
       await load(true);
       say('Inventaire créé : ' + rows.filter(r => STOCKS.includes(r.section)).length + ' éléments et produits à compter.');
     } finally { btn.disabled = false; btn.textContent = 'Créer l’inventaire'; }
+  }
+
+  /* Inventaire en cours (brouillon) : les éléments et produits finis ajoutés au Stock APRÈS sa création y sont ajoutés automatiquement */
+  let completant = false;
+  async function completer(id) {
+    const i = inv(id); if (!i || i.statut === 'cloture' || completant) return 0;
+    completant = true;
+    try {
+      if (window.StockAPI && !StockAPI.list().length) await StockAPI.load();
+      if (window.PFAPI && !PFAPI.produits().length) await PFAPI.load();
+      const deja = new Set(LIG.filter(l => String(l.inventaire_id) === String(id) && STOCKS.includes(l.section)).map(l => l.section + ':' + l.ref_id));
+      let o = Math.max(-1, ...LIG.filter(l => String(l.inventaire_id) === String(id)).map(l => Number(l.ordre) || 0)) + 1;
+      const rows = [];
+      (window.StockAPI ? StockAPI.list() : []).forEach(a => { if (deja.has('matiere:' + a.id)) return; const cond = StockAPI.aCond(a);
+        rows.push({ inventaire_id: id, ordre: o++, section: 'matiere', ref_id: a.id, libelle: a.nom, detail: a.categorie, unite: a.unite, cond_nom: cond ? a.cond_nom : '', cond_qte: cond ? StockAPI.condQte(a) : 0,
+          quantite_theorique: StockAPI.qty(a.id), quantite: null, prix_unitaire: StockAPI.unitPrice(a), montant: 0, note: 'Ajouté au Stock après la création de l’inventaire' }); });
+      (window.PFAPI ? PFAPI.produits() : []).forEach(p => { if (deja.has('produit_fini:' + p.id)) return;
+        rows.push({ inventaire_id: id, ordre: o++, section: 'produit_fini', ref_id: p.id, libelle: p.nom, detail: p.marque || 'MARIA BAG', unite: 'pcs', quantite_theorique: PFAPI.qty(p.id), quantite: null,
+          prix_unitaire: PFAPI.coutProduit(p) || 0, prix_vente: Number(p.prix_vente) || 0, montant: 0, note: 'Ajouté au Stock après la création de l’inventaire' }); });
+      if (!rows.length) return 0;
+      const r = await sb.from('inventaire_lignes').insert(rows).select();
+      if (r.error) { say('Erreur : ' + r.error.message); return 0; }
+      LIG.push(...(r.data || []));
+      if (String(sel) === String(id)) render();
+      say(rows.length + ' nouvel(s) élément(s) ou produit(s) du Stock ajouté(s) à l’inventaire « ' + i.nom + ' ».');
+      return rows.length;
+    } finally { completant = false; }
   }
 
   async function addLigne(x) {
@@ -563,7 +592,7 @@
     if (t.closest('#inv-new')) { nouveau = true; render(); const n = $('#inv-nnom'); if (n) n.focus(); return; }
     if (t.closest('#inv-ncancel')) { nouveau = false; render(); return; }
     const del = t.closest('[data-del]'); if (del) { await supprimer(del.dataset.del); return; }
-    const op = t.closest('[data-open]'); if (op) { sel = op.dataset.open; onglet = 'resume'; saveMsg = ''; render(); window.scrollTo(0, 0); return; }
+    const op = t.closest('[data-open]'); if (op) { sel = op.dataset.open; onglet = 'resume'; saveMsg = ''; render(); window.scrollTo(0, 0); completer(sel); return; }
     if (t.closest('#inv-back')) { sel = null; render(); flush(); return; }
     const tab = t.closest('#inv-tabs [data-tab]'); if (tab) { onglet = tab.dataset.tab; render(); flush(); return; }
     if (t.closest('#inv-close')) { await cloturer(); return; }
