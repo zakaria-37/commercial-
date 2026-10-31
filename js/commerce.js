@@ -128,10 +128,12 @@
     const root = $('#cm-root'); if (!root) return;
     if (err) { root.innerHTML = '<div class="card"><div class="iv-err">' + esc(err) + '</div></div>'; return; }
     if (ed) { root.innerHTML = editeur(); return; }
-    let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Commerce</h2><p>Bons de livraison aux clients, bons de réception (produits finis ou éléments), factures, devis et bons de commande.</p></div></div>';
-    h += '<div class="at-tabs" id="cm-tabs">' + ['bon_livraison', 'bon_reception', 'facture', 'devis', 'bon_commande'].map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + TYPES[t].lp + '</button>').join('') + '<button type="button" data-t="entreprise" class="' + (tab === 'entreprise' ? 'on' : '') + '">Mon entreprise</button></div>';
-    h += tab === 'entreprise' ? paneEntreprise() : paneListe(tab);
+    let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Commerce</h2><p>Bons de livraison et de réception, factures, devis, bons de commande, versements des clients et des fournisseurs, crédits.</p></div></div>';
+    h += '<div class="at-tabs" id="cm-tabs">' + ['bon_livraison', 'bon_reception', 'facture', 'devis', 'bon_commande'].map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + TYPES[t].lp + '</button>').join('') +
+      ['versements', 'credits'].map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + (t === 'versements' ? 'Versements' : 'Crédits') + '</button>').join('') + '<button type="button" data-t="entreprise" class="' + (tab === 'entreprise' ? 'on' : '') + '">Mon entreprise</button></div>';
+    h += tab === 'entreprise' ? paneEntreprise() : (tab === 'versements' || tab === 'credits') ? (window.CommerceFin ? CommerceFin.html(tab) : '') : paneListe(tab);
     root.innerHTML = h;
+    if (window.CommerceFin && tab === 'versements') CommerceFin.apres();
   }
 
   function paneListe(type) {
@@ -669,5 +671,6 @@
   document.addEventListener('mariabag:authenticated', () => load(true));
 
   window.loadCommerce = load;
+  window.cmRender = () => { if (!ed) render(); };
   window.CommerceAPI = { load, facturerCommande, montantLettres, totaux, etatFacture, docs: () => DOCS, lignesDe };
 })();
