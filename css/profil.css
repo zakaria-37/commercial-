@@ -1,0 +1,18 @@
+/* Profil d'un client ou d'un fournisseur (js/profil.js) */
+#pr-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;justify-content:center;align-items:flex-start;padding:24px 14px;overflow:auto}
+#pr-box{background:var(--bg,#f6f5f5);border-radius:16px;width:min(1100px,100%);padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+body.pr-open{overflow:hidden}
+.pr-head{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:#0d0a0b;color:#fff;border-radius:14px;padding:16px 18px;margin-bottom:14px}
+.pr-av{width:52px;height:52px;border-radius:14px;background:var(--brass,#d9a8b2);color:#000;display:grid;place-items:center;font:700 24px Georgia,serif;flex:none}
+.pr-id{flex:1 1 260px;min-width:0}
+.pr-id h2{margin:0;font-size:20px}
+.pr-id p{margin:2px 0 0;color:#d8cdd0;font-size:13px}
+.pr-id .pr-co{color:#fff}
+.pr-act{display:flex;gap:6px;flex-wrap:wrap}
+.pr-head .btn:not(.p){background:transparent;color:#fff;border-color:#555}
+.pr-head .btn.p{background:#fff;color:#000;border-color:#fff}
+.pr-tabs{margin:4px 0 10px}
+.pr-body{background:#fff;border:1px solid var(--line,#e4e2e2);border-radius:14px;padding:14px}
+.pr-body h3{margin:6px 0 8px}
+@media (max-width:700px){#pr-bg{padding:0}#pr-box{border-radius:0;min-height:100%;padding:12px}}
+.pr-head a.btn{text-decoration:none}

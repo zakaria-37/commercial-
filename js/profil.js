@@ -1,0 +1,143 @@
+/* ============================================================
+   PROFIL D'UN CLIENT OU D'UN FOURNISSEUR (bouton « Profil » dans Contacts)
+   Tout ce qui concerne la personne, au même endroit :
+   - résumé : ventes, achats, versements, solde, crédits ;
+   - relevé de compte chronologique avec le solde après chaque opération (+ PDF) ;
+   - ventes (livraisons), achats (entrées en stock, bons de réception), versements, crédits, documents (factures, bons, devis).
+   Données : PartAPI.ops (ventes / achats), PayAPI (versements et soldes), CommerceAPI (documents), table credits_tiers.
+   ============================================================ */
+(function () {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
+  const money = n => (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA';
+  const fd = s => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '';
+  const pdfT = s => String(s ?? '').replace(/œ/g, 'oe').replace(/Œ/g, 'OE').replace(/[\u00a0\u202f]/g, ' ');
+  const say = t => { if (typeof toast === 'function') toast(t); };
+  const contacts = () => (typeof D !== 'undefined' && Array.isArray(D)) ? D : [];
+  const lbl = c => window.PartAPI ? PartAPI.label(c) : (c.societe || c.nom);
+  const MODES = { especes: 'Espèces', cheque: 'Chèque', virement: 'Virement', autre: 'Autre' };
+  const TDOC = { facture: 'Facture', bon_livraison: 'Bon de livraison', bon_reception: 'Bon de réception', devis: 'Devis', bon_commande: 'Bon de commande' };
+  const NAT = { pret_donne: ['Prêt donné', 1], remb_recu: ['Remboursement reçu', -1], pret_recu: ['Prêt reçu', -1], remb_fait: ['Remboursement fait', 1] };
+
+  let cur = null, onglet = 'releve', CR = [], P = null;
+
+  async function charger(id) {
+    const c = contacts().find(x => String(x.id) === String(id)); if (!c) return null;
+    try { if (window.CommerceAPI && !CommerceAPI.docs().length) await CommerceAPI.load(true); } catch (e) {}
+    try { if (window.PayAPI) await PayAPI.load(); } catch (e) {}
+    try { if (window.PFAPI && !PFAPI.produits().length) await PFAPI.load(); } catch (e) {}
+    try { if (window.StockAPI && !StockAPI.list().length) await StockAPI.load(); } catch (e) {}
+    try { const r = await sb.from('credits_tiers').select('*').eq('contact_id', id); CR = r.error ? [] : (r.data || []); } catch (e) { CR = []; }
+    const k = 'c:' + id, ops = (window.PartAPI ? PartAPI.ops({}) : []).filter(o => o.key === k);
+    const ventes = ops.filter(o => o.sens === 'vente'), achats = ops.filter(o => o.sens === 'achat');
+    const pays = (window.PayAPI ? PayAPI.list() : []).filter(p => String(p.contact_id) === String(id));
+    const sc = window.PayAPI ? PayAPI.soldes('client').find(x => String(x.id) === String(id)) : null, sf = window.PayAPI ? PayAPI.soldes('fournisseur').find(x => String(x.id) === String(id)) : null;
+    const docs = window.CommerceAPI ? CommerceAPI.docs().filter(d => String(d.contact_id) === String(id)).sort((a, b) => String(b.date_doc).localeCompare(String(a.date_doc))) : [];
+    const cred = r2(CR.reduce((s, o) => s + NAT[o.nature][1] * Number(o.montant || 0), 0));
+    return { c, ventes, achats, pays, sc, sf, docs, cred, client: /client/i.test(c.type || '') || ventes.length > 0, four: /fournisseur/i.test(c.type || '') || achats.length > 0 };
+  }
+
+  /* Relevé : opérations datées ; « débit » augmente ce que la personne nous doit (client) ou ce que nous lui devons (fournisseur) */
+  function releve(sens) {
+    const cl = sens === 'client', L = [];
+    (cl ? P.ventes : P.achats).forEach(o => L.push({ d: o.date, op: (cl ? 'Vente : ' : 'Achat : ') + o.libelle + (o.qte ? ' (' + o.qte + ')' : ''), ref: o.ref || '', debit: o.montant > 0 ? o.montant : 0, credit: o.montant < 0 ? -o.montant : 0 }));
+    P.pays.filter(p => p.sens === (cl ? 'report_client' : 'report_fournisseur')).forEach(p => L.push({ d: p.date_paiement, op: 'Solde de départ', ref: p.reference || '', debit: Number(p.montant), credit: 0 }));
+    P.pays.filter(p => p.sens === (cl ? 'encaissement' : 'reglement')).forEach(p => L.push({ d: p.date_paiement, op: (cl ? 'Versement reçu' : 'Versement fait') + ' (' + (MODES[p.mode] || p.mode || '') + ')' + (p.note ? ' · ' + p.note : ''), ref: p.reference || '', debit: 0, credit: Number(p.montant) }));
+    L.sort((a, b) => String(a.d).localeCompare(String(b.d)) || (b.debit - a.debit));
+    let s = 0; L.forEach(x => { s = r2(s + x.debit - x.credit); x.solde = s; });
+    return L;
+  }
+
+  function html() {
+    const c = P.c, tel = String(c.tel || '').split(/[\s\/,;-]+/).map(t => t.replace(/[^\d+]/g, '')).filter(t => t.length >= 9)[0] || '';
+    const wa = tel.replace(/^\+/, '').replace(/^00/, '').replace(/^0/, '213');
+    const sum = l => l.reduce((s, o) => s + o.montant, 0);
+    const enc = P.pays.filter(p => p.sens === 'encaissement').reduce((s, p) => s + Number(p.montant), 0), reg = P.pays.filter(p => p.sens === 'reglement').reduce((s, p) => s + Number(p.montant), 0);
+    let h = '<div class="pr-head"><div class="pr-av">' + esc((lbl(c) || '?').trim().charAt(0).toUpperCase()) + '</div><div class="pr-id"><h2>' + esc(lbl(c)) + '</h2>' +
+      '<p>' + esc([c.type, c.statut, c.poste, c.ville].filter(Boolean).join(' · ')) + '</p><p class="pr-co">' + (c.tel ? '☎ ' + esc(c.tel) : '') + (c.email ? ' · ✉ ' + esc(c.email) : '') + '</p></div>' +
+      '<div class="pr-act">' + (tel ? '<a class="btn s" href="tel:' + esc(tel) + '">Appeler</a><a class="btn s" target="_blank" rel="noopener" href="https://wa.me/' + esc(wa) + '">WhatsApp</a>' : '') +
+      '<button class="btn s" type="button" data-pr="edit">Modifier</button><button class="btn s p" type="button" data-pr="pdf">Relevé PDF</button><button class="btn s" type="button" data-pr="close" aria-label="Fermer">✕</button></div></div>';
+    // chiffres clés
+    h += '<div class="ct-kpis">';
+    if (P.client) h += '<div class="ct-kpi"><span>Ventes (livraisons)</span><b>' + money(sum(P.ventes)) + '</b><small>' + P.ventes.length + ' opération(s)</small></div><div class="ct-kpi"><span>Versements reçus</span><b class="py-av">' + money(enc) + '</b><small>' + P.pays.filter(p => p.sens === 'encaissement').length + ' versement(s)</small></div>' +
+      '<div class="ct-kpi"><span>Il nous doit</span><b class="' + ((P.sc && P.sc.solde > 0.004) ? 'py-due' : '') + '">' + money(P.sc ? Math.max(0, P.sc.solde) : 0) + '</b><small>' + (P.sc && P.sc.solde < -0.004 ? 'avance : ' + money(-P.sc.solde) : 'solde client') + '</small></div>';
+    if (P.four) h += '<div class="ct-kpi"><span>Achats</span><b>' + money(sum(P.achats)) + '</b><small>' + P.achats.length + ' opération(s)</small></div><div class="ct-kpi"><span>Versements faits</span><b>' + money(reg) + '</b><small>' + P.pays.filter(p => p.sens === 'reglement').length + ' versement(s)</small></div>' +
+      '<div class="ct-kpi"><span>Nous lui devons</span><b class="' + ((P.sf && P.sf.solde > 0.004) ? 'py-due' : '') + '">' + money(P.sf ? Math.max(0, P.sf.solde) : 0) + '</b><small>solde fournisseur</small></div>';
+    if (CR.length) h += '<div class="ct-kpi"><span>Crédits (prêts)</span><b class="' + (Math.abs(P.cred) > 0.004 ? 'py-due' : '') + '">' + (Math.abs(P.cred) < 0.005 ? 'Soldé' : P.cred > 0 ? 'nous doit ' + money(P.cred) : 'nous lui devons ' + money(-P.cred)) + '</b><small>' + CR.length + ' opération(s)</small></div>';
+    h += '</div>';
+    // onglets
+    const T = [['releve', 'Relevé de compte'], P.client ? ['ventes', 'Ventes (' + P.ventes.length + ')'] : null, P.four ? ['achats', 'Achats (' + P.achats.length + ')'] : null, ['versements', 'Versements (' + P.pays.length + ')'], ['credits', 'Crédits (' + CR.length + ')'], ['docs', 'Documents (' + P.docs.length + ')']].filter(Boolean);
+    if (!T.some(t => t[0] === onglet)) onglet = 'releve';
+    h += '<div class="at-tabs pr-tabs">' + T.map(t => '<button type="button" data-prt="' + t[0] + '" class="' + (onglet === t[0] ? 'on' : '') + '">' + t[1] + '</button>').join('') + '</div><div class="pr-body">';
+    const table = (head, rows, vide) => rows.length ? '<div class="tw"><table class="iv-tbl"><thead><tr>' + head.map(x => '<th' + (/^n:/.test(x) ? ' class="n"' : '') + '>' + x.replace(/^n:/, '') + '</th>').join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>' : '<div class="iv-empty">' + vide + '</div>';
+    if (onglet === 'releve') {
+      [P.client ? 'client' : null, P.four ? 'fournisseur' : null].filter(Boolean).forEach(s => {
+        const L = releve(s), cl = s === 'client';
+        h += '<h3>' + (cl ? 'Compte client' : 'Compte fournisseur') + '</h3>' + table(['Date', 'Opération', 'Réf.', 'n:' + (cl ? 'Vendu' : 'Acheté'), 'n:' + (cl ? 'Versé' : 'Payé'), 'n:Solde'],
+          L.map(x => '<tr><td>' + fd(x.d) + '</td><td>' + esc(x.op) + '</td><td>' + esc(x.ref) + '</td><td class="n">' + (x.debit ? money(x.debit) : '') + '</td><td class="n">' + (x.credit ? '<span class="py-av">' + money(x.credit) + '</span>' : '') + '</td><td class="n"><b class="' + (x.solde > 0.004 ? 'py-due' : '') + '">' + money(x.solde) + '</b></td></tr>'), 'Aucune opération.');
+      });
+      if (!P.client && !P.four) h += '<div class="iv-empty">Aucune vente ni achat pour ce contact.</div>';
+    }
+    if (onglet === 'ventes') h += table(['Date', 'Produit', 'n:Quantité', 'n:Montant', 'Réf.'], P.ventes.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(o => '<tr><td>' + fd(o.date) + '</td><td>' + esc(o.libelle) + '</td><td class="n">' + esc(o.qte || '') + '</td><td class="n"><b>' + money(o.montant) + '</b></td><td>' + esc(o.ref || '') + '</td></tr>'), 'Aucune vente.');
+    if (onglet === 'achats') h += table(['Date', 'Article', 'n:Quantité', 'n:Montant', 'Réf.'], P.achats.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(o => '<tr><td>' + fd(o.date) + '</td><td>' + esc(o.libelle) + '</td><td class="n">' + esc(o.qte || '') + '</td><td class="n"><b>' + money(o.montant) + '</b>' + (o.sansPrix ? '<small>sans prix</small>' : '') + '</td><td>' + esc(o.ref || '') + '</td></tr>'), 'Aucun achat.');
+    if (onglet === 'versements') h += table(['Date', 'Type', 'n:Montant', 'Mode', 'Réf.', 'Note'], P.pays.slice().sort((a, b) => String(b.date_paiement).localeCompare(String(a.date_paiement))).map(p => '<tr><td>' + fd(p.date_paiement) + '</td><td>' + ({ encaissement: 'Versement reçu', reglement: 'Versement fait', report_client: 'Solde de départ (client)', report_fournisseur: 'Solde de départ (fournisseur)' }[p.sens] || p.sens) + '</td><td class="n"><b>' + money(p.montant) + '</b></td><td>' + esc(MODES[p.mode] || p.mode || '') + '</td><td>' + esc(p.reference || '') + '</td><td>' + esc(p.note || '') + '</td></tr>'), 'Aucun versement.') +
+      '<div class="at-actions"><button class="btn p" type="button" data-pr="vers">+ Nouveau versement</button></div>';
+    if (onglet === 'credits') h += table(['Date', 'Opération', 'n:Montant', 'Mode', 'Échéance', 'Note'], CR.slice().sort((a, b) => String(b.date_op).localeCompare(String(a.date_op))).map(o => '<tr><td>' + fd(o.date_op) + '</td><td>' + NAT[o.nature][0] + '</td><td class="n"><b>' + money(o.montant) + '</b></td><td>' + esc(MODES[o.mode] || '') + '</td><td>' + fd(o.echeance) + '</td><td>' + esc(o.note || '') + '</td></tr>'), 'Aucun crédit avec ce contact.') +
+      '<div class="at-actions"><button class="btn" type="button" data-pr="cred">Ouvrir les crédits</button></div>';
+    if (onglet === 'docs') h += table(['Date', 'Document', 'N°', 'n:Total TTC', 'État'], P.docs.map(d => { const t = CommerceAPI.totaux(d, CommerceAPI.lignesDe(d.id)).ttc, e = d.type === 'facture' || d.type === 'bon_livraison' || d.type === 'bon_reception' ? CommerceAPI.etatFacture(d) : null;
+      return '<tr class="row" data-prdoc="' + esc(d.id) + '" data-prtype="' + esc(d.type) + '"><td>' + fd(d.date_doc) + '</td><td>' + (TDOC[d.type] || d.type) + '</td><td><b>' + esc(d.numero) + '</b></td><td class="n">' + money(t) + '</td><td>' + (d.statut === 'annulee' ? 'Annulé' : e ? esc(e.l) : esc(d.statut)) + '</td></tr>'; }), 'Aucun document (facture, bon, devis) pour ce contact.');
+    return h + '</div>';
+  }
+
+  function afficher() {
+    let bg = $('#pr-bg');
+    if (!bg) { bg = document.createElement('div'); bg.id = 'pr-bg'; bg.innerHTML = '<div id="pr-box"></div>'; document.body.appendChild(bg); bg.addEventListener('click', e => { if (e.target === bg) fermer(); }); }
+    $('#pr-box').innerHTML = html(); document.body.classList.add('pr-open');
+  }
+  function fermer() { const bg = $('#pr-bg'); if (bg) bg.remove(); document.body.classList.remove('pr-open'); cur = null; }
+
+  async function ouvrir(id, tab) {
+    cur = id; onglet = tab || 'releve';
+    P = await charger(id); if (!P) { say('Contact introuvable.'); return; }
+    afficher();
+  }
+
+  function relevePdf() {
+    if (!(window.jspdf && window.jspdf.jsPDF)) { say('Bibliothèque PDF non chargée.'); return; }
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = doc.internal.pageSize.getWidth(), M = 14, c = P.c;
+    if (typeof LOGO_PDF !== 'undefined' && LOGO_PDF) doc.addImage(LOGO_PDF, 'PNG', M, 9, 20, 20);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(pdfT('RELEVE DE COMPTE'), W - M, 16, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.text(pdfT('Edite le ' + fd(new Date().toISOString())), W - M, 22, { align: 'right' });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(pdfT(lbl(c)), M, 38); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(pdfT([c.type, c.ville, c.tel].filter(Boolean).join('  -  ')), M, 43);
+    let y = 50;
+    [P.client ? 'client' : null, P.four ? 'fournisseur' : null].filter(Boolean).forEach(s => {
+      const L = releve(s), cl = s === 'client';
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(pdfT(cl ? 'Compte client' : 'Compte fournisseur'), M, y);
+      doc.autoTable({ startY: y + 3, margin: { left: M, right: M }, head: [['Date', 'Operation', 'Ref.', cl ? 'Vendu' : 'Achete', cl ? 'Verse' : 'Paye', 'Solde'].map(pdfT)],
+        body: L.map(x => [fd(x.d), x.op, x.ref, x.debit ? money(x.debit) : '', x.credit ? money(x.credit) : '', money(x.solde)].map(pdfT)), theme: 'grid',
+        styles: { fontSize: 8.5, cellPadding: 2 }, headStyles: { fillColor: [0, 0, 0], textColor: 255 }, columnStyles: { 0: { cellWidth: 20 }, 3: { halign: 'right', cellWidth: 27 }, 4: { halign: 'right', cellWidth: 27 }, 5: { halign: 'right', cellWidth: 28 } } });
+      y = doc.lastAutoTable.finalY + 7;
+      const fin = L.length ? L[L.length - 1].solde : 0;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(pdfT((cl ? (fin >= 0 ? 'Reste du a MARIA BAG : ' : 'Avance du client : ') : (fin >= 0 ? 'Reste a payer par MARIA BAG : ' : 'Avance au fournisseur : ')) + money(Math.abs(fin))), W - M, y, { align: 'right' });
+      y += 12;
+    });
+    doc.save('releve-' + String(lbl(c)).replace(/[^A-Za-z0-9]+/g, '-').slice(0, 40) + '.pdf');
+  }
+
+  document.addEventListener('click', async e => {
+    const box = $('#pr-box'); if (!box || !box.contains(e.target)) return;
+    const t = e.target.closest('[data-prt]'); if (t) { onglet = t.dataset.prt; afficher(); return; }
+    const d = e.target.closest('[data-prdoc]'); if (d) { const id = d.dataset.prdoc; fermer(); if (typeof show === 'function') show('commerce'); setTimeout(() => { const tb = document.querySelector('#cm-tabs [data-t="' + d.dataset.prtype + '"]'); if (tb) tb.click(); setTimeout(() => { const r = document.querySelector('#cm-root tr[data-open="' + id + '"]'); if (r) r.click(); }, 150); }, 150); return; }
+    const b = e.target.closest('[data-pr]'); if (!b) return;
+    const a = b.dataset.pr;
+    if (a === 'close') return fermer();
+    if (a === 'pdf') return relevePdf();
+    if (a === 'edit') { const id = cur; fermer(); if (typeof edit === 'function') edit(id); return; }
+    if (a === 'vers' || a === 'cred') { fermer(); if (typeof show === 'function') show('commerce'); setTimeout(() => { const tb = document.querySelector('#cm-tabs [data-t="' + (a === 'vers' ? 'versements' : 'credits') + '"]'); if (tb) tb.click(); }, 150); return; }
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#pr-bg')) fermer(); });
+
+  window.ouvrirProfil = ouvrir;
+})();

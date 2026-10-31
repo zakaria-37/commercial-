@@ -149,11 +149,11 @@ function list() {
    <td><span class="bd ${ST[c.statut] || 'n'}">${esc(c.statut)}</span></td><td>${esc(c.ville)}</td>
    <td>${c.tel ? `<a href="tel:${esc(c.tel)}">${esc(c.tel)}</a>` : ''}${c.email ? `<small><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></small>` : ''}</td>
    <td><span class="bd ${r.c}">${r.l}</span>${c.relance ? `<small>${fd(c.relance)}</small>` : ''}</td>
-   <td><button class="btn s" data-e="${c.id}">Ouvrir</button></td></tr>` }).join('') : `<tr><td colspan="8" class="empty">${D.length ? 'Aucun contact ne correspond à votre recherche.' : 'Aucun contact. Cliquez sur « Nouveau contact » ou importez un fichier CSV.'}</td></tr>`;
+   <td style="white-space:nowrap"><button class="btn s p" type="button" data-p="${c.id}">Profil</button> <button class="btn s" data-e="${c.id}">Ouvrir</button></td></tr>` }).join('') : `<tr><td colspan="8" class="empty">${D.length ? 'Aucun contact ne correspond à votre recherche.' : 'Aucun contact. Cliquez sur « Nouveau contact » ou importez un fichier CSV.'}</td></tr>`;
 }
 $('#thead').onclick = e => { const k = e.target.closest('th')?.dataset.k; if (!k) return; sd = sk === k ? -sd : 1; sk = k; list() };
 ['q', 'ft', 'fs', 'fr'].forEach(i => $('#' + i).oninput = list);
-$('#tbody').onclick = e => { if (e.target.closest('a')) return; const r = e.target.closest('tr[data-id]'); if (r) edit(r.dataset.id) };
+$('#tbody').onclick = e => { if (e.target.closest('a')) return; const pf = e.target.closest('[data-p]'); if (pf && typeof ouvrirProfil === 'function') { ouvrirProfil(pf.dataset.p); return; } const r = e.target.closest('tr[data-id]'); if (r) edit(r.dataset.id) };
 
 /* ---------- Fiche contact ---------- */
 const F = () => $('#cf').elements;
