@@ -42,7 +42,7 @@
   /* Relevé : opérations datées ; « débit » augmente ce que la personne nous doit (client) ou ce que nous lui devons (fournisseur) */
   function releve(sens) {
     const cl = sens === 'client', L = [];
-    (cl ? P.ventes : P.achats).forEach(o => L.push({ d: o.date, op: (cl ? 'Vente : ' : 'Achat : ') + o.libelle + (o.qte ? ' (' + o.qte + ')' : ''), ref: o.ref || '', debit: o.montant > 0 ? o.montant : 0, credit: o.montant < 0 ? -o.montant : 0 }));
+    (cl ? P.ventes : P.achats).forEach(o => L.push({ d: o.date, op: o.qte ? (cl ? 'Vente : ' : 'Achat : ') + o.libelle + ' (' + o.qte + ')' : o.libelle, ref: o.ref || '', debit: o.montant > 0 ? o.montant : 0, credit: o.montant < 0 ? -o.montant : 0 }));
     P.pays.filter(p => p.sens === (cl ? 'report_client' : 'report_fournisseur')).forEach(p => L.push({ d: p.date_paiement, op: 'Solde de départ', ref: p.reference || '', debit: Number(p.montant), credit: 0 }));
     P.pays.filter(p => p.sens === (cl ? 'encaissement' : 'reglement')).forEach(p => L.push({ d: p.date_paiement, op: (cl ? 'Versement reçu' : 'Versement fait') + ' (' + (MODES[p.mode] || p.mode || '') + ')' + (p.note ? ' · ' + p.note : ''), ref: p.reference || '', debit: 0, credit: Number(p.montant) }));
     L.sort((a, b) => String(a.d).localeCompare(String(b.d)) || (b.debit - a.debit));

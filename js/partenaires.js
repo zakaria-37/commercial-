@@ -294,6 +294,22 @@
         ops.push({ sens: 'vente', date: String(m.date_mvt || ''), key: k.key, id: k.id, nom: k.nom || 'Client non indiqué', libelle: (p ? p.nom : 'Produit') + (m.type === 'retour' ? ' (retour)' : ''), qte: num(Math.abs(n)) + ' pc', montant: n * pv, ref: m.reference || '', sansPrix: !(pv > 0) });
       });
     }
+    // Remise et TVA d'un bon ou d'une facture : les livraisons (ou réceptions) sont comptées ligne par ligne,
+    // on ajoute donc l'ajustement du document (TTC − total des lignes) pour que le solde soit celui du document
+    if (window.CommerceAPI && CommerceAPI.docs && (window.PFAPI || window.StockAPI)) {
+      const mv = [...(window.PFAPI ? PFAPI.mouvements() : []), ...(window.StockAPI ? StockAPI.mouvements() : [])];
+      CommerceAPI.docs().forEach(d => {
+        if (d.statut === 'annulee' || !['bon_livraison', 'facture', 'bon_reception'].includes(d.type) || !ok(d.date_doc)) return;
+        const mk = d.type === 'facture' ? 'Facture ' + d.numero : (d.type === 'bon_livraison' ? 'Bon de livraison ' : 'Bon de réception ') + d.numero;
+        if (!mv.some(m => String(m.note || '') === mk || String(m.note || '').startsWith(mk + ' '))) return;      // le document n'a rien sorti / rentré du stock
+        const t = CommerceAPI.totaux(d, CommerceAPI.lignesDe(d.id)), adj = Math.round((t.ttc - t.sous) * 100) / 100;
+        if (Math.abs(adj) < 0.005) return;
+        const achat = d.type === 'bon_reception'; if (achat && !d.contact_id) return;
+        const k = cle({ contact_id: d.contact_id, client_nom: d.contact_nom, fournisseur: d.contact_nom }, achat ? 'fournisseur' : 'client_nom', achat ? 'Fournisseur' : 'Client');
+        const lib = [t.remise ? 'Remise' : '', t.tva ? 'TVA' : ''].filter(Boolean).join(' et ') + ' ' + d.numero;
+        ops.push({ sens: achat ? 'achat' : 'vente', date: String(d.date_doc || ''), key: k.key, id: k.id, nom: k.nom || (achat ? 'Fournisseur non indiqué' : 'Client non indiqué'), libelle: lib, qte: '', montant: adj, ref: d.numero, sansPrix: false });
+      });
+    }
     return ops;
   }
 
