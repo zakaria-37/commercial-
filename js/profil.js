@@ -50,6 +50,11 @@
     return L;
   }
 
+  /* Case « Différence » : + = reste à payer, − = payé en plus (avance), 0 = soldé */
+  function diff(v, plus, moins) {
+    v = r2(v); const z = Math.abs(v) < 0.005;
+    return '<div class="ct-kpi"><span>Différence</span><b class="' + (z ? 'py-av' : v > 0 ? 'py-due' : 'pr-moins') + '">' + (z ? '0 DA' : (v > 0 ? '+ ' : '− ') + money(Math.abs(v))) + '</b><small>' + (z ? '✔ compte soldé' : v > 0 ? plus : moins) + '</small></div>';
+  }
   function html() {
     const c = P.c, tel = String(c.tel || '').split(/[\s\/,;-]+/).map(t => t.replace(/[^\d+]/g, '')).filter(t => t.length >= 9)[0] || '';
     const wa = tel.replace(/^\+/, '').replace(/^00/, '').replace(/^0/, '213');
@@ -62,9 +67,9 @@
     // chiffres clés
     h += '<div class="ct-kpis">';
     if (P.client) h += '<div class="ct-kpi"><span>Ventes (livraisons)</span><b>' + money(sum(P.ventes)) + '</b><small>' + P.ventes.length + ' opération(s)</small></div><div class="ct-kpi"><span>Versements reçus</span><b class="py-av">' + money(enc) + '</b><small>' + P.pays.filter(p => p.sens === 'encaissement').length + ' versement(s)</small></div>' +
-      '<div class="ct-kpi"><span>Il nous doit</span><b class="' + ((P.sc && P.sc.solde > 0.004) ? 'py-due' : '') + '">' + money(P.sc ? Math.max(0, P.sc.solde) : 0) + '</b><small>' + (P.sc && P.sc.solde < -0.004 ? 'avance : ' + money(-P.sc.solde) : 'solde client') + '</small></div>';
+      diff(P.sc ? P.sc.solde : 0, 'le client nous doit encore', 'le client a payé en plus (avance)');
     if (P.four) h += '<div class="ct-kpi"><span>Achats</span><b>' + money(sum(P.achats)) + '</b><small>' + P.achats.length + ' opération(s)</small></div><div class="ct-kpi"><span>Versements faits</span><b>' + money(reg) + '</b><small>' + P.pays.filter(p => p.sens === 'reglement').length + ' versement(s)</small></div>' +
-      '<div class="ct-kpi"><span>Nous lui devons</span><b class="' + ((P.sf && P.sf.solde > 0.004) ? 'py-due' : '') + '">' + money(P.sf ? Math.max(0, P.sf.solde) : 0) + '</b><small>solde fournisseur</small></div>';
+      diff(P.sf ? P.sf.solde : 0, 'nous lui devons encore', 'nous avons payé en plus (avance chez lui)');
     if (CR.length) h += '<div class="ct-kpi"><span>Crédits (prêts)</span><b class="' + (Math.abs(P.cred) > 0.004 ? 'py-due' : '') + '">' + (Math.abs(P.cred) < 0.005 ? 'Soldé' : P.cred > 0 ? 'nous doit ' + money(P.cred) : 'nous lui devons ' + money(-P.cred)) + '</b><small>' + CR.length + ' opération(s)</small></div>';
     h += '</div>';
     // onglets
