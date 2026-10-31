@@ -67,7 +67,10 @@
     return [c.prenom, c.nom].filter(Boolean).join(' ') + (c.societe ? ' — ' + c.societe : '');
   }
   const atelierNom = id => (ATS.find(a => String(a.id) === String(id)) || {}).nom || '';
-  function cout(p) { try { return typeof recap === 'function' ? recap(p).total : null; } catch (e) { return null; } }
+  /* Coût d'une pièce : prix d'achat / coût de fabrication saisi (prioritaire), sinon calcul de l'onglet Produits */
+  const coutSaisi = p => Number(p && p.prix_achat) || 0;
+  function cout(p) { if (coutSaisi(p) > 0) return coutSaisi(p); try { return typeof recap === 'function' ? recap(p).total : null; } catch (e) { return null; } }
+  const sourceCout = p => coutSaisi(p) > 0 ? 'prix d’achat / fabrication' : 'calculé (Produits)';
 
   /* Capacité de production avec le stock de MATIÈRES actuel (fiche matières du modèle lié) */
   function capacite(p) {
@@ -231,13 +234,13 @@
       return '<tr><td><b>' + esc(p.nom) + '</b>' + '<small>' + esc([p.marque || 'MARIA BAG', p.description].filter(Boolean).join(' · ')) + '</small>' + '</td>' +
         '<td><b>' + num(st) + '</b> pcs' + (Number(p.seuil_pf) ? '<small>seuil ' + num(p.seuil_pf) + '</small>' : '') + '</td>' +
         '<td>' + (prod || liv ? (prod ? '<span class="pf-l">En prod. :</span> ' + num(prod) + ' pcs' : '') + (prod && liv ? '<br>' : '') + (liv ? '<span class="pf-l">À livrer :</span> <b>' + num(liv) + '</b> pcs' + (liv > st + prod ? '<small style="color:var(--r)">manque ' + num(liv - st - prod) + ' à lancer</small>' : '') : '') : '<small>—</small>') + '</td>' +
-        '<td>' + (c > 0 ? '<b>' + money(c, 2) + '</b>' : '<small>à calculer (Produits)</small>') + '</td>' +
+        '<td>' + (c > 0 ? '<b>' + money(c, 2) + '</b><small>' + sourceCout(p) + '</small>' : '<small>à renseigner (bouton « Prix / coût »)</small>') + '</td>' +
         '<td>' + (pv ? '<b>' + money(pv, 2) + '</b>' + (marge != null ? '<small style="color:' + (marge >= 0 ? 'var(--g)' : 'var(--r)') + '">marge ' + money(marge, 2) + ' (' + num(pv ? marge / pv * 100 : 0, 1) + ' %)</small>' : '') : '<small>à renseigner</small>') + '</td>' +
         '<td>' + (cap.cap != null ? '<b>≈ ' + num(cap.cap) + '</b> pcs' + '<small>limité par ' + esc(cap.limit) + (cap.nonLies ? ' · ' + cap.nonLies + ' non lié(s)' : '') + '</small>' : '<small>' + esc(cap.why) + '</small>') + '</td>' +
         '<td><span class="bd ' + e.c + '">' + e.l + '</span></td>' +
         '<td class="emp-act"><button class="btn s p" type="button" onclick="pfShowMvt(\'entree\',\'' + esc(p.id) + '\')">+ Entrée</button> ' +
         '<button class="btn s" type="button" onclick="pfShowMvt(\'livraison\',\'' + esc(p.id) + '\')">Livrer</button> ' +
-        '<button class="btn s" type="button" onclick="pfShowProduit(\'' + esc(p.id) + '\')">Prix / seuil</button> ' +
+        '<button class="btn s" type="button" onclick="pfShowProduit(\'' + esc(p.id) + '\')">Prix / coût</button> ' +
         '<button class="btn s" type="button" onclick="pfVoirHist(\'' + esc(p.id) + '\')">Historique</button></td></tr>';
     }).join('') : '<tr><td colspan="8" class="at-empty">Aucun produit ne correspond.</td></tr>';
   }
@@ -276,7 +279,7 @@
       const p = produitById(m.produit_id), t = TYPES[m.type] || [m.type, 'n'], q = Number(m.quantite) || 0;
       const cmd = m.commande_id ? CMDS.find(c => String(c.id) === String(m.commande_id)) : null;
       return '<tr><td>' + fd(m.date_mvt) + '</td><td><b>' + esc(p ? p.nom : '—') + '</b></td><td><span class="bd ' + t[1] + '">' + t[0] + '</span></td>' +
-        '<td><b class="' + (q < 0 ? 'st-neg' : 'st-pos') + '">' + (q < 0 ? '−' : '+') + num(Math.abs(q)) + '</b>' + (m.prix_vente ? '<small>' + money(m.prix_vente, 2) + ' / pièce</small>' : '') + '</td>' +
+        '<td><b class="' + (q < 0 ? 'st-neg' : 'st-pos') + '">' + (q < 0 ? '−' : '+') + num(Math.abs(q)) + '</b>' + (m.prix_vente ? '<small>' + money(m.prix_vente, 2) + ' / pièce</small>' : '') + (m.prix_achat ? '<small>coût ' + money(m.prix_achat, 2) + ' / pièce</small>' : '') + '</td>' +
         '<td>' + esc(clientNom(m.contact_id, m.client_nom) || '—') + '</td>' +
         '<td>' + esc([m.reference, cmd ? 'cmd ' + (cmd.commande_numero || '') : '', m.note].filter(Boolean).join(' · ')) + '</td>' +
         '<td class="emp-act">' + (m.type === 'livraison' && m.reference ? '<button class="btn s" type="button" onclick="pfBonLivraison(\'' + esc(m.reference) + '\')">Bon PDF</button> ' : '') +
@@ -292,17 +295,19 @@
     curProduit = id;
     $('#pf-pform-title').textContent = 'Produit fini — ' + p.nom;
     $('#pf-pprix').value = Number(p.prix_vente) || '';
+    $('#pf-pachat').value = coutSaisi(p) || '';
     $('#pf-pseuil').value = Number(p.seuil_pf) || '';
     $('#pf-pmodele').innerHTML = '<option value="">Automatique (même nom que le produit)</option>' + MODELES.map(m => '<option value="' + esc(m.id) + '"' + (String(p.modele_id) === String(m.id) ? ' selected' : '') + '>' + esc(m.nom) + '</option>').join('');
-    const c = cout(p);
-    $('#pf-phint').textContent = c != null ? 'Coût de revient actuel : ' + money(c, 2) + ' par pièce (onglet Produits).' : '';
+    let calc = null; try { calc = typeof recap === 'function' ? recap(p).total : null; } catch (e) {}
+    $('#pf-phint').textContent = 'Prix d’achat (produit acheté pour la revente) ou coût de fabrication d’une pièce (produit fabriqué chez nous ou en atelier). ' +
+      (calc > 0 ? 'Laissez vide pour utiliser le coût calculé dans l’onglet Produits : ' + money(calc, 2) + ' par pièce.' : 'Il sert à calculer la marge et la valeur du stock.');
     $('#pf-mform').style.display = 'none'; $('#pf-pform').style.display = 'block';
     $('#pf-pform').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('#pf-pprix').focus();
   }
   function cancelProduit() { curProduit = null; $('#pf-pform').style.display = 'none'; }
   async function saveProduit() {
     if (!curProduit) return;
-    const r = await sb.from('produits').update({ prix_vente: parseFloat($('#pf-pprix').value) || 0, seuil_pf: Math.round(parseFloat($('#pf-pseuil').value) || 0), modele_id: $('#pf-pmodele').value || null }).eq('id', curProduit);
+    const r = await sb.from('produits').update({ prix_vente: parseFloat($('#pf-pprix').value) || 0, prix_achat: Math.max(0, parseFloat($('#pf-pachat').value) || 0), seuil_pf: Math.round(parseFloat($('#pf-pseuil').value) || 0), modele_id: $('#pf-pmodele').value || null }).eq('id', curProduit);
     if (r.error) { toast('Erreur : ' + errMsg(r.error)); return; }
     toast('Produit enregistré.'); cancelProduit(); await load();
     if (typeof loadProduits === 'function') loadProduits();
@@ -324,6 +329,7 @@
     if (produitId) $('#pf-mproduit').value = produitId;
     const pSel = produitById($('#pf-mproduit').value);
     $('#pf-mprix').value = mvtType === 'livraison' && pSel ? (Number(pSel.prix_vente) || '') : '';
+    $('#pf-machat').value = pSel && cout(pSel) > 0 ? Math.round(cout(pSel) * 100) / 100 : '';
     $('#pf-mclient').innerHTML = '<option value="">— Aucun client —</option>' + clientsList().map(c => '<option value="' + esc(c.id) + '">' + esc(clientNom(c.id)) + '</option>').join('') + '<option value="__new__">＋ Nouveau client…</option>';
     $('#pf-mclient').value = opt.client || '';
     $('#pf-mdate').value = iso(new Date());
@@ -358,6 +364,7 @@
     $('#pf-mcmd-wrap').style.display = liv || ret ? '' : 'none';
     $('#pf-mprod-wrap').style.display = ent ? '' : 'none';
     $('#pf-mprix-wrap').style.display = liv || ret ? '' : 'none';
+    $('#pf-machat-wrap').style.display = ent ? '' : 'none';
     $('#pf-mref-wrap').style.display = mvtType === 'ajustement' || mvtType === 'perte' ? 'none' : '';
     $('#pf-mqte-lbl').textContent = mvtType === 'ajustement' ? 'Quantité réelle comptée (pièces) *' : 'Quantité (pièces) *';
     $('#pf-mform-title').textContent = { entree: 'Entrée en stock (production terminée)', livraison: 'Livraison à un client', retour: 'Retour d’un client', perte: 'Perte / casse / défaut', ajustement: 'Inventaire : corriger le stock' }[mvtType];
@@ -416,15 +423,21 @@
     const cmdId = (liv || ret) ? ($('#pf-mcmd').value || null) : null;
     const cmd = cmdId ? CMDS.find(c => String(c.id) === String(cmdId)) : null;
     if (liv && cmd && qIn > resteCmd(cmd) && !confirm('Vous livrez ' + num(qIn) + ' pièces, mais il ne reste que ' + num(resteCmd(cmd)) + ' à livrer pour la commande ' + (cmd.commande_numero || '') + '.\nContinuer ?')) return;
-    const pv = parseFloat($('#pf-mprix').value);
+    const pv = parseFloat($('#pf-mprix').value), pa = parseFloat($('#pf-machat').value);
     const row = {
       produit_id: p.id, date_mvt: $('#pf-mdate').value || iso(new Date()), type, quantite: delta,
       contact_id: client || (cmd && cmd.contact_id) || null, client_nom: client ? clientNom(client) : (cmd && cmd.contact_id ? clientNom(cmd.contact_id) : ''),
       commande_id: cmdId, production_id: type === 'entree' ? ($('#pf-mprod').value || null) : null,
-      prix_vente: liv && pv > 0 ? pv : null, reference: $('#pf-mref').value.trim(), note: $('#pf-mnote').value.trim() || (type === 'ajustement' ? 'Inventaire' : '')
+      prix_vente: liv && pv > 0 ? pv : null, prix_achat: type === 'entree' && pa > 0 ? pa : null, reference: $('#pf-mref').value.trim(), note: $('#pf-mnote').value.trim() || (type === 'ajustement' ? 'Inventaire' : '')
     };
     const r = await sb.from('pf_mouvements').insert([row]);
     if (r.error) { toast('Erreur : ' + errMsg(r.error)); return; }
+    // entrée avec un prix d'achat / coût de fabrication : le coût du produit devient le coût moyen pondéré du stock
+    if (type === 'entree' && pa > 0) {
+      const ancien = cout(p) > 0 ? cout(p) : 0, avant = Math.max(0, cur);
+      const cmp = ancien > 0 && avant > 0 ? (avant * ancien + qIn * pa) / (avant + qIn) : pa;
+      await sb.from('produits').update({ prix_achat: Math.round(cmp * 100) / 100 }).eq('id', p.id);
+    }
     // le prix de vente saisi à la livraison devient le prix du produit s'il n'en avait pas
     if (liv && pv > 0 && !(Number(p.prix_vente) > 0)) await sb.from('produits').update({ prix_vente: pv }).eq('id', p.id);
     // la commande suit : quantité reçue et statut
@@ -555,7 +568,7 @@
   function exportExcel() {
     if (typeof XLSX === 'undefined') { toast('Bibliothèque Excel non chargée.'); return; }
     const stock = PR.map(p => { const c = cout(p), pv = Number(p.prix_vente) || 0, cap = capacite(p); return {
-      Produit: p.nom, 'Stock (pièces)': qtyOf(p.id), 'En production': enProduction(p), 'À livrer (commandes)': aLivrer(p), 'Coût de revient (DA)': c != null ? Math.round(c * 100) / 100 : '',
+      Produit: p.nom, 'Stock (pièces)': qtyOf(p.id), 'En production': enProduction(p), 'À livrer (commandes)': aLivrer(p), 'Coût d\'une pièce (DA)': c != null ? Math.round(c * 100) / 100 : '', 'Origine du coût': c > 0 ? sourceCout(p) : '',
       'Prix de vente (DA)': pv || '', 'Marge (DA)': c != null && pv ? Math.round((pv - c) * 100) / 100 : '', 'Valeur du stock au coût (DA)': c != null ? Math.round(Math.max(0, qtyOf(p.id)) * c) : '',
       'Capacité avec le stock de matières': cap.cap != null ? cap.cap : '', 'Seuil d\'alerte': Number(p.seuil_pf) || 0, 'État': etat(p).l }; });
     const cli = livraisons().map(g => ({ Client: g.nom, 'Pièces livrées': g.pieces, Produits: Object.keys(g.parProduit).map(k => k + ' ' + g.parProduit[k]).join(' · '), 'Valeur (DA)': Math.round(g.valeur), 'Dernière livraison': fd(g.dernier) }));
@@ -646,6 +659,7 @@
   });
   $('#pf-mproduit').addEventListener('change', () => {
     const p = produitById($('#pf-mproduit').value); if (p && $('#pf-mtype').value === 'livraison') $('#pf-mprix').value = Number(p.prix_vente) || '';
+    if (p) $('#pf-machat').value = cout(p) > 0 ? Math.round(cout(p) * 100) / 100 : '';
     majSelects(); majMvt();
   });
   $('#pf-mclient').addEventListener('change', () => { if ($('#pf-mclient').value === '__new__') nouveauClient(); else { majSelects(); majMvt(); } });

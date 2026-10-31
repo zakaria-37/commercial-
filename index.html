@@ -510,6 +510,7 @@
     <form id="pf-pform" class="at-form">
       <h2 id="pf-pform-title" style="margin-top:0">Produit fini</h2>
       <div class="at-fields">
+        <label>Prix d’achat ou coût de fabrication d’une pièce (DA)<input id="pf-pachat" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Vide = calcul de l’onglet Produits"></label>
         <label>Prix de vente d’une pièce (DA)<input id="pf-pprix" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex : 1500"></label>
         <label>Alerte quand le stock est ≤ (pièces)<input id="pf-pseuil" type="number" min="0" step="1" inputmode="numeric" placeholder="Facultatif"></label>
         <label>Modèle de la fiche matières (capacité de production)<select id="pf-pmodele"></select></label>
@@ -528,6 +529,7 @@
         <label id="pf-mprod-wrap">Production liée<select id="pf-mprod"></select></label>
         <label>Date<input id="pf-mdate" type="date"></label>
         <label><span id="pf-mqte-lbl">Quantité (pièces) *</span><input id="pf-mqte" type="number" min="0" step="1" inputmode="numeric" placeholder="Ex : 100"></label>
+        <label id="pf-machat-wrap">Prix d’achat / coût de fabrication d’une pièce (DA)<input id="pf-machat" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Facultatif"></label>
         <label id="pf-mprix-wrap">Prix de vente d’une pièce (DA)<input id="pf-mprix" type="number" min="0" step="0.01" inputmode="decimal"></label>
         <label id="pf-mref-wrap">Référence (bon de livraison)<input id="pf-mref" maxlength="60"></label>
         <label style="grid-column:1/-1">Note<input id="pf-mnote" maxlength="200" placeholder="Facultatif"></label>
