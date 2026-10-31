@@ -153,7 +153,7 @@ function list() {
 }
 $('#thead').onclick = e => { const k = e.target.closest('th')?.dataset.k; if (!k) return; sd = sk === k ? -sd : 1; sk = k; list() };
 ['q', 'ft', 'fs', 'fr'].forEach(i => $('#' + i).oninput = list);
-$('#tbody').onclick = e => { if (e.target.closest('a')) return; const pf = e.target.closest('[data-p]'); if (pf && typeof ouvrirProfil === 'function') { ouvrirProfil(pf.dataset.p); return; } const r = e.target.closest('tr[data-id]'); if (r) edit(r.dataset.id) };
+$('#tbody').onclick = e => { if (e.target.closest('a')) return; const pf = e.target.closest('[data-p]'); if (pf && typeof ouvrirProfil === 'function') { ouvrirProfil(pf.dataset.p); return; } const ed = e.target.closest('[data-e]'); if (ed) { edit(ed.dataset.e); return; } const r = e.target.closest('tr[data-id]'); if (r) { if (typeof ouvrirProfil === 'function') ouvrirProfil(r.dataset.id); else edit(r.dataset.id); } };
 
 /* ---------- Fiche contact ---------- */
 const F = () => $('#cf').elements;
