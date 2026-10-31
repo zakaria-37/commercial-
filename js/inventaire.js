@@ -176,6 +176,38 @@
     } finally { completant = false; }
   }
 
+  /* Synchroniser avec le Stock actuel : chaque élément et produit fini de l'inventaire prend la quantité et le prix du Stock
+     (« Selon la plateforme » ET « Compté »). Sert à faire l'inventaire de départ juste après avoir rempli le Stock. */
+  async function synchroniserStock() {
+    const i = inv(sel); if (ro(i)) return;
+    if (!confirm('Synchroniser « ' + i.nom + ' » avec le Stock actuel ?\n\nPour chaque élément et chaque produit fini :\n• la quantité comptée devient le stock actuel de la plateforme ;\n• le prix devient le prix actuel du Stock.\n\nLes quantités déjà saisies dans l’inventaire seront remplacées.')) return;
+    await flush();
+    if (window.StockAPI) await StockAPI.load();
+    if (window.PFAPI) await PFAPI.load();
+    await completer(sel);
+    const ls = linesOf(sel).filter(l => STOCKS.includes(l.section) && l.ref_id);
+    let n = 0, err = 0;
+    for (const l of ls) {
+      let maj = null;
+      if (l.section === 'matiere' && window.StockAPI) {
+        const a = StockAPI.byId(l.ref_id); if (!a) continue; const cond = StockAPI.aCond(a), q = r4(Math.max(0, StockAPI.qty(a.id))), pu = StockAPI.unitPrice(a);
+        maj = { libelle: a.nom, detail: a.categorie, unite: a.unite, cond_nom: cond ? a.cond_nom : '', cond_qte: cond ? StockAPI.condQte(a) : 0, quantite_theorique: q, quantite: q, prix_unitaire: pu > 0 ? pu : Number(l.prix_unitaire) || 0 };
+      } else if (l.section === 'produit_fini' && window.PFAPI) {
+        const p = PFAPI.produits().find(x => String(x.id) === String(l.ref_id)); if (!p) continue; const q = Math.max(0, PFAPI.qty(p.id)), c = PFAPI.coutProduit(p);
+        maj = { libelle: p.nom, quantite_theorique: q, quantite: q, prix_unitaire: c > 0 ? c : Number(l.prix_unitaire) || 0, prix_vente: Number(p.prix_vente) || 0 };
+      }
+      if (!maj) continue;
+      Object.assign(l, maj); recalc(l); maj.montant = l.montant;
+      const r = await sb.from('inventaire_lignes').update(maj).eq('id', l.id);
+      if (r.error) err++; else n++;
+      dirty.delete(String(l.id));
+    }
+    saveMsg = 'Synchronisé avec le Stock ✓ ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    render();
+    const t = totaux(linesOf(sel));
+    say(n + ' ligne(s) synchronisée(s) avec le Stock' + (err ? ' · ⚠ ' + err + ' erreur(s)' : '') + ' — éléments : ' + money(t.par.matiere) + ' · produits finis : ' + money(t.par.produit_fini) + '.');
+  }
+
   async function addLigne(x) {
     const i = inv(sel); if (ro(i)) return null;
     const max = Math.max(-1, ...linesOf(sel).map(l => Number(l.ordre) || 0));
@@ -348,7 +380,7 @@
 
   function paneResume(i, lines) {
     const t = totaux(lines), clos = ro(i), nc = nonComptes(lines);
-    let h = '<h2 style="margin-top:0">Résumé détaillé</h2><div class="tw"><table class="iv-tbl"><thead><tr><th>Rubrique</th><th class="n">Lignes</th><th class="n">Montant</th></tr></thead><tbody>';
+    let h = '<div class="at-actions" style="margin-top:0"><h2 style="margin:0 auto 0 0">Résumé détaillé</h2>' + (clos ? '' : '<button class="btn s p" type="button" id="inv-sync">↻ Synchroniser avec le Stock actuel</button>') + '</div><div class="tw"><table class="iv-tbl"><thead><tr><th>Rubrique</th><th class="n">Lignes</th><th class="n">Montant</th></tr></thead><tbody>';
     h += '<tr class="iv-sec"><td colspan="3">ACTIFS</td></tr>' + ORDRE.filter(s => SEC[s].actif).map(s => '<tr><td>' + SEC[s].l + '</td><td class="n">' + lines.filter(l => l.section === s).length + '</td><td class="n">' + money(t.par[s]) + '</td></tr>').join('') +
       '<tr class="iv-tot"><td colspan="2">Total des actifs</td><td class="n">' + money(t.actifs) + '</td></tr>' +
       '<tr class="iv-sec"><td colspan="3">PASSIFS</td></tr>' + ORDRE.filter(s => !SEC[s].actif).map(s => '<tr><td>' + SEC[s].l + '</td><td class="n">' + lines.filter(l => l.section === s).length + '</td><td class="n">' + money(t.par[s]) + '</td></tr>').join('') +
@@ -374,6 +406,7 @@
   function paneStock(i, lines, sec, clos) {
     const pf = sec === 'produit_fini', d = clos ? ' disabled' : '', nc = lines.filter(l => l.quantite == null).length;
     let h = '<div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">' + (pf ? 'Produits finis en stock' : 'Éléments de production en stock') + '</h2>' +
+      (!clos ? '<button class="btn s p" type="button" id="inv-sync" title="Reprend la quantité et le prix actuels du Stock pour tous les éléments et produits finis">↻ Synchroniser avec le Stock actuel</button>' : '') +
       (!clos && nc ? '<button class="btn s" type="button" id="inv-same">Compter comme le système (' + nc + ' ligne' + (nc > 1 ? 's' : '') + ' vide' + (nc > 1 ? 's' : '') + ')</button>' : '') + '</div>' +
       '<p class="iv-help">' + (pf ? 'Comptez les pièces finies réellement présentes. Valorisation au <b>coût de revient</b> (modifiable).' : 'Comptez ce qui est réellement dans l’atelier. Pour un rouleau : nombre de rouleaux entiers + mètres restants. Valorisation au <b>prix d’achat</b> (modifiable).') + ' Une ligne <b>vide</b> = pas encore comptée ; tapez 0 s’il n’y en a plus.</p>';
     if (!lines.length) return h + '<div class="iv-empty">Aucune ligne.</div>';
@@ -602,6 +635,7 @@
     if (t.closest('#inv-fiche')) { ficheComptage(); return; }
     const same = t.closest('[data-same]');
     if (same) { const l = ligne(same.dataset.same); if (l && l.quantite_theorique != null) { l.quantite = Math.max(0, l.quantite_theorique); recalc(l); dirty.add(String(l.id)); schedule(); render(); } return; }
+    if (t.closest('#inv-sync')) { const b = t.closest('#inv-sync'); b.disabled = true; b.textContent = 'Synchronisation…'; try { await synchroniserStock(); } finally { b.disabled = false; } return; }
     if (t.closest('#inv-same')) {
       const ls = linesOf(sel).filter(l => l.section === onglet && l.quantite == null && l.quantite_theorique != null);
       if (!ls.length || !confirm(ls.length + ' ligne(s) vide(s) seront comptées comme le stock de la plateforme.\nÀ n’utiliser que si vous avez bien vérifié ces lignes dans l’atelier. Continuer ?')) return;
