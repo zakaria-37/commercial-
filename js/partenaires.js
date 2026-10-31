@@ -116,6 +116,24 @@
       if (unit != null) { const x = g.pa.get(String(a.id)) || { montant: 0, qte: 0 }; x.montant += montant; x.qte += base; g.pa.set(String(a.id), x); }
       groupes.set(k.key, g);
     });
+    // Produits finis reçus d'un fournisseur par un bon de réception (Commerce)
+    if (window.PFAPI && window.CommerceAPI && CommerceAPI.docs) {
+      const BR = 'Bon de réception ', bons = CommerceAPI.docs().filter(d => d.type === 'bon_reception' && d.statut !== 'annulee');
+      const prods = new Map(PFAPI.produits().map(p => [String(p.id), p]));
+      PFAPI.mouvements().forEach(m => {
+        if (m.type !== 'entree' || !String(m.note || '').startsWith(BR) || !(Number(m.quantite) > 0) || !dansPeriode(m.date_mvt)) return;
+        const d = bons.find(x => x.numero === String(m.note).slice(BR.length)); if (!d || !d.contact_id) return;
+        const p = prods.get(String(m.produit_id)), aid = 'p:' + m.produit_id;
+        if (!arts.has(aid)) arts.set(aid, { nom: p ? p.nom : 'Produit fini', categorie: 'Produit fini', unite: 'pièce' });
+        const k = cle({ contact_id: d.contact_id, fournisseur: d.contact_nom }, 'fournisseur', 'Fournisseur'), unit = Number(m.prix_achat) > 0 ? Number(m.prix_achat) : null;
+        const base = Number(m.quantite), montant = unit != null ? unit * base : 0;
+        const g = groupes.get(k.key) || { key: k.key, id: k.id, nom: k.nom || 'Fournisseur non indiqué', nb: 0, total: 0, arts: new Set(), dernier: '', sansPrix: 0, pa: new Map() };
+        g.nb++; g.total += montant; g.arts.add(aid); if (unit == null) g.sansPrix++;
+        if (String(m.date_mvt || '') > g.dernier) g.dernier = String(m.date_mvt || '');
+        if (unit != null) { const x = g.pa.get(aid) || { montant: 0, qte: 0 }; x.montant += montant; x.qte += base; g.pa.set(aid, x); }
+        groupes.set(k.key, g);
+      });
+    }
     // Prix moyen du marché par article = moyenne des prix moyens de chaque fournisseur (≥ 2 fournisseurs)
     groupes.forEach(g => { if (g.key === 'none') return; g.pa.forEach((x, aid) => { const l = parArt.get(aid) || []; l.push({ g, p: x.montant / x.qte, montant: x.montant }); parArt.set(aid, l); }); });
     const compar = [];
@@ -260,6 +278,15 @@
     }
     if (window.PFAPI) {
       const prods = new Map(PFAPI.produits().map(p => [String(p.id), p]));
+      // produits finis reçus par un bon de réception (Commerce) : achat auprès du fournisseur du bon
+      const BR = 'Bon de réception ', bons = window.CommerceAPI && CommerceAPI.docs ? CommerceAPI.docs().filter(d => d.type === 'bon_reception' && d.statut !== 'annulee') : [];
+      PFAPI.mouvements().forEach(m => {
+        if (m.type !== 'entree' || !String(m.note || '').startsWith(BR) || !(Number(m.quantite) > 0) || !ok(m.date_mvt)) return;
+        const d = bons.find(x => x.numero === String(m.note).slice(BR.length)); if (!d || !d.contact_id) return;      // fabrication interne : pas un achat
+        const p = prods.get(String(m.produit_id)), k = cle({ contact_id: d.contact_id, fournisseur: d.contact_nom }, 'fournisseur', 'Fournisseur');
+        const q = Number(m.quantite) || 0, pu = Number(m.prix_achat) || 0;
+        ops.push({ sens: 'achat', date: String(m.date_mvt || ''), key: k.key, id: k.id, nom: k.nom || 'Fournisseur non indiqué', libelle: (p ? p.nom : 'Produit fini') + ' (' + d.numero + ')', qte: num(q) + ' pcs', montant: pu * q, sansPrix: !(pu > 0) });
+      });
       PFAPI.mouvements().forEach(m => {
         if ((m.type !== 'livraison' && m.type !== 'retour') || !ok(m.date_mvt)) return;
         const p = prods.get(String(m.produit_id)), k = cle(m, 'client_nom', 'Client');
@@ -339,6 +366,8 @@
     if (tw) tw.style.display = liste ? '' : 'none';
     document.querySelectorAll('#ct-tabs [data-ctp]').forEach(b => b.classList.toggle('on', b.dataset.ctp === tab));
     if (liste) return;
+    // les bons de réception (Commerce) comptent dans les achats : on les charge s'ils ne le sont pas encore
+    if (window.CommerceAPI && CommerceAPI.docs && !CommerceAPI.docs().length && !render.com) { render.com = true; CommerceAPI.load(true).then(() => render()).catch(() => {}); }
     if (tab === 'ca') { renderCA(box); return; }
     if (tab === 'pay') { if (window.PayAPI) PayAPI.render(box); return; }
     const four = tab === 'four';
