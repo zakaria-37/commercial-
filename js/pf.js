@@ -601,10 +601,15 @@
     const liv = type === 'livraison', ret = type === 'retour';
     const clientId = o.clientId || (cmd && cmd.contact_id) || null;
     const row = { produit_id: p.id, date_mvt: o.date || iso(new Date()), type, quantite: delta, contact_id: clientId, client_nom: clientId ? clientNom(clientId) : '',
-      commande_id: cmd ? cmd.id : null, production_id: o.productionId || null, prix_vente: liv && o.prix > 0 ? o.prix : null,
+      commande_id: cmd ? cmd.id : null, production_id: o.productionId || null, prix_vente: liv && o.prix > 0 ? o.prix : null, prix_achat: type === 'entree' && o.prixAchat > 0 ? o.prixAchat : null,
       reference: o.reference != null ? o.reference : (liv ? refDefaut() : ''), note: o.note || '' };
     const r = await sb.from('pf_mouvements').insert([row]);
     if (r.error) return { error: r.error };
+    // entrée avec un coût : le coût du produit devient le coût moyen pondéré du stock
+    if (type === 'entree' && o.prixAchat > 0) {
+      const ancien = cout(p) > 0 ? cout(p) : 0, avant = Math.max(0, cur);
+      await sb.from('produits').update({ prix_achat: Math.round((ancien > 0 && avant > 0 ? (avant * ancien + qIn * o.prixAchat) / (avant + qIn) : o.prixAchat) * 100) / 100 }).eq('id', p.id);
+    }
     if (liv && o.prix > 0 && !(Number(p.prix_vente) > 0)) await sb.from('produits').update({ prix_vente: o.prix }).eq('id', p.id);
     if (cmd && (liv || ret)) await majCommande(cmd.id, liv ? qIn : -qIn);
     await load(); await refreshAteliers();

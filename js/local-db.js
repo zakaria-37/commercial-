@@ -45,7 +45,7 @@
     paiements_ateliers: { atelier_id: null, atelier_nom: '', production_id: null, type: 'paiement', date_paiement: null, mode: 'especes', reference: '', note: '' },
     paiements: { date_paiement: null, contact_id: null, contact_nom: '', mode: 'especes', reference: '', note: '', document_id: null },
     documents: { date_doc: null, echeance: null, paiement: 'terme', contact_id: null, contact_nom: '', statut: 'brouillon', source_id: null, commande_id: null, tva_taux: 0, remise: 0, notes: '' },
-    document_lignes: { produit_id: null, article_id: null, designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, quantite_recue: 0, ordre: 0 },
+    document_lignes: { produit_id: null, article_id: null, ref: '', designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, quantite_recue: 0, ordre: 0 },
     parametres: { valeur: {} },
     remises_hs: { date_op: null, type: 'remise', note: '' },
     credits_employes: { date_op: null, type: 'credit', note: '' },
