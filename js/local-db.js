@@ -21,7 +21,7 @@
 
   // Ordre = parents d'abord (important pour envoyer les nouvelles lignes à Supabase)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants', 'productions', 'commandes',
-                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers', 'credits_employes', 'rendez_vous', 'notes_perso', 'zacksmart_messages', 'tendances', 'credits_tiers'];
+                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers', 'credits_employes', 'rendez_vous', 'notes_perso', 'zacksmart_messages', 'tendances', 'credits_tiers', 'caisse'];
 
   // Valeurs par défaut (les mêmes que dans les fichiers supabase/*.sql)
   var DEFAULTS = {
@@ -44,12 +44,13 @@
     pf_mouvements: { date_mvt: null, type: 'entree', contact_id: null, client_nom: '', commande_id: null, production_id: null, prix_vente: null, prix_achat: null, reference: '', note: '' },
     paiements_ateliers: { atelier_id: null, atelier_nom: '', production_id: null, type: 'paiement', date_paiement: null, mode: 'especes', reference: '', note: '' },
     paiements: { date_paiement: null, contact_id: null, contact_nom: '', mode: 'especes', reference: '', note: '', document_id: null },
-    documents: { date_doc: null, echeance: null, paiement: 'terme', contact_id: null, contact_nom: '', statut: 'brouillon', source_id: null, commande_id: null, tva_taux: 0, remise: 0, notes: '' },
+    documents: { date_doc: null, echeance: null, paiement: 'terme', contact_id: null, contact_nom: '', statut: 'brouillon', source_id: null, commande_id: null, tva_taux: 0, remise: 0, notes: '', ref_externe: '' },
     document_lignes: { produit_id: null, article_id: null, ref: '', designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, quantite_recue: 0, ordre: 0 },
     parametres: { valeur: {} },
     remises_hs: { date_op: null, type: 'remise', note: '' },
     credits_employes: { date_op: null, type: 'credit', note: '' },
     zacksmart_messages: { proprietaire: 'partage', role: 'user' },
+    caisse: { date_op: null, type: 'entree', montant: 0, theorique: null, ecart: null, libelle: '' },
     credits_tiers: { date_op: null, nature: 'pret_donne', contact_id: null, personne: '', categorie: 'Autre', montant: 0, mode: 'especes', echeance: null, reference: '', note: '' },
     tendances: { type: 'Modèle', categorie: '', region: 'Monde', periode: '', resume: '', pourquoi: '', idee_maria: '', prix_indicatif: '', potentiel: 3, statut: 'À étudier', source_nom: '', source_url: '', image_url: '' },
     notes_perso: { titre: '', categorie: 'À ne pas oublier', couleur: 'jaune', rappel: null, epingle: false, fait: false },

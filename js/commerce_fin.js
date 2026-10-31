@@ -200,6 +200,124 @@
     doc.save((cl ? 'recu-versement-' : 'bon-versement-') + String(nom || '').replace(/[^A-Za-z0-9]+/g, '-').slice(0, 30) + '-' + p.date_paiement + '.pdf');
   }
 
+  /* ================= JOURNAL DES OPÉRATIONS ET CAISSE =================
+     Toutes les opérations d'une journée : versements, bons, factures, crédits, charges, acomptes, paiements des ateliers…
+     Caisse : ouverture (fond de caisse) → entrées et sorties EN ESPÈCES → solde attendu → clôture (argent compté) → écart.
+     Table caisse (supabase/caisse.sql) : ouverture, clôture, entrées et sorties diverses. */
+  let jDate = today(), J = null, jCharge = '', jForm = null;
+  const heure = s => { try { return s ? new Date(s).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''; } catch (e) { return ''; } };
+  const rows = async (t, col, d) => { try { const r = await sb.from(t).select('*').eq(col, d); return r.error ? [] : (r.data || []); } catch (e) { return []; } };
+  const empNom = id => { const e = (typeof EMPLOYES !== 'undefined' ? EMPLOYES : []).find(x => String(x.id) === String(id)); return e ? [e.nom, e.prenom].filter(Boolean).join(' ') : 'Employé'; };
+  async function loadJour(d) {
+    jCharge = d;
+    const [pay, cr, ch, ac, pa, hs, ce, ca] = await Promise.all([rows('paiements', 'date_paiement', d), rows('credits_tiers', 'date_op', d), rows('charges', 'date_charge', d), rows('acomptes', 'date_acompte', d),
+      rows('paiements_ateliers', 'date_paiement', d), rows('remises_hs', 'date_op', d), rows('credits_employes', 'date_op', d), rows('caisse', 'date_op', d)]);
+    let avant = []; try { const r = await sb.from('caisse').select('*').eq('type', 'cloture').lt('date_op', d).order('date_op', { ascending: false }); avant = r.error ? [] : (r.data || []); } catch (e) {}
+    const ops = [], esp = m => !m || m === 'especes';
+    const op = (o, x) => ops.push(Object.assign({ h: heure(o.created_at), tri: String(o.created_at || ''), caisse: 0 }, x));
+    pay.filter(p => p.sens === 'encaissement' || p.sens === 'reglement').forEach(p => { const re = p.sens === 'encaissement', c = p.contact_id ? cById(p.contact_id) : null;
+      op(p, { type: re ? 'Versement reçu' : 'Versement fait', detail: (c ? lbl(c) : p.contact_nom || '') + (p.reference ? ' · ' + p.reference : '') + (p.note ? ' · ' + p.note : ''), mode: p.mode, montant: Number(p.montant), caisse: esp(p.mode) ? (re ? 1 : -1) * Number(p.montant) : 0, c: re ? 'g' : 'o' }); });
+    cr.forEach(o => { const sg = { pret_donne: -1, remb_recu: 1, pret_recu: 1, remb_fait: -1 }[o.nature];
+      op(o, { type: NAT[o.nature][0] + ' (crédit)', detail: nomOp(o) + (o.note ? ' · ' + o.note : ''), mode: o.mode, montant: Number(o.montant), caisse: esp(o.mode) ? sg * Number(o.montant) : 0, c: sg > 0 ? 'g' : 'o' }); });
+    ch.forEach(o => { const paie = o.categorie === 'Paie des employés';
+      op(o, { type: paie ? 'Paie du jour (coût)' : 'Charge', detail: [o.categorie, o.employe_nom, o.note].filter(Boolean).join(' · '), mode: paie ? '' : 'especes', montant: Number(o.montant), caisse: paie ? 0 : -Number(o.montant), c: 'o' }); });
+    ac.forEach(o => op(o, { type: 'Acompte employé', detail: empNom(o.employe_id) + (o.note ? ' · ' + o.note : ''), mode: 'especes', montant: Number(o.montant), caisse: -Number(o.montant), c: 'o' }));
+    pa.filter(o => o.type !== 'report').forEach(o => op(o, { type: 'Paiement atelier', detail: (o.atelier_nom || 'Atelier') + (o.reference ? ' · ' + o.reference : ''), mode: o.mode, montant: Number(o.montant), caisse: esp(o.mode) ? -Number(o.montant) : 0, c: 'o' }));
+    hs.filter(o => o.type === 'remise').forEach(o => op(o, { type: 'Heures sup remises', detail: empNom(o.employe_id), mode: 'especes', montant: Number(o.montant), caisse: -Number(o.montant), c: 'o' }));
+    ce.forEach(o => op(o, { type: o.type === 'credit' ? 'Crédit employé' : o.type === 'retenue' ? 'Retenue sur salaire' : 'Crédit employé (départ)', detail: empNom(o.employe_id) + (o.note ? ' · ' + o.note : ''), mode: o.type === 'credit' ? 'especes' : '', montant: Number(o.montant), caisse: o.type === 'credit' ? -Number(o.montant) : 0, c: 'o' }));
+    ca.filter(o => o.type === 'entree' || o.type === 'sortie').forEach(o => op(o, { type: o.type === 'entree' ? 'Entrée de caisse' : 'Sortie de caisse', detail: o.libelle || '', mode: 'especes', montant: Number(o.montant), caisse: (o.type === 'entree' ? 1 : -1) * Number(o.montant), c: o.type === 'entree' ? 'g' : 'o', caisseId: o.id }));
+    if (window.CommerceAPI) CommerceAPI.docs().filter(x => x.date_doc === d && x.statut !== 'annulee' && x.type !== 'devis').forEach(x => {
+      const nom = x.contact_id && cById(x.contact_id) ? lbl(cById(x.contact_id)) : x.contact_nom;
+      op(x, { type: { facture: 'Facture', bon_livraison: 'Bon de livraison', bon_reception: 'Bon de réception', bon_commande: 'Bon de commande' }[x.type] || x.type, detail: x.numero + ' · ' + (nom || ''), mode: '', montant: CommerceAPI.totaux(x, CommerceAPI.lignesDe(x.id)).ttc, caisse: 0, c: 'x', doc: true });
+    });
+    ops.sort((a, b) => a.tri.localeCompare(b.tri));
+    const ouv = ca.filter(o => o.type === 'ouverture').sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0] || null;
+    const clo = ca.filter(o => o.type === 'cloture').sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0] || null;
+    J = { d, ops, ouv, clo, prec: avant[0] || null };
+    if (tabActif === 'journal') rerender();
+  }
+  let tabActif = '';
+  function caisseCalc() {
+    const ent = J.ops.filter(o => o.caisse > 0).reduce((s, o) => s + o.caisse, 0), sor = -J.ops.filter(o => o.caisse < 0).reduce((s, o) => s + o.caisse, 0);
+    const ouv = J.ouv ? Number(J.ouv.montant) : 0;
+    return { ouv, ent: r2(ent), sor: r2(sor), att: r2(ouv + ent - sor) };
+  }
+  function paneJournal() {
+    tabActif = 'journal';
+    if (!J || J.d !== jDate) { if (jCharge !== jDate) loadJour(jDate); return '<div class="card"><div class="iv-empty">Chargement du journal…</div></div>'; }
+    const k = caisseCalc(), aujourdhui = jDate === today();
+    const lettreJour = new Date(jDate + 'T00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    let h = '<div class="card"><div class="at-actions" style="margin-top:0;flex-wrap:wrap"><button class="btn" type="button" data-cf="j-prev" title="Jour précédent">◀</button><input id="cf-jd" type="date" value="' + esc(jDate) + '" style="padding:8px;border:1px solid #ccc;border-radius:8px"><button class="btn" type="button" data-cf="j-next" title="Jour suivant">▶</button>' +
+      (aujourdhui ? '' : '<button class="btn s" type="button" data-cf="j-auj">Aujourd’hui</button>') + '<b style="margin-left:6px">' + esc(lettreJour.replace(/^./, c => c.toUpperCase())) + '</b><span style="margin-left:auto"></span><button class="btn" type="button" data-cf="j-pdf">Journal PDF</button></div>';
+    // --- Caisse
+    const etat = J.clo ? '<span class="cm-bdg g">Caisse clôturée à ' + heure(J.clo.created_at) + '</span>' : J.ouv ? '<span class="cm-bdg b">Caisse ouverte depuis ' + heure(J.ouv.created_at) + '</span>' : '<span class="cm-bdg x">Caisse non ouverte</span>';
+    h += '<h3 style="margin:14px 0 8px">Caisse de l’atelier (espèces) ' + etat + '</h3><div class="ct-kpis">' +
+      '<div class="ct-kpi"><span>Ouverture (fond de caisse)</span><b>' + money(k.ouv) + '</b><small>' + (J.ouv ? 'compté à l’ouverture' : 'non saisie') + '</small></div>' +
+      '<div class="ct-kpi"><span>Entrées en espèces</span><b class="py-av">+ ' + money(k.ent) + '</b><small>versements reçus, remboursements…</small></div>' +
+      '<div class="ct-kpi"><span>Sorties en espèces</span><b class="py-due">− ' + money(k.sor) + '</b><small>versements faits, charges, acomptes…</small></div>' +
+      '<div class="ct-kpi"><span>Solde attendu en caisse</span><b>' + money(k.att) + '</b><small>ouverture + entrées − sorties</small></div></div>';
+    if (J.clo) { const e = Number(J.clo.ecart) || 0;
+      h += '<div class="pf-note' + (Math.abs(e) > 0.004 ? ' pf-warn' : '') + '" style="font-size:14px">Clôture : argent compté <b>' + money(J.clo.montant) + '</b> · attendu <b>' + money(J.clo.theorique) + '</b> · <b>' + (Math.abs(e) < 0.005 ? '✔ aucun écart' : e > 0 ? 'excédent de ' + money(e) : 'MANQUE ' + money(-e)) + '</b>' +
+        (Math.abs((Number(J.clo.theorique) || 0) - k.att) > 0.004 ? ' <small>(des opérations ont changé depuis la clôture : solde attendu actuel ' + money(k.att) + ')</small>' : '') + ' <button class="btn s" type="button" data-cf="j-rouvrir">Rouvrir la caisse</button></div>'; }
+    h += '<div class="at-actions">' + (!J.ouv ? '<button class="btn p" type="button" data-cf="j-form" data-t="ouverture">Ouvrir la caisse</button>' : '') +
+      (!J.clo ? '<button class="btn" type="button" data-cf="j-form" data-t="entree">+ Entrée de caisse</button><button class="btn" type="button" data-cf="j-form" data-t="sortie">+ Sortie de caisse</button>' : '') +
+      (J.ouv && !J.clo ? '<button class="btn p" type="button" data-cf="j-form" data-t="cloture">Clôturer la caisse (fin de journée)</button>' : '') + '</div>';
+    if (jForm) h += formCaisse(k);
+    // --- Journal
+    const docs = J.ops.filter(o => o.doc), argent = J.ops.filter(o => !o.doc);
+    const tot = (l, f) => l.filter(f).reduce((s, o) => s + o.montant, 0);
+    h += '<h3 style="margin:18px 0 8px">Journal des opérations (' + J.ops.length + ')</h3>';
+    h += J.ops.length ? '<div class="tw"><table class="iv-tbl"><thead><tr><th>Heure</th><th>Opération</th><th>Détail</th><th class="iv-opt">Mode</th><th class="n">Montant</th><th class="n">Caisse</th><th></th></tr></thead><tbody>' +
+      J.ops.map(o => '<tr><td>' + esc(o.h) + '</td><td><span class="cm-bdg ' + o.c + '">' + esc(o.type) + '</span></td><td>' + esc(o.detail) + '</td><td class="iv-opt">' + esc(MODES[o.mode] || (o.doc ? 'document' : '')) + '</td><td class="n"><b>' + money(o.montant) + '</b></td>' +
+        '<td class="n">' + (o.caisse ? '<b class="' + (o.caisse > 0 ? 'py-av' : 'py-due') + '">' + (o.caisse > 0 ? '+ ' : '− ') + money(Math.abs(o.caisse)) + '</b>' : '<small>—</small>') + '</td><td class="n">' + (o.caisseId && !J.clo ? '<button class="btn s d" type="button" data-cf="j-del" data-id="' + esc(o.caisseId) + '">×</button>' : '') + '</td></tr>').join('') + '</tbody></table></div>'
+      : '<div class="iv-empty">Aucune opération ce jour-là.</div>';
+    h += '<div class="ct-kpis" style="margin-top:12px"><div class="ct-kpi"><span>Livré / facturé ce jour</span><b>' + money(tot(docs, o => o.type === 'Bon de livraison' || o.type === 'Facture')) + '</b><small>bons de livraison et factures</small></div>' +
+      '<div class="ct-kpi"><span>Reçu ce jour (achats)</span><b>' + money(tot(docs, o => o.type === 'Bon de réception')) + '</b><small>bons de réception</small></div>' +
+      '<div class="ct-kpi"><span>Versements reçus (tous modes)</span><b class="py-av">' + money(tot(argent, o => o.type === 'Versement reçu')) + '</b><small>versements faits : ' + money(tot(argent, o => o.type === 'Versement fait')) + '</small></div></div>';
+    return h + '<p class="iv-help">La caisse ne compte que l’argent <b>en espèces</b> (chèques et virements apparaissent dans le journal sans toucher la caisse). Les documents (bons, factures) sont listés pour information : l’argent n’entre en caisse qu’avec le versement ou le paiement « cash ». La paie du jour est un coût, pas une sortie d’argent : seuls les acomptes et les heures sup remises sortent de la caisse.</p></div>';
+  }
+  function formCaisse(k) {
+    const t = jForm.type, prop = t === 'ouverture' ? (J.prec ? Number(J.prec.montant) : '') : '';
+    const titre = { ouverture: 'Ouverture de la caisse', cloture: 'Clôture de la caisse', entree: 'Entrée de caisse', sortie: 'Sortie de caisse' }[t];
+    return '<form id="cf-jform" class="at-form" style="display:block"><h3 style="margin-top:0">' + titre + '</h3>' +
+      (t === 'ouverture' ? '<p class="iv-help">Comptez l’argent présent dans la caisse au début de la journée.' + (J.prec ? ' Dernière clôture (' + fd(J.prec.date_op) + ') : <b>' + money(J.prec.montant) + '</b>.' : '') + '</p>' : '') +
+      (t === 'cloture' ? '<p class="iv-help">Comptez l’argent présent dans la caisse en fin de journée. Solde attendu : <b>' + money(k.att) + '</b>.</p>' : '') +
+      '<div class="at-fields"><label>' + (t === 'ouverture' || t === 'cloture' ? 'Argent compté en caisse (DA) *' : 'Montant (DA) *') + '<input id="cf-jm" type="number" min="0" step="any" inputmode="decimal" value="' + esc(jForm.montant != null ? jForm.montant : prop) + '"></label>' +
+      (t === 'entree' || t === 'sortie' ? '<label style="grid-column:span 2">Motif *<input id="cf-jl" maxlength="160" value="' + esc(jForm.libelle || '') + '" placeholder="' + (t === 'entree' ? 'Ex : apport du gérant, retrait banque…' : 'Ex : achat de fil, transport, dîner…') + '"></label>' : '') + '</div>' +
+      (t === 'cloture' ? '<div id="cf-jecart" class="iv-help"></div>' : '') +
+      '<div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" data-cf="j-no">Annuler</button></div></form>';
+  }
+  function ecartTxt() {
+    const e = $('#cf-jecart'); if (!e || !J) return; const k = caisseCalc(), m = $('#cf-jm').value;
+    if (m === '') { e.textContent = ''; return; }
+    const d = r2(num(m) - k.att); e.innerHTML = Math.abs(d) < 0.005 ? '✔ Aucun écart : la caisse est juste.' : d > 0 ? 'Excédent de <b>' + money(d) + '</b> (plus d’argent que prévu).' : '<b style="color:var(--r)">Manque de ' + money(-d) + '</b> (moins d’argent que prévu).';
+  }
+  async function saveCaisse() {
+    const t = jForm.type, m = r2(num($('#cf-jm').value)), lib = $('#cf-jl') ? $('#cf-jl').value.trim() : '';
+    if ($('#cf-jm').value === '' || m < 0) { say('Indiquez le montant.'); return; }
+    if ((t === 'entree' || t === 'sortie') && (!(m > 0) || !lib)) { say('Indiquez un montant et un motif.'); return; }
+    const k = caisseCalc(), row = { date_op: jDate, type: t, montant: m, libelle: lib || (t === 'ouverture' ? 'Ouverture' : t === 'cloture' ? 'Clôture' : '') };
+    if (t === 'cloture') { row.theorique = k.att; row.ecart = r2(m - k.att); }
+    const r = await sb.from('caisse').insert([row]); if (r.error) { say('Erreur : ' + (/caisse/.test(r.error.message) ? 'table « caisse » introuvable : exécutez supabase/caisse.sql. ' : '') + r.error.message); return; }
+    jForm = null; say({ ouverture: 'Caisse ouverte : ' + money(m), cloture: 'Caisse clôturée' + (Math.abs(row.ecart) > 0.004 ? ' — écart de ' + money(row.ecart) : ' — aucun écart'), entree: 'Entrée de caisse enregistrée', sortie: 'Sortie de caisse enregistrée' }[t]);
+    await loadJour(jDate);
+  }
+  async function journalPdf() {
+    if (!J || !(window.jspdf && window.jspdf.jsPDF)) { say('Bibliothèque PDF non chargée.'); return; }
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = doc.internal.pageSize.getWidth(), M = 12, k = caisseCalc(), P = s => pdfT(String(s).replace(/[  ]/g, ' '));
+    if (typeof LOGO_PDF !== 'undefined' && LOGO_PDF) doc.addImage(LOGO_PDF, 'PNG', M, 8, 18, 18);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text(P('JOURNAL DES OPERATIONS'), W - M, 15, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text(P('Journee du ' + fd(jDate)), W - M, 21, { align: 'right' });
+    doc.setFontSize(9); doc.text(P('Caisse : ouverture ' + money(k.ouv) + '  |  entrees especes ' + money(k.ent) + '  |  sorties especes ' + money(k.sor) + '  |  solde attendu ' + money(k.att)), M, 33);
+    if (J.clo) doc.text(P('Cloture : compte ' + money(J.clo.montant) + '  |  ecart ' + (Math.abs(Number(J.clo.ecart)) < 0.005 ? 'aucun' : money(J.clo.ecart))), M, 38);
+    doc.autoTable({ startY: 43, margin: { left: M, right: M }, head: [['Heure', 'Operation', 'Detail', 'Mode', 'Montant (DA)', 'Caisse (DA)'].map(P)],
+      body: J.ops.map(o => [o.h, o.type, o.detail, MODES[o.mode] || (o.doc ? 'document' : ''), money(o.montant).replace(' DA', ''), o.caisse ? (o.caisse > 0 ? '+' : '-') + money(Math.abs(o.caisse)).replace(' DA', '') : '-'].map(P)),
+      theme: 'grid', styles: { fontSize: 8.5, cellPadding: 2 }, headStyles: { fillColor: [0, 0, 0], textColor: 255 }, columnStyles: { 0: { cellWidth: 14 }, 4: { halign: 'right', cellWidth: 26 }, 5: { halign: 'right', cellWidth: 26 } } });
+    const y = doc.lastAutoTable.finalY + 14; doc.setDrawColor(120); doc.rect(M, y, 80, 24); doc.rect(W - M - 80, y, 80, 24); doc.setFontSize(8); doc.setTextColor(90);
+    doc.text(P('Caissier(e)'), M + 3, y + 5); doc.text(P('Gerant'), W - M - 77, y + 5);
+    doc.save('journal-' + jDate + '.pdf');
+  }
+
   /* ================= Événements ================= */
   document.addEventListener('click', async e => {
     const root = $('#cm-root'); if (!root || !root.contains(e.target)) return;
@@ -214,24 +332,36 @@
     if (a === 'c-hist') { cPers = cPers === b.dataset.k ? '' : b.dataset.k; rerender(); return; }
     if (a === 'c-no') { cForm = null; rerender(); return; }
     if (a === 'c-del') return delC(b.dataset.id);
+    if (a === 'j-prev' || a === 'j-next') { const d = new Date(jDate + 'T00:00'); d.setDate(d.getDate() + (a === 'j-prev' ? -1 : 1)); jDate = iso(d); jForm = null; rerender(); return; }
+    if (a === 'j-auj') { jDate = today(); jForm = null; rerender(); return; }
+    if (a === 'j-form') { jForm = { type: b.dataset.t }; rerender(); const m = $('#cf-jm'); if (m) { m.focus(); m.select(); } return; }
+    if (a === 'j-no') { jForm = null; rerender(); return; }
+    if (a === 'j-pdf') return journalPdf();
+    if (a === 'j-del') { if (!confirm('Supprimer cette opération de caisse ?')) return; await sb.from('caisse').delete().eq('id', b.dataset.id); await loadJour(jDate); return; }
+    if (a === 'j-rouvrir') { if (!confirm('Rouvrir la caisse ? La clôture de ce jour sera supprimée (vous pourrez clôturer à nouveau).')) return; await sb.from('caisse').delete().eq('id', J.clo.id); await loadJour(jDate); return; }
   });
   document.addEventListener('change', e => {
     const id = e.target.id;
     if (id === 'cf-vc') { lireV(); rerender(); hintV(); }
     else if (id === 'cf-vf') { vFiltre = e.target.value; rerender(); }
+    else if (id === 'cf-jd' && e.target.value) { jDate = e.target.value; jForm = null; rerender(); }
     else if (id === 'cf-cc' || id === 'cf-cnat') { lireC(); rerender(); }
   });
   document.addEventListener('input', e => {
     if (e.target.id === 'cf-vm' || e.target.id === 'cf-vn') hintV();
+    if (e.target.id === 'cf-jm') ecartTxt();
     if (e.target.id === 'cf-vq') { vQ = e.target.value; const pos = e.target.selectionStart; rerender(); const q = $('#cf-vq'); if (q) { q.focus(); q.setSelectionRange(pos, pos); } }
   });
   document.addEventListener('submit', async e => {
     if (e.target.id === 'cf-vform') { e.preventDefault(); await saveV(); }
     else if (e.target.id === 'cf-cform') { e.preventDefault(); await saveC(); }
+    else if (e.target.id === 'cf-jform') { e.preventDefault(); await saveCaisse(); }
   });
 
   window.CommerceFin = {
-    html: t => t === 'versements' ? paneVersements() : paneCredits(),
+    html: t => { if (t !== 'journal') tabActif = t; return t === 'versements' ? paneVersements() : t === 'journal' ? paneJournal() : paneCredits(); },
+    // une opération enregistrée ailleurs (versement, bon, crédit…) : le journal du jour est relu à la prochaine ouverture
+    invalider: () => { J = null; jCharge = ''; },
     apres: () => hintV(),
     rechargerCredits: loadCredits,
     credits: () => CR, personnes

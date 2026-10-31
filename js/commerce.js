@@ -128,10 +128,10 @@
     const root = $('#cm-root'); if (!root) return;
     if (err) { root.innerHTML = '<div class="card"><div class="iv-err">' + esc(err) + '</div></div>'; return; }
     if (ed) { root.innerHTML = editeur(); return; }
-    let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Commerce</h2><p>Bons de livraison et de réception, factures, devis, bons de commande, versements des clients et des fournisseurs, crédits.</p></div></div>';
+    let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Commerce</h2><p>Bons de livraison et de réception, factures, devis, bons de commande, versements, crédits, journal des opérations et caisse.</p></div></div>';
     h += '<div class="at-tabs" id="cm-tabs">' + ['bon_livraison', 'bon_reception', 'facture', 'devis', 'bon_commande'].map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + TYPES[t].lp + '</button>').join('') +
-      ['versements', 'credits'].map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + (t === 'versements' ? 'Versements' : 'Crédits') + '</button>').join('') + '<button type="button" data-t="entreprise" class="' + (tab === 'entreprise' ? 'on' : '') + '">Mon entreprise</button></div>';
-    h += tab === 'entreprise' ? paneEntreprise() : (tab === 'versements' || tab === 'credits') ? (window.CommerceFin ? CommerceFin.html(tab) : '') : paneListe(tab);
+      ['versements', 'credits', 'journal'].map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + ({ versements: 'Versements', credits: 'Crédits', journal: 'Journal & caisse' })[t] + '</button>').join('') + '<button type="button" data-t="entreprise" class="' + (tab === 'entreprise' ? 'on' : '') + '">Mon entreprise</button></div>';
+    h += tab === 'entreprise' ? paneEntreprise() : (tab === 'versements' || tab === 'credits' || tab === 'journal') ? (window.CommerceFin ? CommerceFin.html(tab) : '') : paneListe(tab);
     root.innerHTML = h;
     if (window.CommerceFin && tab === 'versements') CommerceFin.apres();
   }
@@ -154,15 +154,15 @@
       const pcs = l => l.reduce((s, d) => s + lignesDe(d.id).reduce((x, y) => x + num(y.quantite), 0), 0);
       h += '<div class="ct-kpis"><div class="ct-kpi"><span>' + (type === 'bon_livraison' ? 'Livré ce mois' : 'Reçu ce mois') + '</span><b>' + money(duMois.reduce((s, d) => s + totaux(d, lignesDe(d.id)).ttc, 0)) + '</b><small>' + duMois.length + ' bon(s) · ' + nf(pcs(duMois), 0) + ' unité(s)</small></div>' +
         '<div class="ct-kpi"><span>Total des bons</span><b>' + money(ok.reduce((s, d) => s + totaux(d, lignesDe(d.id)).ttc, 0)) + '</b><small>' + ok.length + ' bon(s)</small></div>' +
-        (type === 'bon_livraison' ? '<div class="ct-kpi"><span>À facturer</span><b class="py-due">' + ok.filter(d => d.statut !== 'facture').length + '</b><small>bon(s) livrés non facturés</small></div>' : '') + '</div>';
+        '<div class="ct-kpi"><span>' + (type === 'bon_livraison' ? 'Reste à encaisser' : 'Reste à payer') + '</span><b class="py-due">' + money(ok.reduce((s, d) => s + Math.max(0, etatFacture(d).reste || 0), 0)) + '</b><small>' + (type === 'bon_livraison' ? ok.filter(d => d.statut !== 'facture').length + ' bon(s) non facturé(s)' : 'paiements rattachés aux bons') + '</small></div></div>';
     }
     h += '<div class="card"><div class="at-actions" style="margin-top:0"><input id="cm-q" type="search" placeholder="Rechercher : numéro, nom…" value="' + esc(filtre) + '" style="padding:9px;border:1px solid #ccc;border-radius:8px;min-width:220px">' +
       '<span style="margin-left:auto"></span>' + (type === 'facture' ? '<button class="btn" type="button" id="cm-liv">Facturer des livraisons</button>' : '') + '<button class="btn p" type="button" id="cm-new">' + T.btn + '</button></div>';
     if (fromLiv && type === 'facture') h += formLivraisons();
-    h += liste.length ? '<div class="tw"><table class="iv-tbl"><thead><tr><th>N°</th><th>Date</th><th>' + T.cible + '</th><th class="n">Total TTC</th>' + (type === 'facture' ? '<th class="n iv-opt">Payé</th>' : '') + '<th>État</th></tr></thead><tbody>' +
+    h += liste.length ? '<div class="tw"><table class="iv-tbl"><thead><tr><th>N°</th><th>Date</th><th>' + T.cible + '</th><th class="n">Total TTC</th>' + (type === 'facture' || isBon(type) ? '<th class="n iv-opt">Payé</th>' : '') + '<th>État</th></tr></thead><tbody>' +
       liste.map(d => { const t = totaux(d, lignesDe(d.id)), e = type === 'facture' ? etatFacture(d) : type === 'bon_commande' ? etatBC(d) : isBon(type) ? etatBon(d) : { l: STATUTS_DEVIS[d.statut] || d.statut, c: d.statut === 'accepte' || d.statut === 'facture' ? 'g' : d.statut === 'refuse' ? 'r' : 'o' };
         return '<tr class="row" data-open="' + esc(d.id) + '"><td><b>' + esc(d.numero) + '</b></td><td>' + fd(d.date_doc) + '</td><td>' + esc(nomDoc(d) || '—') + '</td><td class="n"><b>' + money(t.ttc) + '</b></td>' +
-          (type === 'facture' ? '<td class="n iv-opt">' + money(payeDoc(d)) + '</td>' : '') + '<td><span class="cm-bdg ' + e.c + '">' + e.l + '</span></td></tr>'; }).join('') + '</tbody></table></div>'
+          (type === 'facture' || isBon(type) ? '<td class="n iv-opt">' + money(payeDoc(d)) + '</td>' : '') + '<td><span class="cm-bdg ' + e.c + '">' + e.l + '</span>' + (isBon(type) && d.statut !== 'annulee' && t.ttc > 0 ? ' <span class="cm-bdg ' + etatFacture(d).c + '">' + (etatFacture(d).l === 'Payée' ? 'Payé' : etatFacture(d).l === 'Partiellement payée' ? 'Partiellement payé' : 'Reste ' + money(etatFacture(d).reste)) + '</span>' : '') + '</td></tr>'; }).join('') + '</tbody></table></div>'
       : '<div class="iv-empty">Aucun document. Cliquez sur « ' + T.btn + ' ».</div>';
     return h + '</div>';
   }
@@ -229,7 +229,8 @@
     h += '<div class="at-fields"><label>' + (br ? 'Fournisseur / provenance' : T.cible + ' *') + '<select id="cm-contact"><option value="">' + (br ? '— Fabrication interne / atelier —' : '— choisir —') + '</option>' + cs.map(c => '<option value="' + esc(c.id) + '"' + (String(c.id) === String(doc.contact_id) ? ' selected' : '') + '>' + esc(lbl(c)) + '</option>').join('') + '</select></label>' +
       '<label>Numéro<input id="cm-num" value="' + esc(doc.numero) + '" maxlength="30"></label><label>Date<input id="cm-date" type="date" value="' + esc(doc.date_doc) + '"></label>' +
       (fac || bon ? '' : '<label>' + (doc.type === 'devis' ? 'Valable jusqu’au' : 'Livraison prévue') + '<input id="cm-ech" type="date" value="' + esc(doc.echeance || '') + '"></label>') +
-      (fac || bc ? '<label>Paiement<select id="cm-paie">' + [['cash', 'Cash (payé comptant)'], ['terme', 'À terme (paiement plus tard)'], ['versement', 'Versement (par tranches)']].map(o => '<option value="' + o[0] + '"' + ((doc.paiement || 'terme') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' : '') +
+      (bon ? '<label>' + (br ? 'N° de facture du fournisseur' : 'Réf. du client (son bon de commande)') + '<input id="cm-refext" maxlength="60" value="' + esc(doc.ref_externe || '') + '" placeholder="Facultatif"></label>' : '') +
+      (fac || bc || bon ? '<label>Paiement<select id="cm-paie">' + [['cash', 'Cash (payé comptant)'], ['terme', 'À terme (paiement plus tard)'], ['versement', 'Versement (par tranches)']].map(o => '<option value="' + o[0] + '"' + ((doc.paiement || 'terme') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' : '') +
       '<label>TVA<select id="cm-tva">' + [0, 9, 19].map(v => '<option value="' + v + '"' + (Number(doc.tva_taux) === v ? ' selected' : '') + '>' + (v ? v + ' %' : 'Sans TVA') + '</option>').join('') + '</select></label>' +
       '<label>Remise (DA)<input id="cm-remise" type="number" min="0" step="any" inputmode="decimal" value="' + (Number(doc.remise) || '') + '" placeholder="0"></label>' +
       (doc.type === 'devis' ? '<label>Statut<select id="cm-statut">' + Object.keys(STATUTS_DEVIS).map(k => '<option value="' + k + '"' + (doc.statut === k ? ' selected' : '') + '>' + STATUTS_DEVIS[k] + '</option>').join('') + '</select></label>' : '') +
@@ -251,14 +252,15 @@
       (bc ? '' : '<p class="iv-help">« En stock » = pièces finies réellement disponibles. <b>À l’enregistrement, la facture sort automatiquement les pièces du stock</b> (livraison au client, historique et commande mis à jour). Si vous modifiez, annulez ou supprimez la facture, le stock revient comme avant. « Livré » = pièces déjà sorties.</p>') +
       '<div class="cm-tot" id="cm-tot">' + totHtml(t, doc) + '</div></div>';
     // paiement (factures et bons de commande) : cash, à terme ou versements
-    if (!nouveau && (fac || bc)) {
+    if (!nouveau && (fac || bc || bon)) {
+      const encais = fac || doc.type === 'bon_livraison';
       const ps = pays().filter(p => String(p.document_id) === String(doc.id)), paye = payeDoc(doc), reste = r2(t.ttc - paye), mode = doc.paiement || 'terme';
       const nomMode = { cash: 'Cash', terme: 'À terme', versement: 'Versement' }[mode];
       h += '<div class="card" style="margin-top:12px"><h3 style="margin-top:0">Paiement : ' + nomMode + '</h3>' +
         (mode === 'cash' ? '<p>Payé comptant : <b class="py-av">' + money(paye) + '</b> <small>(enregistré automatiquement avec ' + (fac ? 'la facture' : 'le bon') + ')</small></p>'
-          : '<p>Total TTC <b>' + money(t.ttc) + '</b> · ' + (fac ? 'encaissé' : 'réglé') + ' <b class="py-av">' + money(paye) + '</b> · reste <b class="' + (reste > 0.004 ? 'py-due' : 'py-av') + '">' + money(Math.max(0, reste)) + '</b></p>') +
+          : '<p>Total TTC <b>' + money(t.ttc) + '</b> · ' + (encais ? 'encaissé' : 'réglé') + ' <b class="py-av">' + money(paye) + '</b> · reste <b class="' + (reste > 0.004 ? 'py-due' : 'py-av') + '">' + money(Math.max(0, reste)) + '</b></p>') +
         (ps.length ? '<div class="tw"><table class="iv-tbl"><tbody>' + ps.map(p => '<tr><td>' + fd(p.date_paiement) + '</td><td>' + esc(({ especes: 'Espèces', cheque: 'Chèque', virement: 'Virement', autre: 'Autre' })[p.mode] || '') + '</td><td class="n"><b>' + money(p.montant) + '</b></td><td>' + esc(p.reference || '') + '</td>' + (mode === 'cash' ? '' : '<td class="n"><button class="btn s d" type="button" data-pdel="' + esc(p.id) + '">Supprimer</button></td>') + '</tr>').join('') + '</tbody></table></div>' : '') +
-        (mode === 'cash' ? '' : (payForm ? formPaiement(doc, reste) : (reste > 0.004 ? '<div class="at-actions"><button class="btn p" type="button" id="cm-pay">' + (mode === 'versement' ? 'Ajouter un versement' : (fac ? 'Enregistrer le paiement' : 'Enregistrer le règlement')) + '</button></div>' : ''))) + '</div>';
+        (mode === 'cash' ? '' : (payForm ? formPaiement(doc, reste) : (reste > 0.004 ? '<div class="at-actions"><button class="btn p" type="button" id="cm-pay">' + (mode === 'versement' ? 'Ajouter un versement' : (encais ? 'Enregistrer le paiement' : 'Enregistrer le règlement')) + '</button></div>' : ''))) + '</div>';
     }
     if (!nouveau && bc && recForm) h += formReception(doc);
     // actions
@@ -278,8 +280,9 @@
     return '<table class="cm-tt"><tr><td>Sous-total</td><td>' + money(t.sous) + '</td></tr>' + (t.remise ? '<tr><td>Remise</td><td>− ' + money(t.remise) + '</td></tr>' : '') + '<tr><td>Total HT</td><td>' + money(t.ht) + '</td></tr>' +
       (Number(doc.tva_taux) ? '<tr><td>TVA ' + nf(doc.tva_taux, 2) + ' %</td><td>' + money(t.tva) + '</td></tr>' : '') + '<tr class="cm-ttc"><td>TOTAL TTC</td><td>' + money(t.ttc) + '</td></tr></table>';
   }
+  const encaisse = doc => doc.type === 'facture' || doc.type === 'bon_livraison';     // argent reçu ; sinon argent payé
   function formPaiement(doc, reste) {
-    const fac = doc.type === 'facture';
+    const fac = encaisse(doc);
     return '<form id="cm-payform" class="at-form" style="display:block"><div class="at-fields"><label>Montant (DA) *<input id="cm-pm" type="number" min="0" step="any" inputmode="decimal" value="' + (reste > 0 ? reste : '') + '"></label><label>Date<input id="cm-pd" type="date" value="' + today() + '"></label>' +
       '<label>Mode<select id="cm-pmode"><option value="especes">Espèces</option><option value="cheque">Chèque</option><option value="virement">Virement</option><option value="autre">Autre</option></select></label><label>Référence<input id="cm-pref" maxlength="80" placeholder="N° de chèque, reçu…"></label></div>' +
       '<div class="at-actions"><button class="btn p" type="submit">' + (fac ? 'Enregistrer l’encaissement' : 'Enregistrer le règlement') + '</button><button class="btn" type="button" id="cm-pno">Annuler</button></div></form>';
@@ -302,6 +305,7 @@
     d.numero = $('#cm-num').value.trim(); d.date_doc = $('#cm-date').value; if ($('#cm-ech')) d.echeance = $('#cm-ech').value || null; if ($('#cm-paie')) d.paiement = $('#cm-paie').value;
     d.tva_taux = num($('#cm-tva').value); d.remise = Math.max(0, num($('#cm-remise').value)); d.notes = $('#cm-notes').value.trim();
     if ($('#cm-statut')) d.statut = $('#cm-statut').value;
+    if ($('#cm-refext')) d.ref_externe = $('#cm-refext').value.trim();
   }
   /* Facture : le stock des produits finis suit toujours la facture (sortie à l'enregistrement, retour si on diminue ou supprime une ligne) */
   async function synchroniserStock(infoSuppr) {
@@ -326,13 +330,13 @@
 
   /* Paiement « Cash » : l'encaissement (ou le règlement) du total est enregistré automatiquement et suit le montant de la facture */
   async function synchroniserCash() {
-    const d = ed.doc; if ((d.type !== 'facture' && d.type !== 'bon_commande') || d.paiement !== 'cash' || d.statut === 'annulee') return;
+    const d = ed.doc; if ((d.type !== 'facture' && d.type !== 'bon_commande' && !isBon(d.type)) || d.paiement !== 'cash' || d.statut === 'annulee') return;
     const ttc = totaux(d, ed.lignes).ttc, liees = pays().filter(p => String(p.document_id) === String(d.id)), paye = r2(liees.reduce((s, p) => s + Number(p.montant), 0));
     if (Math.abs(ttc - paye) < 0.005) return;
-    const c = cById(d.contact_id), fac = d.type === 'facture';
+    const c = cById(d.contact_id), fac = encaisse(d);
     if (paye > ttc) for (const p of liees) await sb.from('paiements').delete().eq('id', p.id);
     const du = paye > ttc ? ttc : r2(ttc - paye);
-    if (du > 0) await sb.from('paiements').insert([{ date_paiement: d.date_doc || today(), sens: fac ? 'encaissement' : 'reglement', contact_id: d.contact_id, contact_nom: c ? lbl(c) : d.contact_nom, montant: du, mode: 'especes', reference: d.numero, note: (fac ? 'Facture ' : 'Bon de commande ') + d.numero + ' : paiement comptant', document_id: d.id }]);
+    if (du > 0) await sb.from('paiements').insert([{ date_paiement: d.date_doc || today(), sens: fac ? 'encaissement' : 'reglement', contact_id: d.contact_id, contact_nom: c ? lbl(c) : d.contact_nom, montant: du, mode: 'especes', reference: d.numero, note: TYPES[d.type].l + ' ' + d.numero + ' : paiement comptant', document_id: d.id }]);
     if (window.PayAPI) await PayAPI.load();
   }
 
@@ -378,7 +382,7 @@
     const ls = ed.lignes.filter(l => String(l.designation).trim() || num(l.quantite) > 0);
     if (!ls.length) { say('Ajoutez au moins une ligne.'); return false; }
     if (ls.some(l => !String(l.designation).trim())) { say('Chaque ligne doit avoir une désignation.'); return false; }
-    const row = { type: d.type, numero: d.numero, date_doc: d.date_doc, echeance: d.echeance, paiement: d.paiement || 'terme', contact_id: d.contact_id, contact_nom: d.contact_nom, statut: d.statut, source_id: d.source_id, commande_id: d.commande_id, tva_taux: d.tva_taux, remise: r2(d.remise), notes: d.notes };
+    const row = { type: d.type, numero: d.numero, date_doc: d.date_doc, echeance: d.echeance, paiement: d.paiement || 'terme', contact_id: d.contact_id, contact_nom: d.contact_nom, statut: d.statut, source_id: d.source_id, commande_id: d.commande_id, tva_taux: d.tva_taux, remise: r2(d.remise), notes: d.notes, ref_externe: d.ref_externe || '' };
     let id = d.id;
     if (id) { const u = await sb.from('documents').update(row).eq('id', id); if (u.error) { say('Erreur : ' + u.error.message); return false; } }
     else { const i = await sb.from('documents').insert([row]).select(); if (i.error || !i.data || !i.data[0]) { say('Erreur : ' + ((i.error && i.error.message) || 'enregistrement impossible')); return false; } id = i.data[0].id; d.id = id; }
@@ -474,12 +478,14 @@
   async function bonEnFacture() {
     if (!(await enregistrer(true))) return;
     const d = ed.doc;
-    const base = { contact_id: d.contact_id, contact_nom: d.contact_nom, tva_taux: d.tva_taux, remise: d.remise, notes: 'Bon de livraison ' + d.numero + (d.notes ? ' — ' + d.notes : ''), source_id: d.id };
+    const base = { contact_id: d.contact_id, contact_nom: d.contact_nom, tva_taux: d.tva_taux, remise: d.remise, paiement: d.paiement || 'terme', notes: 'Bon de livraison ' + d.numero + (d.notes ? ' — ' + d.notes : ''), source_id: d.id };
     // pièces déjà sorties du stock par le bon : la facture ne les sort pas une deuxième fois
     const lig = ed.lignes.map(l => Object.assign({}, l, { id: null, quantite_recue: l.produit_id ? num(l.quantite) : 0 }));
     const src = d.id; tab = 'facture'; nouveauDoc('facture', base); ed.lignes = lig; render();
     if (!(await enregistrer(true))) return;
     await sb.from('documents').update({ statut: 'facture' }).eq('id', src);
+    for (const x of pays().filter(y => String(y.document_id) === String(src))) await sb.from('paiements').update({ document_id: ed.doc.id }).eq('id', x.id);      // les versements du bon passent sur la facture
+    if (window.PayAPI) await PayAPI.load();
     await load(true); say('Facture ' + ed.doc.numero + ' créée à partir du bon de livraison (le stock n’est pas sorti une deuxième fois).'); render();
   }
   async function devisEnFacture() {
@@ -515,12 +521,12 @@
   /* ---------- Paiement et réception ---------- */
   async function payer() {
     lireEntete();
-    const doc = ed.doc, m = num($('#cm-pm').value), fac = doc.type === 'facture';
+    const doc = ed.doc, m = num($('#cm-pm').value), fac = encaisse(doc);
     if (!(m > 0)) { say('Indiquez un montant supérieur à 0.'); return; }
     const reste = r2(totaux(doc, ed.lignes).ttc - payeDoc(doc));
     if (m > reste + 0.004 && !confirm('Ce montant dépasse le reste à ' + (fac ? 'encaisser' : 'payer') + ' (' + money(reste) + '). Continuer ?')) return;
     const c = cById(doc.contact_id);
-    const r = await sb.from('paiements').insert([{ date_paiement: $('#cm-pd').value || today(), sens: fac ? 'encaissement' : 'reglement', contact_id: doc.contact_id, contact_nom: c ? lbl(c) : doc.contact_nom, montant: r2(m), mode: $('#cm-pmode').value, reference: $('#cm-pref').value.trim() || doc.numero, note: (fac ? 'Facture ' : 'Bon de commande ') + doc.numero, document_id: doc.id }]);
+    const r = await sb.from('paiements').insert([{ date_paiement: $('#cm-pd').value || today(), sens: fac ? 'encaissement' : 'reglement', contact_id: doc.contact_id, contact_nom: c ? lbl(c) : doc.contact_nom, montant: r2(m), mode: $('#cm-pmode').value, reference: $('#cm-pref').value.trim() || doc.numero, note: TYPES[doc.type].l + ' ' + doc.numero, document_id: doc.id }]);
     if (r.error) { say('Erreur : ' + r.error.message); return; }
     payForm = null; if (window.PayAPI) await PayAPI.load(); say((fac ? 'Encaissement' : 'Règlement') + ' enregistré : ' + money(m)); render();
   }
@@ -560,7 +566,7 @@
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(pdfT(T.l.toUpperCase()), W - M, 17, { align: 'right' });
     doc.setFontSize(11); doc.text(pdfT('N° ' + d.numero), W - M, 24, { align: 'right' });
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.text(pdfT('Date : ' + fd(d.date_doc)), W - M, 30, { align: 'right' });
-    if (fac || d.type === 'bon_commande') doc.text(pdfT('Paiement : ' + ({ cash: 'Cash', terme: 'A terme', versement: 'Versement' })[d.paiement || 'terme']), W - M, d.echeance ? 40 : 35, { align: 'right' });
+    if (fac || d.type === 'bon_commande' || isBon(d.type)) doc.text(pdfT('Paiement : ' + ({ cash: 'Cash', terme: 'A terme', versement: 'Versement' })[d.paiement || 'terme']), W - M, d.echeance ? 40 : 35, { align: 'right' });
     if (d.echeance && !isBon(d.type)) doc.text(pdfT((d.type === 'devis' ? 'Valable jusqu\'au : ' : fac ? 'Echeance : ' : 'Livraison prevue : ') + fd(d.echeance)), W - M, 35, { align: 'right' });
     doc.setDrawColor(0); doc.setLineWidth(0.6); doc.line(M, 44, W - M, 44);
     const bonP = isBon(d.type), brP = d.type === 'bon_reception';
@@ -570,7 +576,7 @@
     const lignesP = ed.lignes.filter(l => String(l.designation).trim());
     const body = bonP ? lignesP.map((l, i) => [i + 1, l.ref || '', l.designation, nf(l.quantite, 2) + (brP || l.unite !== 'pcs' ? ' ' + l.unite : ' pcs'), nf(l.prix_unitaire, 2), nf(r2(num(l.quantite) * num(l.prix_unitaire)), 2)].map(pdfT))
       : lignesP.map((l, i) => [i + 1, l.designation, nf(l.quantite, 2) + (d.type === 'bon_commande' ? ' ' + l.unite : ''), nf(l.prix_unitaire, 2), nf(r2(num(l.quantite) * num(l.prix_unitaire)), 2)].map(pdfT));
-    doc.autoTable({ startY: 67, margin: { left: M, right: M, bottom: 30 }, head: [(bonP ? ['N°', 'Ref.', 'Designation', 'Quantite', 'Prix unitaire (DA)', 'Montant (DA)'] : ['N°', 'Designation', 'Quantite', 'Prix unitaire (DA)', 'Montant (DA)']).map(pdfT)], body, theme: 'grid',
+    doc.autoTable({ startY: d.ref_externe ? 70 : 67, margin: { left: M, right: M, bottom: 30 }, head: [(bonP ? ['N°', 'Ref.', 'Designation', 'Quantite', 'Prix unitaire (DA)', 'Montant (DA)'] : ['N°', 'Designation', 'Quantite', 'Prix unitaire (DA)', 'Montant (DA)']).map(pdfT)], body, theme: 'grid',
       styles: { font: 'helvetica', fontSize: 9.5, cellPadding: 2.6, textColor: 0, lineColor: 120, lineWidth: 0.15 }, headStyles: { fillColor: [0, 0, 0], textColor: 255 },
       columnStyles: bonP ? { 0: { cellWidth: 10 }, 1: { cellWidth: 24 }, 3: { halign: 'right', cellWidth: 26 }, 4: { halign: 'right', cellWidth: 32 }, 5: { halign: 'right', cellWidth: 32 } }
         : { 0: { cellWidth: 10 }, 2: { halign: 'right', cellWidth: 28 }, 3: { halign: 'right', cellWidth: 36 }, 4: { halign: 'right', cellWidth: 34 } } });
@@ -578,7 +584,8 @@
     const ligne = (l, v, bold) => { doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(bold ? 11 : 9.5); doc.text(pdfT(l), W - M - 62, y); doc.text(pdfT(v), W - M, y, { align: 'right' }); y += bold ? 7 : 5.5; };
     ligne('Sous-total', nf(t.sous, 2) + ' DA'); if (t.remise) ligne('Remise', '- ' + nf(t.remise, 2) + ' DA'); ligne('Total HT', nf(t.ht, 2) + ' DA'); if (Number(d.tva_taux)) ligne('TVA ' + nf(d.tva_taux, 2) + ' %', nf(t.tva, 2) + ' DA');
     doc.setDrawColor(0); doc.line(W - M - 64, y - 3.5, W - M, y - 3.5); ligne('TOTAL TTC', nf(t.ttc, 2) + ' DA', true);
-    if (fac && d.id) { const p = payeDoc(d); if (p > 0) { ligne('Deja regle', nf(p, 2) + ' DA'); ligne('Reste a payer', nf(Math.max(0, r2(t.ttc - p)), 2) + ' DA', true); } }
+    if (d.ref_externe) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(pdfT((d.type === 'bon_reception' ? 'Facture fournisseur : ' : 'Ref. client : ') + d.ref_externe), M, 65.5); }
+    if ((fac || isBon(d.type)) && d.id) { const p = payeDoc(d); if (p > 0) { ligne('Deja regle', nf(p, 2) + ' DA'); ligne('Reste a payer', nf(Math.max(0, r2(t.ttc - p)), 2) + ' DA', true); } }
     y += 3; doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
     const phrase = (fac ? 'Arretee la presente facture a la somme de : ' : d.type === 'devis' ? 'Arrete le present devis a la somme de : ' : d.type === 'bon_livraison' ? 'Arrete le present bon de livraison a la somme de : ' : brP ? 'Arrete le present bon de reception a la somme de : ' : 'Arrete le present bon de commande a la somme de : ') + montantLettres(t.ttc) + '.';
     doc.text(doc.splitTextToSize(pdfT(phrase), W - 2 * M), M, y); y += 12;
@@ -598,7 +605,7 @@
   document.addEventListener('click', async e => {
     const root = $('#cm-root'); if (!root || !root.contains(e.target)) return;
     const t = e.target;
-    const tb = t.closest('#cm-tabs [data-t]'); if (tb) { tab = tb.dataset.t; filtre = ''; fromLiv = false; render(); return; }
+    const tb = t.closest('#cm-tabs [data-t]'); if (tb) { tab = tb.dataset.t; filtre = ''; fromLiv = false; if (tab === 'journal' && window.CommerceFin) CommerceFin.invalider(); render(); return; }
     if (t.closest('#cm-new')) { nouveauDoc(tab); payForm = recForm = null; render(); return; }
     if (t.closest('#cm-liv')) { fromLiv = true; render(); return; }
     if (t.closest('#cm-livno')) { fromLiv = false; render(); return; }
