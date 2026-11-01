@@ -42,3 +42,8 @@
   #inv-root .iv-in input.iv-q{width:70px}
   #inv-root .iv-in input.iv-p{width:104px}
 }
+.iv-res{margin-bottom:14px}
+.iv-verdict{font:700 22px Georgia,serif;padding:14px 16px;border-radius:12px;margin:0 0 12px}
+.iv-verdict small{display:block;font:400 13px system-ui,sans-serif;color:var(--mut);margin-top:4px}
+.iv-verdict.ok{background:var(--gb);color:var(--g)}
+.iv-verdict.ko{background:var(--rb);color:var(--r)}

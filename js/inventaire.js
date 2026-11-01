@@ -33,7 +33,7 @@
   const ORDRE = ['matiere', 'produit_fini', 'client', 'employe_creance', 'autre_actif', 'fournisseur', 'employe_dette', 'autre_passif'];
   const STOCKS = ['matiere', 'produit_fini'];
 
-  let INV = [], LIG = [], err = '', sel = null, onglet = 'resume', nouveau = false;
+  let INV = [], LIG = [], CHG = [], err = '', sel = null, onglet = 'resume', nouveau = false;
   let cmp = { a: '', b: '', sec: 'matiere' };
   const dirty = new Set();
   let timer = null, saveMsg = '';
@@ -74,6 +74,7 @@
     if (r.error) { err = /does not exist|relation|schema cache/i.test(r.error.message) ? 'Tables « inventaires » introuvables dans Supabase. Exécutez supabase/inventaire.sql dans SQL Editor, puis rechargez la page.' : r.error.message; INV = []; LIG = []; render(); return; }
     const l = await sb.from('inventaire_lignes').select('*').order('ordre', { ascending: true });
     err = ''; INV = r.data || []; LIG = l.data || [];
+    try { const ch = await sb.from('charges').select('date_charge,montant,categorie'); CHG = ch.error ? [] : (ch.data || []); } catch (e) { CHG = []; }
     if (sel && !inv(sel)) sel = null;
     render();
     // inventaires en cours : on ajoute les éléments créés dans le Stock depuis leur création
@@ -145,6 +146,7 @@
       }
       nouveau = false; sel = id; onglet = 'resume';
       await load(true);
+      await majFinancier(id, true);
       say('Inventaire créé : ' + rows.filter(r => STOCKS.includes(r.section)).length + ' éléments et produits à compter.');
     } finally { btn.disabled = false; btn.textContent = 'Créer l’inventaire'; }
   }
@@ -176,11 +178,68 @@
     } finally { completant = false; }
   }
 
+  /* ---------- Créances et dettes calculées par la plateforme ----------
+     Crédits (prêts donnés = créance, prêts reçus = dette), soldes clients et fournisseurs, reste à payer aux ateliers,
+     crédit personnel des employés (avance) et heures sup à leur remettre (dette). */
+  async function financier() {
+    const L = [], cle = (sec, ref, tag) => sec + '|' + (ref || '') + '|' + (tag || '');
+    const add = (section, ref_id, libelle, detail, montant, note) => { montant = r2(montant); if (Math.abs(montant) < 0.005) return; L.push({ k: cle(section, ref_id, detail), section, ref_id: ref_id || null, libelle, detail, montant, note: note || 'Calculé par la plateforme' }); };
+    try { if (window.PayAPI && PayAPI.load) await PayAPI.load(); } catch (e) {}
+    if (window.PayAPI) {
+      PayAPI.soldes('client').filter(x => x.id && x.solde > 0.004).forEach(x => add('client', x.id, x.nom, 'Client', x.solde));
+      PayAPI.soldes('fournisseur').filter(x => x.id && x.solde > 0.004).forEach(x => add('fournisseur', x.id, x.nom, 'Fournisseur', x.solde));
+      PayAPI.soldes('fournisseur').filter(x => x.id && x.solde < -0.004).forEach(x => add('autre_actif', x.id, 'Avance chez ' + x.nom, 'Avance fournisseur', -x.solde));
+    }
+    // crédits (prêts) : donnés et reçus, séparément
+    let CR = []; try { const r = await sb.from('credits_tiers').select('*'); CR = r.error ? [] : (r.data || []); } catch (e) {}
+    const per = new Map();
+    CR.forEach(o => { const k = o.contact_id ? 'c' + o.contact_id : 'n' + norm(o.personne); const x = per.get(k) || { id: o.contact_id || null, nom: o.personne || '—', d: 0, r: 0 }; const m = Number(o.montant) || 0;
+      if (o.nature === 'pret_donne') x.d += m; else if (o.nature === 'remb_recu') x.d -= m; else if (o.nature === 'pret_recu') x.r += m; else if (o.nature === 'remb_fait') x.r -= m;
+      if (o.contact_id && typeof D !== 'undefined') { const c = D.find(y => String(y.id) === String(o.contact_id)); if (c && window.PartAPI) x.nom = PartAPI.label(c); } per.set(k, x); });
+    per.forEach(x => { if (x.d > 0.004) add('autre_actif', x.id, 'Prêt accordé — ' + x.nom, 'Crédit (prêt)', x.d); if (x.r > 0.004) add('autre_passif', x.id, 'Prêt reçu — ' + x.nom, 'Crédit (prêt)', x.r); });
+    // ateliers : façon due − paiements
+    try {
+      const pa = await sb.from('paiements_ateliers').select('*'), PA = pa.error ? [] : (pa.data || []);
+      (typeof ATELIERS !== 'undefined' ? ATELIERS : []).forEach(a => {
+        const du = (typeof PRODUCTIONS !== 'undefined' ? PRODUCTIONS : []).filter(p => String(p.atelier_id) === String(a.id) && p.statut !== 'Annulée').reduce((t, p) => t + (Number(p.prix_facon) || 0) * (Number(p.quantite_lancee) || 0), 0);
+        const mine = PA.filter(x => String(x.atelier_id) === String(a.id)), rep2 = mine.filter(x => x.type === 'report').reduce((t, x) => t + Number(x.montant || 0), 0), paye = mine.filter(x => x.type !== 'report').reduce((t, x) => t + Number(x.montant || 0), 0);
+        const reste = du + rep2 - paye;
+        if (reste > 0.004) add('fournisseur', a.id, 'Atelier ' + a.nom, 'Atelier (façon)', reste); else if (reste < -0.004) add('autre_actif', a.id, 'Avance à l’atelier ' + a.nom, 'Atelier (façon)', -reste);
+      });
+    } catch (e) {}
+    // employés : avances (crédit personnel) et heures sup à remettre
+    (typeof EMPLOYES !== 'undefined' ? EMPLOYES : []).forEach(e => {
+      const n = [e.prenom, e.nom].filter(Boolean).join(' ');
+      try { const c = soldeCredit(e.id); if (c > 0.004) add('employe_creance', e.id, n, e.poste || '', c, 'Crédit personnel à rembourser'); } catch (x) {}
+      try { const h = soldeSup(e); if (h > 0.004) add('employe_dette', e.id, n, e.poste || '', h, 'Heures sup à remettre'); } catch (x) {}
+    });
+    return L;
+  }
+  async function majFinancier(id, silencieux) {
+    const i = inv(id); if (ro(i)) return;
+    if (!silencieux && !confirm('Mettre à jour les créances et dettes de « ' + i.nom + ' » ?\n\nCrédits (prêts), soldes clients et fournisseurs, ateliers, crédits et heures sup des employés sont recalculés par la plateforme. Les lignes saisies à la main ne sont pas touchées.')) return;
+    await flush();
+    const L = await financier(), mine = linesOf(id).filter(l => !STOCKS.includes(l.section));
+    const k = l => l.section + '|' + (l.ref_id || '') + '|' + (['client', 'fournisseur', 'autre_actif', 'autre_passif'].includes(l.section) ? (l.detail || '') : '');
+    let n = 0, o = Math.max(-1, ...linesOf(id).map(l => Number(l.ordre) || 0)) + 1;
+    for (const x of L) {
+      const key = x.section + '|' + (x.ref_id || '') + '|' + (['client', 'fournisseur', 'autre_actif', 'autre_passif'].includes(x.section) ? x.detail : '');
+      const ex = mine.find(l => k(l) === key);
+      if (ex) { if (Math.abs((Number(ex.montant) || 0) - x.montant) > 0.004) { const r = await sb.from('inventaire_lignes').update({ montant: x.montant, libelle: x.libelle, note: x.note }).eq('id', ex.id); if (!r.error) { Object.assign(ex, { montant: x.montant, libelle: x.libelle, note: x.note }); n++; } } }
+      else { const r = await sb.from('inventaire_lignes').insert([{ inventaire_id: id, ordre: o++, section: x.section, ref_id: x.ref_id, libelle: x.libelle, detail: x.detail, montant: x.montant, note: x.note }]).select(); if (!r.error && r.data) { LIG.push(r.data[0]); n++; } }
+    }
+    // lignes calculées auparavant et désormais soldées : remises à 0
+    for (const l of mine) { if (/Calculé par la plateforme|Crédit personnel à rembourser|Heures sup à remettre/.test(l.note || '') && !L.some(x => (x.section + '|' + (x.ref_id || '') + '|' + (['client', 'fournisseur', 'autre_actif', 'autre_passif'].includes(x.section) ? x.detail : '')) === k(l)) && Number(l.montant)) {
+      const r = await sb.from('inventaire_lignes').update({ montant: 0 }).eq('id', l.id); if (!r.error) { l.montant = 0; n++; } } }
+    render();
+    if (!silencieux) { const t = totaux(linesOf(id)); say(n + ' ligne(s) de créances / dettes mises à jour — actifs ' + money(t.actifs) + ', passifs ' + money(t.passifs) + '.'); }
+  }
+
   /* Synchroniser avec le Stock actuel : chaque élément et produit fini de l'inventaire prend la quantité et le prix du Stock
      (« Selon la plateforme » ET « Compté »). Sert à faire l'inventaire de départ juste après avoir rempli le Stock. */
   async function synchroniserStock() {
     const i = inv(sel); if (ro(i)) return;
-    if (!confirm('Synchroniser « ' + i.nom + ' » avec le Stock actuel ?\n\nPour chaque élément et chaque produit fini :\n• la quantité comptée devient le stock actuel de la plateforme ;\n• le prix devient le prix actuel du Stock.\n\nLes quantités déjà saisies dans l’inventaire seront remplacées.')) return;
+    if (!confirm('Synchroniser « ' + i.nom + ' » avec le Stock actuel ?\n\nPour chaque élément et chaque produit fini :\n• la quantité comptée devient le stock actuel de la plateforme ;\n• le prix devient le prix actuel du Stock.\n\nLes quantités déjà saisies dans l’inventaire seront remplacées.\n\n⚠ Le stock ACTUEL est repris, y compris les réceptions faites après la date de l’inventaire (' + fd(i.date_inventaire) + ').')) return;
     await flush();
     if (window.StockAPI) await StockAPI.load();
     if (window.PFAPI) await PFAPI.load();
@@ -378,9 +437,36 @@
     return paneAutres(i, lines, clos);
   }
 
+  /* Résultat de l'année : valeur nette de cet inventaire − valeur nette de l'inventaire précédent (clôturé),
+     avec le détail de l'activité de la période (chiffre d'affaires, coût des produits vendus, marge, achats, charges). */
+  function resultatAnnee(i, lines) {
+    const prev = precedent(i.date_inventaire, i.id), t = totaux(lines);
+    if (!prev) return '<div class="card iv-res"><h2 style="margin-top:0">Inventaire d’ouverture</h2><p class="iv-help" style="margin:0">C’est le <b>point de départ</b> : valeur nette de départ <b>' + money(t.net) + '</b>. À l’inventaire suivant (dans un an), la plateforme comparera les deux et vous dira si vous avez <b>gagné ou perdu</b>, avec votre chiffre d’affaires de l’année.</p></div>';
+    const tp = totaux(linesOf(prev.id)), varia = r2(t.net - tp.net), P = { depuis: prev.date_inventaire, jusqua: i.date_inventaire };
+    const ops = window.PartAPI ? PartAPI.ops(P) : [], ventes = r2(ops.filter(o => o.sens === 'vente').reduce((x, o) => x + o.montant, 0)), achats = r2(ops.filter(o => o.sens === 'achat').reduce((x, o) => x + o.montant, 0));
+    let cpv = 0, sans = 0;
+    if (window.PFAPI) { const pr = new Map(PFAPI.produits().map(p => [String(p.id), p])); PFAPI.mouvements().forEach(m => { const d = String(m.date_mvt || ''); if ((m.type !== 'livraison' && m.type !== 'retour') || d <= P.depuis || d > P.jusqua) return; const p = pr.get(String(m.produit_id)), c = p ? Number(PFAPI.coutProduit(p)) || 0 : 0; if (!c) sans++; cpv += c * -(Number(m.quantite) || 0); }); }
+    cpv = r2(cpv);
+    const charges = r2(CHG.filter(c => String(c.date_charge) > P.depuis && String(c.date_charge) <= P.jusqua).reduce((x, c) => x + Number(c.montant || 0), 0));
+    const gagne = varia >= 0;
+    const lig = (a, b, cls) => '<tr><td>' + a + '</td><td class="n' + (cls ? ' ' + cls : '') + '">' + b + '</td></tr>';
+    return '<div class="card iv-res"><h2 style="margin-top:0">Résultat de l’année : ' + esc(prev.nom) + ' → ' + esc(i.nom) + '</h2>' +
+      '<div class="iv-verdict ' + (gagne ? 'ok' : 'ko') + '">' + (gagne ? '✔ Vous avez GAGNÉ ' : '✘ Vous avez PERDU ') + money(Math.abs(varia)) + '<small>valeur nette : ' + money(tp.net) + ' (' + fd(prev.date_inventaire) + ') → ' + money(t.net) + ' (' + fd(i.date_inventaire) + ')</small></div>' +
+      '<div class="tw"><table class="iv-tbl"><tbody>' +
+      lig('<b>Chiffre d’affaires de la période</b> (ventes − retours − remises)', '<b>' + money(ventes) + '</b>') +
+      lig('Coût des produits vendus (prix d’achat ou de fabrication)' + (sans ? ' <small>⚠ ' + sans + ' vente(s) sans coût</small>' : ''), '− ' + money(cpv)) +
+      lig('<b>Marge sur les ventes</b>', '<b>' + money(r2(ventes - cpv)) + '</b>' + (ventes ? ' <small>(' + Math.round((ventes - cpv) / ventes * 100) + ' %)</small>' : ''), ventes - cpv >= 0 ? 'py-av' : 'py-due') +
+      lig('Achats de la période (matières, produits)', money(achats)) +
+      lig('Charges de la période (paie, loyer, électricité…)', money(charges)) +
+      lig('Évolution du stock (éléments + produits finis)', money(r2(t.par.matiere + t.par.produit_fini - tp.par.matiere - tp.par.produit_fini))) +
+      lig('Évolution des créances (clients, prêts accordés, avances)', money(r2(t.par.client + t.par.employe_creance + t.par.autre_actif - tp.par.client - tp.par.employe_creance - tp.par.autre_actif))) +
+      lig('Évolution des dettes (fournisseurs, ateliers, prêts reçus)', money(r2(t.passifs - tp.passifs))) +
+      '<tr class="iv-tot iv-net"><td>RÉSULTAT DE L’ANNÉE (variation de la valeur nette)</td><td class="n">' + (gagne ? '+ ' : '− ') + money(Math.abs(varia)) + '</td></tr></tbody></table></div>' +
+      '<p class="iv-help">Le résultat est la différence entre ce que possède l’atelier (stock, créances, trésorerie) moins ce qu’il doit, d’un inventaire à l’autre. Si vous avez retiré de l’argent pour vous-même ou en avez apporté pendant l’année, tenez-en compte.</p></div>';
+  }
   function paneResume(i, lines) {
     const t = totaux(lines), clos = ro(i), nc = nonComptes(lines);
-    let h = '<div class="at-actions" style="margin-top:0"><h2 style="margin:0 auto 0 0">Résumé détaillé</h2>' + (clos ? '' : '<button class="btn s p" type="button" id="inv-sync">↻ Synchroniser avec le Stock actuel</button>') + '</div><div class="tw"><table class="iv-tbl"><thead><tr><th>Rubrique</th><th class="n">Lignes</th><th class="n">Montant</th></tr></thead><tbody>';
+    let h = resultatAnnee(i, lines) + '<div class="at-actions" style="margin-top:0"><h2 style="margin:0 auto 0 0">Résumé détaillé</h2>' + (clos ? '' : '<button class="btn s p" type="button" id="inv-sync">↻ Synchroniser avec le Stock actuel</button><button class="btn s" type="button" id="inv-fin">↻ Mettre à jour créances et dettes</button>') + '</div><div class="tw"><table class="iv-tbl"><thead><tr><th>Rubrique</th><th class="n">Lignes</th><th class="n">Montant</th></tr></thead><tbody>';
     h += '<tr class="iv-sec"><td colspan="3">ACTIFS</td></tr>' + ORDRE.filter(s => SEC[s].actif).map(s => '<tr><td>' + SEC[s].l + '</td><td class="n">' + lines.filter(l => l.section === s).length + '</td><td class="n">' + money(t.par[s]) + '</td></tr>').join('') +
       '<tr class="iv-tot"><td colspan="2">Total des actifs</td><td class="n">' + money(t.actifs) + '</td></tr>' +
       '<tr class="iv-sec"><td colspan="3">PASSIFS</td></tr>' + ORDRE.filter(s => !SEC[s].actif).map(s => '<tr><td>' + SEC[s].l + '</td><td class="n">' + lines.filter(l => l.section === s).length + '</td><td class="n">' + money(t.par[s]) + '</td></tr>').join('') +
@@ -635,6 +721,7 @@
     if (t.closest('#inv-fiche')) { ficheComptage(); return; }
     const same = t.closest('[data-same]');
     if (same) { const l = ligne(same.dataset.same); if (l && l.quantite_theorique != null) { l.quantite = Math.max(0, l.quantite_theorique); recalc(l); dirty.add(String(l.id)); schedule(); render(); } return; }
+    if (t.closest('#inv-fin')) { const b = t.closest('#inv-fin'); b.disabled = true; try { await majFinancier(sel); } finally { b.disabled = false; } return; }
     if (t.closest('#inv-sync')) { const b = t.closest('#inv-sync'); b.disabled = true; b.textContent = 'Synchronisation…'; try { await synchroniserStock(); } finally { b.disabled = false; } return; }
     if (t.closest('#inv-same')) {
       const ls = linesOf(sel).filter(l => l.section === onglet && l.quantite == null && l.quantite_theorique != null);
