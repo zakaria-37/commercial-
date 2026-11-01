@@ -58,6 +58,13 @@ function besoin(c, N) {
   if (UNITES_ENTIERES.includes(c.unite)) return Math.ceil(brut);
   return Math.ceil(round6(brut * 100)) / 100;
 }
+/* Quantité à sortir exprimée aussi en rouleaux (bobines, paquets…) pour le chef de dépôt : « (0,44 rouleau) » */
+function enCond(c, N) {
+  const a = articleDe(c); if (!a || !window.StockAPI || !StockAPI.aCond(a)) return '';
+  const base = StockAPI.toBase(a, besoin(c, N), c.unite); if (base == null) return '';
+  const nb = base / StockAPI.condQte(a), entiers = Math.floor(nb + 1e-9), reste = base - entiers * StockAPI.condQte(a);
+  return fmtN(nb, 2) + ' ' + StockAPI.plur(a.cond_nom, nb) + (entiers >= 1 && reste > 1e-6 ? ' = ' + entiers + ' ' + StockAPI.plur(a.cond_nom, entiers) + ' + ' + fmtN(reste, 2) + ' ' + a.unite : '');
+}
 function fmtBesoin(c, N) { return fmtN(besoin(c, N), UNITES_ENTIERES.includes(c.unite) ? 0 : 2); }
 function modeleCourant() { return MODELES.find(m => String(m.id) === String(selModele)) || null; }
 function composantsDe(id) { return COMPOSANTS.filter(c => String(c.modele_id) === String(id)); }
@@ -450,7 +457,7 @@ function imprimerBon() {
   const rows = b.list.map((c, i) =>
     '<tr><td class="c">' + (i + 1) + '</td><td><b>' + escP(c.nom) + '</b>' + (c.note ? '<small>' + escP(c.note) + '</small>' : '') + '</td>' +
     '<td class="c">' + escP(c.unite) + '</td><td class="c">' + fmtN(c.quantite, 4) + '</td>' +
-    '<td class="bon-qte">' + fmtBesoin(c, b.N) + ' ' + escP(c.unite) + '</td><td class="bon-box"></td><td class="bon-box"></td></tr>').join('');
+    '<td class="bon-qte">' + fmtBesoin(c, b.N) + ' ' + escP(c.unite) + (enCond(c, b.N) ? '<small>(' + escP(enCond(c, b.N)) + ')</small>' : '') + '</td><td class="bon-box"></td><td class="bon-box"></td></tr>').join('');
   $p('#bon-print').innerHTML =
     '<div class="bon-head"><img src="icons/icon-192.png" alt=""><div><h1>BON DE SORTIE DE MATIÈRES</h1><p>Dépôt → Atelier · MARIA BAG</p></div>' +
     '<div class="bon-num">N° ' + escP(b.num || '—') + '<br>' + fdP(b.date) + '</div></div>' +
@@ -474,7 +481,7 @@ function imprimerBon() {
 /* jsPDF n'affiche que les caractères latins : on nettoie le texte (espaces insécables des nombres, apostrophes, flèches…) */
 function pdfTxt(v) {
   return String(v ?? '')
-    .replace(/[\u202f\u00a0]/g, ' ')
+    .replace(/[\u202f\u00a0]/g, ' ').replace(/œ/g, 'oe').replace(/Œ/g, 'OE')
     .replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
     .replace(/\u2026/g, '...').replace(/[\u2013\u2014]/g, '-').replace(/\u2192/g, '->')
     .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u00FF]/g, '?');
@@ -530,7 +537,7 @@ function creerPdf(b) {
     startY: 70, margin: { left: M, right: M, bottom: 18 },
     head: [['N°', 'Désignation', 'Unité', 'Qté par pièce', 'Quantité à sortir', 'Sorti du dépôt', 'Reçu à l\'atelier'].map(pdfTxt)],
     body: b.list.map((c, i) => [i + 1, c.nom + (c.note ? '\n' + c.note : ''), c.unite, pdfNum(c.quantite, 4),
-                                pdfTxt(fmtBesoin(c, N)) + ' ' + pdfTxt(c.unite), '', '']).map(r => r.map(pdfTxt)),
+                                pdfTxt(fmtBesoin(c, N)) + ' ' + pdfTxt(c.unite) + (enCond(c, N) ? '\n(' + enCond(c, N) + ')' : ''), '', '']).map(r => r.map(pdfTxt)),
     theme: 'grid', rowPageBreak: 'avoid',
     styles: { font: 'helvetica', fontSize: 10, cellPadding: 3, textColor: 0, lineColor: 0, lineWidth: 0.2, valign: 'middle', minCellHeight: 11 },
     headStyles: { fillColor: [235, 235, 235], textColor: 0, fontStyle: 'bold', halign: 'center', fontSize: 8.5 },
@@ -597,7 +604,7 @@ function exportBon() {
     ['N° du bon', b.num], ['Date', fdP(b.date)], ['Produit', b.m.nom], ['Quantité à fabriquer', b.N],
     ['Atelier destinataire', b.atelier], ['Chef d’atelier', b.chef], [],
     ['N°', 'Désignation', 'Unité', 'Quantité par pièce', 'Marge de chute (%)', 'Quantité à sortir', 'Sorti du dépôt', 'Reçu à l’atelier']
-  ].concat(b.list.map((c, i) => [i + 1, c.nom, c.unite, Number(c.quantite), Number(c.perte_pct) || 0, besoin(c, b.N), '', '']));
+  ].concat(b.list.map((c, i) => [i + 1, c.nom, c.unite, Number(c.quantite), Number(c.perte_pct) || 0, besoin(c, b.N) + (enCond(c, b.N) ? ' (' + enCond(c, b.N) + ')' : ''), '', '']));
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [{ wch: 6 }, { wch: 34 }, { wch: 9 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 16 }];
   const wb = XLSX.utils.book_new();
