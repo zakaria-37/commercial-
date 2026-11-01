@@ -574,6 +574,86 @@
 
   /* ---------- PDF ---------- */
   const pdfT = s => String(s ?? '').replace(/œ/g, 'oe').replace(/Œ/g, 'OE').replace(/[  ]/g, ' ');
+  /* ---------- PDF professionnel des bons (livraison, réception) et de la facture d'un bon ----------
+     En-tête avec logo et coordonnées, cadre titre (n°, date), cadres client / détails, tableau à lignes alternées,
+     total des pièces, totaux, montant en lettres, état du paiement, signatures, pied de page légal et pagination. */
+  function pdfBon(asFacture) {
+    if (!(window.jspdf && window.jspdf.jsPDF)) { say('Bibliothèque PDF non chargée.'); return; }
+    lireEntete();
+    const d = ed.doc, br = d.type === 'bon_reception', asF = !!asFacture && d.type === 'bon_livraison';
+    const titre = asF ? 'FACTURE' : br ? 'BON DE RÉCEPTION' : 'BON DE LIVRAISON';
+    const t = totaux(d, ed.lignes), c = cById(d.contact_id), lignes = ed.lignes.filter(l => String(l.designation).trim());
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), M = 14, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    const N = [17, 17, 17], ROSE = [217, 168, 178], GRIS = [110, 110, 110], FOND = [247, 243, 244];
+    const T = s => pdfT(s).replace(/[  ]/g, ' ').replace(/\u2212/g, '-');
+    const m2 = n => nf(n, 2).replace(/[  ]/g, ' ');
+    // bandeau supérieur
+    doc.setFillColor(...N); doc.rect(0, 0, W, 4, 'F'); doc.setFillColor(...ROSE); doc.rect(0, 4, W, 1.2, 'F');
+    if (typeof LOGO_PDF !== 'undefined' && LOGO_PDF) doc.addImage(LOGO_PDF, 'PNG', M, 11, 24, 24);
+    doc.setTextColor(...N); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(T(ENT.nom || 'MARIA BAG'), M + 28, 17);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.3); doc.setTextColor(...GRIS);
+    [ENT.forme, [ENT.adresse, ENT.ville].filter(Boolean).join(', '), [ENT.tel && 'Tél : ' + ENT.tel, ENT.email].filter(Boolean).join('   ·   ')].filter(Boolean).forEach((l, i) => doc.text(T(l), M + 28, 22.5 + i * 4.2));
+    // cadre titre
+    const bw = 74, bx = W - M - bw;
+    doc.setFillColor(...N); doc.roundedRect(bx, 10, bw, 14, 2, 2, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(titre.length > 16 ? 13 : 15); doc.text(T(titre), bx + bw / 2, 19, { align: 'center' });
+    doc.setTextColor(...N); doc.setFontSize(10.5); doc.text(T('N° ' + d.numero), bx + bw / 2, 30, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GRIS); doc.text(T('Date : ' + fd(d.date_doc)), bx + bw / 2, 35, { align: 'center' });
+    // cadres client / détails
+    const y0 = 43, hb = 33, cw = (W - 2 * M - 6) / 2;
+    const cadre = (x, lib) => { doc.setFillColor(...FOND); doc.setDrawColor(225); doc.roundedRect(x, y0, cw, hb, 2, 2, 'FD'); doc.setFillColor(...ROSE); doc.rect(x, y0 + 3, 1.3, hb - 6, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.8); doc.setTextColor(...GRIS); doc.text(T(lib), x + 5, y0 + 6); };
+    cadre(M, br ? 'FOURNISSEUR / PROVENANCE' : asF ? 'FACTURÉ À' : 'LIVRÉ À');
+    doc.setTextColor(...N); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+    const nom = c ? lbl(c) : (d.contact_nom || (br ? 'Fabrication interne' : ''));
+    doc.text(doc.splitTextToSize(T(nom), cw - 9).slice(0, 2), M + 5, y0 + 12.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); doc.setTextColor(60);
+    if (c) [c.poste, c.ville, c.tel && 'Tél : ' + c.tel, c.email].filter(Boolean).slice(0, 3).forEach((l, i) => doc.text(T(l), M + 5, y0 + (nom.length > 34 ? 23 : 19) + i * 4.4));
+    const x2 = M + cw + 6; cadre(x2, 'DÉTAILS');
+    const det = [['N° du document', d.numero], ['Date', fd(d.date_doc)], [br ? 'Facture fournisseur' : 'Réf. client', d.ref_externe || '—'],
+      ['Paiement', ({ cash: 'Comptant', terme: 'À terme', versement: 'Par versements' })[d.paiement || 'terme'] + (d.paiement === 'cash' ? ' (' + ({ especes: 'espèces', cheque: 'chèque', virement: 'virement', autre: 'autre' })[d.mode_paiement || 'especes'] + ')' : '')]];
+    det.forEach((r, i) => { const yy = y0 + 12 + i * 5.2; doc.setFontSize(8.6); doc.setTextColor(...GRIS); doc.text(T(r[0]), x2 + 5, yy); doc.setTextColor(...N); doc.setFont('helvetica', 'bold'); doc.text(T(r[1]), x2 + cw - 4, yy, { align: 'right' }); doc.setFont('helvetica', 'normal'); });
+    // tableau
+    const body = lignes.map((l, i) => [i + 1, l.ref || '', l.designation, nf(l.quantite, 2).replace(/[  ]/g, ' ') + ' ' + (br || l.unite !== 'pcs' ? l.unite : 'pcs'), m2(l.prix_unitaire), m2(r2(num(l.quantite) * num(l.prix_unitaire)))].map(T));
+    doc.autoTable({ startY: y0 + hb + 6, margin: { left: M, right: M, bottom: 28 }, head: [['N°', 'Réf.', 'Désignation', 'Quantité', 'Prix unitaire', 'Montant (DA)'].map(T)], body, theme: 'plain',
+      styles: { font: 'helvetica', fontSize: 9.3, cellPadding: { top: 3, bottom: 3, left: 2.5, right: 2.5 }, textColor: N, lineColor: [230, 226, 227], lineWidth: { bottom: 0.2 } },
+      headStyles: { fillColor: N, textColor: 255, fontStyle: 'bold', fontSize: 8.8 }, alternateRowStyles: { fillColor: [250, 247, 248] },
+      columnStyles: { 0: { cellWidth: 9, halign: 'center' }, 1: { cellWidth: 24 }, 3: { halign: 'right', cellWidth: 25 }, 4: { halign: 'right', cellWidth: 28 }, 5: { halign: 'right', cellWidth: 31, fontStyle: 'bold' } } });
+    let y = doc.lastAutoTable.finalY + 5;
+    if (y > H - 95) { doc.addPage(); y = 20; }
+    // nombre de pièces + totaux
+    const pcs = lignes.filter(l => (l.unite || 'pcs') === 'pcs').reduce((s, l) => s + num(l.quantite), 0);
+    doc.setFontSize(9); doc.setTextColor(...GRIS); doc.text(T(lignes.length + ' ligne(s)' + (pcs ? ' · ' + nf(pcs, 0) + ' pièce(s) au total' : '')), M, y + 4);
+    const tw = 76, tx = W - M - tw; let ty = y;
+    const ligT = (a, b) => { doc.setFontSize(9.3); doc.setTextColor(70); doc.setFont('helvetica', 'normal'); doc.text(T(a), tx + 3, ty + 4); doc.setTextColor(...N); doc.text(T(b), tx + tw - 3, ty + 4, { align: 'right' }); ty += 6; };
+    ligT('Sous-total', m2(t.sous) + ' DA'); if (t.remise) ligT('Remise', '− ' + m2(t.remise) + ' DA'); if (Number(d.tva_taux)) { ligT('Total HT', m2(t.ht) + ' DA'); ligT('TVA ' + nf(d.tva_taux, 2) + ' %', m2(t.tva) + ' DA'); }
+    doc.setFillColor(...N); doc.roundedRect(tx, ty, tw, 10, 1.5, 1.5, 'F'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+    doc.text(T(Number(d.tva_taux) ? 'TOTAL TTC' : 'TOTAL'), tx + 3, ty + 6.6); doc.text(T(m2(t.ttc) + ' DA'), tx + tw - 3, ty + 6.6, { align: 'right' }); ty += 13;
+    if (d.id) { const p = payeDoc(d); if (p > 0 || d.paiement !== 'cash') { const reste = Math.max(0, r2(t.ttc - p)); ligT(br ? 'Déjà réglé' : 'Déjà payé', m2(p) + ' DA'); doc.setFont('helvetica', 'bold'); ligT('Reste à payer', m2(reste) + ' DA'); } }
+    // montant en lettres
+    const phrase = (asF ? 'Arrêtée la présente facture' : br ? 'Arrêté le présent bon de réception' : 'Arrêté le présent bon de livraison') + ' à la somme de : ' + montantLettres(t.ttc) + '.';
+    const lw = tx - M - 6, lt = doc.splitTextToSize(T(phrase), lw - 8);
+    doc.setFillColor(...FOND); doc.roundedRect(M, y + 8, lw, 6 + lt.length * 4.4, 1.5, 1.5, 'F'); doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(50); doc.text(lt, M + 4, y + 13);
+    if (d.notes) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.6); doc.setTextColor(...GRIS); doc.text(doc.splitTextToSize(T('Note : ' + d.notes), lw), M, y + 18 + lt.length * 4.4); }
+    // signatures
+    let ys = Math.max(ty, y + 26 + lt.length * 4.4) + 6; if (ys > H - 60) { doc.addPage(); ys = 20; }
+    const sigs = asF ? ['Le client', 'Cachet et signature ' + (ENT.nom || 'MARIA BAG')] : br ? ['Remis par (fournisseur / atelier)', 'Contrôlé par', 'Réceptionné par (' + (ENT.nom || 'MARIA BAG') + ')'] : ['Préparé par', 'Livré par (chauffeur)', 'Reçu conforme par le client'];
+    const sw = (W - 2 * M - (sigs.length - 1) * 5) / sigs.length;
+    sigs.forEach((s, i) => { const sx = M + i * (sw + 5); doc.setDrawColor(200); doc.setLineWidth(0.25); doc.roundedRect(sx, ys, sw, 30, 1.5, 1.5);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...N); doc.text(T(s), sx + 3, ys + 5);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.3); doc.setTextColor(150); doc.text(T('Nom, date et signature' + (i === sigs.length - 1 && !br ? ' + cachet' : '')), sx + 3, ys + 27); });
+    // pied de page légal + pagination, sur chaque page
+    const legal = [[ENT.nif && 'NIF : ' + ENT.nif, ENT.rc && 'RC : ' + ENT.rc, ENT.nis && 'NIS : ' + ENT.nis, ENT.ai && 'AI : ' + ENT.ai].filter(Boolean).join('   ·   '), ENT.rib && 'RIB : ' + ENT.rib].filter(Boolean);
+    const np = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= np; i++) {
+      doc.setPage(i); doc.setDrawColor(...ROSE); doc.setLineWidth(0.5); doc.line(M, H - 17, W - M, H - 17);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.6); doc.setTextColor(...GRIS);
+      legal.forEach((l, k) => doc.text(T(l), W / 2, H - 12.5 + k * 3.6, { align: 'center' }));
+      doc.setFontSize(8); doc.text(T(ENT.pied || 'Merci pour votre confiance'), M, H - 5); doc.text(T('Page ' + i + ' / ' + np), W - M, H - 5, { align: 'right' });
+    }
+    doc.save((asF ? 'facture-' : br ? 'bon-de-reception-' : 'bon-de-livraison-') + String(d.numero).replace(/[^A-Za-z0-9-]/g, '') + '.pdf');
+  }
+
   /* asFacture : le bon de livraison imprimé comme FACTURE (même numéro, mêmes lignes, paiement) */
   function pdf(asFacture) {
     if (!(window.jspdf && window.jspdf.jsPDF)) { say('Bibliothèque PDF non chargée.'); return; }
@@ -637,8 +717,8 @@
     if (t.closest('#cm-addl')) { lireEntete(); ed.lignes.push(ligneVide()); render(); return; }
     const rm = t.closest('[data-rm]'); if (rm) { lireEntete(); const l = ed.lignes[Number(rm.dataset.rm)]; if (l && l.id) { if (ed.doc.type === 'bon_commande' && num(l.quantite_recue) > 0) { say('Cette ligne a déjà été reçue : impossible de la supprimer.'); return; } ed.supprimes.push(l.id); if (ed.doc.type === 'facture' && l.produit_id && num(l.quantite_recue) > 0) (ed.supprInfo = ed.supprInfo || []).push({ produit_id: l.produit_id, q: num(l.quantite_recue) }); } ed.lignes.splice(Number(rm.dataset.rm), 1); render(); return; }
     const pdl = t.closest('[data-pdel]'); if (pdl) { if (confirm('Supprimer ce paiement ?')) { const r = await sb.from('paiements').delete().eq('id', pdl.dataset.pdel); if (r.error) say('Erreur : ' + r.error.message); if (window.PayAPI) await PayAPI.load(); render(); } return; }
-    if (t.closest('#cm-pdf')) { pdf(); return; }
-    if (t.closest('#cm-pdffac')) { pdf(true); return; }
+    if (t.closest('#cm-pdf')) { if (ed && isBon(ed.doc.type)) pdfBon(); else pdf(); return; }
+    if (t.closest('#cm-pdffac')) { pdfBon(true); return; }
     if (t.closest('#cm-livrer')) { await livrerFacture(); return; }
     if (t.closest('#cm-tofac')) { await devisEnFacture(); return; }
     if (t.closest('#cm-blfac')) { await bonEnFacture(); return; }
