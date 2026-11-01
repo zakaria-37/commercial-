@@ -23,6 +23,33 @@
 
   let cur = null, onglet = 'releve', CR = [], P = null;
 
+  /* Bénéfice avec un client : pour chaque pièce livrée (moins les retours) : prix de vente − coût de la pièce
+     (prix d'achat ou de fabrication actuel), puis moins les remises des bons et factures. */
+  function benefice(c, docs) {
+    if (!window.PFAPI) return null;
+    const prods = new Map(PFAPI.produits().map(p => [String(p.id), p])), nomC = norm(lbl(c)), lignes = [];
+    let ben = 0, ca = 0, sansCout = 0;
+    PFAPI.mouvements().forEach(m => {
+      if (m.type !== 'livraison' && m.type !== 'retour') return;
+      if (!(String(m.contact_id) === String(c.id) || (!m.contact_id && m.client_nom && norm(m.client_nom) === nomC))) return;
+      const p = prods.get(String(m.produit_id)), n = -(Number(m.quantite) || 0), pv = m.prix_vente != null ? Number(m.prix_vente) : (p ? Number(p.prix_vente) || 0 : 0);
+      const cout = p ? Number(PFAPI.coutProduit(p)) || 0 : 0;
+      ca += pv * n;
+      if (cout > 0) { const b = (pv - cout) * n; ben += b; lignes.push({ id: m.id, b, cout }); } else { sansCout++; lignes.push({ id: m.id, b: null, cout: 0 }); }
+    });
+    // remises des bons de livraison et factures qui ont sorti des pièces du stock
+    const mv = PFAPI.mouvements();
+    let remises = 0;
+    (docs || []).forEach(d => {
+      if (d.statut === 'annulee' || !['bon_livraison', 'facture'].includes(d.type)) return;
+      const mk = d.type === 'facture' ? 'Facture ' + d.numero : 'Bon de livraison ' + d.numero;
+      if (!mv.some(m => String(m.note || '') === mk || String(m.note || '').startsWith(mk + ' '))) return;
+      remises += CommerceAPI.totaux(d, CommerceAPI.lignesDe(d.id)).remise || 0;
+    });
+    return { ben: r2(ben - remises), ca: r2(ca - remises), remises: r2(remises), sansCout, parMvt: new Map(lignes.map(x => [String(x.id), x])) };
+  }
+  const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
   async function charger(id) {
     const c = contacts().find(x => String(x.id) === String(id)); if (!c) return null;
     try { if (window.CommerceAPI && !CommerceAPI.docs().length) await CommerceAPI.load(true); } catch (e) {}
@@ -36,7 +63,8 @@
     const sc = window.PayAPI ? PayAPI.soldes('client').find(x => String(x.id) === String(id)) : null, sf = window.PayAPI ? PayAPI.soldes('fournisseur').find(x => String(x.id) === String(id)) : null;
     const docs = window.CommerceAPI ? CommerceAPI.docs().filter(d => String(d.contact_id) === String(id)).sort((a, b) => String(b.date_doc).localeCompare(String(a.date_doc))) : [];
     const cred = r2(CR.reduce((s, o) => s + NAT[o.nature][1] * Number(o.montant || 0), 0));
-    return { c, ventes, achats, pays, sc, sf, docs, cred, client: /client/i.test(c.type || '') || ventes.length > 0, four: /fournisseur/i.test(c.type || '') || achats.length > 0 };
+    const ben = benefice(c, docs);
+    return { c, ventes, achats, pays, sc, sf, docs, cred, ben, client: /client/i.test(c.type || '') || ventes.length > 0, four: /fournisseur/i.test(c.type || '') || achats.length > 0 };
   }
 
   /* Relevé : opérations datées ; « débit » augmente ce que la personne nous doit (client) ou ce que nous lui devons (fournisseur) */
@@ -70,6 +98,8 @@
       diff(P.sc ? P.sc.solde : 0, 'le client nous doit encore', 'le client a payé en plus (avance)');
     if (P.four) h += '<div class="ct-kpi"><span>Achats</span><b>' + money(sum(P.achats)) + '</b><small>' + P.achats.length + ' opération(s)</small></div><div class="ct-kpi"><span>Versements faits</span><b>' + money(reg) + '</b><small>' + P.pays.filter(p => p.sens === 'reglement').length + ' versement(s)</small></div>' +
       diff(P.sf ? P.sf.solde : 0, 'nous lui devons encore', 'nous avons payé en plus (avance chez lui)');
+    if (P.client && P.ben && P.ventes.length) { const b = P.ben;
+      h += '<div class="ct-kpi"><span>Bénéfice avec ce client</span><b class="' + (b.ben < 0 ? 'py-due' : 'py-av') + '">' + money(b.ben) + '</b><small>' + (b.ca > 0 ? Math.round(b.ben / b.ca * 100) + ' % des ventes' : '') + (b.remises ? ' · remises déduites : ' + money(b.remises) : '') + (b.sansCout ? ' · ⚠ ' + b.sansCout + ' vente(s) sans coût renseigné' : '') + '</small></div>'; }
     if (CR.length) h += '<div class="ct-kpi"><span>Crédits (prêts)</span><b class="' + (Math.abs(P.cred) > 0.004 ? 'py-due' : '') + '">' + (Math.abs(P.cred) < 0.005 ? 'Soldé' : P.cred > 0 ? 'nous doit ' + money(P.cred) : 'nous lui devons ' + money(-P.cred)) + '</b><small>' + CR.length + ' opération(s)</small></div>';
     h += '</div>';
     // onglets
@@ -85,7 +115,12 @@
       });
       if (!P.client && !P.four) h += '<div class="iv-empty">Aucune vente ni achat pour ce contact.</div>';
     }
-    if (onglet === 'ventes') h += table(['Date', 'Produit', 'n:Quantité', 'n:Montant', 'Réf.'], P.ventes.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(o => '<tr><td>' + fd(o.date) + '</td><td>' + esc(o.libelle) + '</td><td class="n">' + esc(o.qte || '') + '</td><td class="n"><b>' + money(o.montant) + '</b></td><td>' + esc(o.ref || '') + '</td></tr>'), 'Aucune vente.');
+    if (onglet === 'ventes') {
+      // bénéfice de chaque vente (prix de vente − coût de la pièce) ; les lignes « Remise » le diminuent
+      const ventesB = venteBen();
+      h += table(['Date', 'Produit', 'n:Quantité', 'n:Montant', 'n:Bénéfice', 'Réf.'], ventesB.sort((a, b) => String(b.o.date).localeCompare(String(a.o.date))).map(x => '<tr><td>' + fd(x.o.date) + '</td><td>' + esc(x.o.libelle) + '</td><td class="n">' + esc(x.o.qte || '') + '</td><td class="n"><b>' + money(x.o.montant) + '</b></td><td class="n">' + (x.b == null ? '<small>coût non renseigné</small>' : '<b class="' + (x.b < 0 ? 'py-due' : 'py-av') + '">' + money(x.b) + '</b>') + '</td><td>' + esc(x.o.ref || '') + '</td></tr>'), 'Aucune vente.');
+      if (P.ben) h += '<p class="iv-help" style="margin-top:10px">Bénéfice total : <b>' + money(P.ben.ben) + '</b> = prix de vente − coût de chaque pièce (prix d’achat ou de fabrication, Stock › Produits finis) − remises. Le coût utilisé est le coût actuel du produit.</p>';
+    }
     if (onglet === 'achats') h += table(['Date', 'Article', 'n:Quantité', 'n:Montant', 'Réf.'], P.achats.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(o => '<tr><td>' + fd(o.date) + '</td><td>' + esc(o.libelle) + '</td><td class="n">' + esc(o.qte || '') + '</td><td class="n"><b>' + money(o.montant) + '</b>' + (o.sansPrix ? '<small>sans prix</small>' : '') + '</td><td>' + esc(o.ref || '') + '</td></tr>'), 'Aucun achat.');
     if (onglet === 'versements') h += table(['Date', 'Type', 'n:Montant', 'Mode', 'Réf.', 'Note'], P.pays.slice().sort((a, b) => String(b.date_paiement).localeCompare(String(a.date_paiement))).map(p => '<tr><td>' + fd(p.date_paiement) + '</td><td>' + ({ encaissement: 'Versement reçu', reglement: 'Versement fait', report_client: 'Solde de départ (client)', report_fournisseur: 'Solde de départ (fournisseur)' }[p.sens] || p.sens) + '</td><td class="n"><b>' + money(p.montant) + '</b></td><td>' + esc(MODES[p.mode] || p.mode || '') + '</td><td>' + esc(p.reference || '') + '</td><td>' + esc(p.note || '') + '</td></tr>'), 'Aucun versement.') +
       '<div class="at-actions"><button class="btn p" type="button" data-pr="vers">+ Nouveau versement</button></div>';
@@ -96,6 +131,15 @@
     return h + '</div>';
   }
 
+  // ventes du contact avec le bénéfice de chacune (même ordre que PartAPI.ops : par mouvement de stock, puis ajustements de documents)
+  function venteBen() {
+    const prods = window.PFAPI ? new Map(PFAPI.produits().map(p => [String(p.id), p])) : new Map();
+    return P.ventes.map(o => {
+      if (!o.qte) { const t = P.docs.find(d => d.numero === o.ref); const rem = t ? (CommerceAPI.totaux(t, CommerceAPI.lignesDe(t.id)).remise || 0) : 0; return { o, b: rem ? -rem : null }; }
+      const p = [...prods.values()].sort((x, y) => y.nom.length - x.nom.length).find(x => o.libelle.startsWith(x.nom)), c = p ? Number(PFAPI.coutProduit(p)) || 0 : 0, n = parseFloat(String(o.qte).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+      return { o, b: c > 0 && n ? r2(o.montant - c * n * (o.montant < 0 ? -1 : 1)) : null };
+    });
+  }
   function afficher() {
     let bg = $('#pr-bg');
     if (!bg) { bg = document.createElement('div'); bg.id = 'pr-bg'; bg.innerHTML = '<div id="pr-box"></div>'; document.body.appendChild(bg); bg.addEventListener('click', e => { if (e.target === bg) fermer(); }); }
