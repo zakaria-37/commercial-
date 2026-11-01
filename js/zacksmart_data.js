@@ -1,5 +1,5 @@
 /* ============================================================
-   ZACKsmart : données réelles de toute la plateforme (clients, soldes, factures, commandes, paie par jour ou par mois, charges, ateliers, rendez-vous, notes, tendances, coût des produits, inventaire, bilan)
+   ZACKsmart : données réelles de toute la plateforme (clients, soldes, factures, commandes, paie par jour ou par mois, charges, ateliers, rendez-vous, notes, coût des produits, inventaire, bilan)
    transmises à l'assistant UNIQUEMENT quand la question concerne le sujet (le stock est géré dans zacksmart.js).
    Les salaires ne sont transmis qu'à l'administrateur (ou sans compte, avec l'ancien mot de passe).
    ============================================================ */
@@ -249,14 +249,6 @@
     return lim(t, 2600);
   }
 
-  /* ---------- Tendances ---------- */
-  async function sectionTendances() {
-    let l = []; try { const r = await sb.from('tendances').select('*'); l = r.error ? [] : (r.data || []); } catch (e) {}
-    if (!l.length) return '';
-    l.sort((a, b) => (b.potentiel || 0) - (a.potentiel || 0));
-    return lim('== TENDANCES ENREGISTRÉES DANS LA PLATEFORME ==\n' + l.slice(0, 12).map(x => '- ' + x.titre + ' (' + x.type + (x.categorie ? ', ' + x.categorie : '') + (x.region ? ', ' + x.region : '') + ') potentiel ' + x.potentiel + '/5 · ' + x.statut + (x.prix_indicatif ? ' · prix ' + x.prix_indicatif : '') + (x.idee_maria ? ' · idée Maria Bag : ' + String(x.idee_maria).slice(0, 140) : '')).join('\n') + '\n', 2200);
-  }
-
   /* ---------- Produits : coût de revient, prix de vente, marge ---------- */
   function sectionProduits(tk) {
     if (typeof PRODUITS === 'undefined' || typeof recap !== 'function' || !PRODUITS.length) return '';
@@ -312,13 +304,12 @@
       want.charges = /(charge|depense|loyer|electricite|diner|frais)/.test(q);
       want.ateliers = /(atelier|facon|sous trait|soustrait)/.test(q) || (tk.length && typeof ATELIERS !== 'undefined' && ATELIERS.some(a => flou(tk, a.nom)));
       want.notes = /(rdv|rendez|rendez vous|agenda|planning|note|rappel|pense bete|prospect a contacter|a ne pas oublier)/.test(q);
-      want.tendances = /(tendance|winner|trend|a la mode|modele populaire)/.test(q);
       want.produits = /(cout de revient|prix de revient|cout d une piece|cout de production|main d oeuvre|rentab|marge par|marge du|marge sur|prix de vente)/.test(q) || (tk.length && typeof PRODUITS !== 'undefined' && PRODUITS.some(p => flou(tk, p.nom)) && !want.employes);
       want.inventaire = /inventaire/.test(q);
       want.bilan = /(bilan|situation|resume general|vue d ensemble|tableau de bord|comment va|etat general|rapport|point sur l atelier|point global)/.test(q) && !P;
       if (want.paieJour) want.employes = false;                       // la période demandée remplace le mois affiché
       if (P && P.mois && !P.au.startsWith(isoD(new Date()).slice(0, 7)) && /(salair|salari|paie|paye|employ|acompte)/.test(q)) { want.paieJour = true; want.employes = false; }
-      if (!['msgContact', 'contacts', 'factures', 'commandes', 'employes', 'paieJour', 'activite', 'charges', 'ateliers', 'notes', 'tendances', 'produits', 'inventaire', 'bilan'].some(k => want[k])) return '';
+      if (!['msgContact', 'contacts', 'factures', 'commandes', 'employes', 'paieJour', 'activite', 'charges', 'ateliers', 'notes', 'produits', 'inventaire', 'bilan'].some(k => want[k])) return '';
       if (want.factures || want.contacts || want.nomFact || want.activite || want.bilan) await chargerCommerce();
       let t = '';
       if (P) t += 'DATE DU JOUR : ' + fd(isoD(new Date())) + '. Période demandée : ' + P.l + ' (du ' + fd(P.du) + ' au ' + fd(P.au) + ').\n';
@@ -329,7 +320,6 @@
       if (want.ateliers) t += await sectionAteliers(tk) + '\n';
       if (want.charges && !want.bilan) t += await sectionCharges(P && P.du !== P.au ? P : (P ? { du: P.du, au: P.au, l: P.l } : null)) + '\n';
       if (want.produits) t += sectionProduits(tk) + '\n';
-      if (want.tendances) t += await sectionTendances() + '\n';
       if (want.inventaire) t += await sectionInventaire() + '\n';
       if (want.msgContact) t += sectionContactsMessage(q, tk) + '\n';
       if (want.contacts) t += sectionContacts(tk) + '\n';

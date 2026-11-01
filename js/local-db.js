@@ -21,7 +21,7 @@
 
   // Ordre = parents d'abord (important pour envoyer les nouvelles lignes à Supabase)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants', 'productions', 'commandes',
-                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers', 'credits_employes', 'rendez_vous', 'notes_perso', 'zacksmart_messages', 'tendances', 'credits_tiers', 'caisse'];
+                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers', 'credits_employes', 'rendez_vous', 'notes_perso', 'zacksmart_messages', 'credits_tiers', 'caisse'];
 
   // Valeurs par défaut (les mêmes que dans les fichiers supabase/*.sql)
   var DEFAULTS = {
@@ -52,7 +52,6 @@
     zacksmart_messages: { proprietaire: 'partage', role: 'user' },
     caisse: { date_op: null, type: 'entree', montant: 0, theorique: null, ecart: null, libelle: '' },
     credits_tiers: { date_op: null, nature: 'pret_donne', contact_id: null, personne: '', categorie: 'Autre', montant: 0, mode: 'especes', echeance: null, reference: '', note: '' },
-    tendances: { type: 'Modèle', categorie: '', region: 'Monde', periode: '', resume: '', pourquoi: '', idee_maria: '', prix_indicatif: '', potentiel: 3, statut: 'À étudier', source_nom: '', source_url: '', image_url: '' },
     notes_perso: { titre: '', categorie: 'À ne pas oublier', couleur: 'jaune', rappel: null, epingle: false, fait: false },
     rendez_vous: { heure: null, type: 'Client', contact_id: null, contact_nom: '', tel: '', lieu: '', objet: '', statut: 'Prévu', resultat: '', relance: null },
     inventaires: { annee: 0, date_inventaire: null, statut: 'brouillon', debut_periode: null, ventes: 0, achats: 0, valeur_nette: 0, stock_applique: false, notes: '', cloture_le: null },
@@ -190,7 +189,7 @@
       idb = await openIdb();
       var all = await idbAll();
       all.rows.forEach(function (r) { mem(r[0]).set(String(r[1].id), r[1]); });
-      OUTBOX = all.meta.outbox || [];
+      OUTBOX = (all.meta.outbox || []).filter(function (o) { return TABLES.indexOf(o.t) >= 0; });   // changements d'une table retirée de la plateforme : abandonnés
       REJECTED = all.meta.rejected || [];
       META = Object.assign(META, all.meta.info || {});
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
