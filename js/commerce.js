@@ -201,6 +201,19 @@
     const date = today(), ech = new Date(); ech.setDate(ech.getDate() + (type === 'devis' ? 30 : type === 'facture' ? 30 : 15));
     ed = { doc: Object.assign({ id: null, type, numero: nextNumero(type, date), date_doc: date, echeance: type === 'facture' || isBon(type) ? null : iso(ech), paiement: 'terme', contact_id: null, contact_nom: '', statut: type === 'facture' || isBon(type) ? 'emise' : 'brouillon', source_id: null, commande_id: null, tva_taux: Number(ENT.tva_defaut) || 0, remise: 0, notes: '' }, base || {}), lignes: [], supprimes: [] };
   }
+  /* Bon de livraison : coût d'une pièce (prix d'achat ou de fabrication) et marge de la ligne — information interne, absente du PDF */
+  const coutLigne = l => { if (!l.produit_id || !window.PFAPI) return null; const p = PFAPI.produits().find(x => String(x.id) === String(l.produit_id)); const c = p ? Number(PFAPI.coutProduit(p)) : 0; return c > 0 ? c : null; };
+  function margeTxt(l) {
+    const c = coutLigne(l), pu = num(l.prix_unitaire), q = num(l.quantite);
+    if (c == null) return '<small>coût non renseigné</small>';
+    if (!(pu > 0)) return '—';
+    const m = r2((pu - c) * q), pct = Math.round((pu - c) / pu * 100);
+    return '<b class="' + (pu < c ? 'py-due' : 'py-av') + '">' + money(m) + '</b><small>' + money(r2(pu - c)) + ' / pièce · ' + pct + ' %</small>';
+  }
+  function margeTotale(lignes) {
+    let m = 0, ok = false; lignes.forEach(l => { const c = coutLigne(l); if (c != null && num(l.prix_unitaire) > 0) { ok = true; m += (num(l.prix_unitaire) - c) * num(l.quantite); } });
+    return ok ? r2(m) : null;
+  }
   const ligneVide = () => ({ id: null, produit_id: null, article_id: null, ref: '', designation: '', unite: 'pcs', quantite: 1, prix_unitaire: 0, quantite_recue: 0 });
   // empreinte d'un bon : le stock n'est recalculé que si les lignes, la date ou le contact ont changé
   const sigBon = (doc, lignes) => JSON.stringify([doc.date_doc, doc.contact_id || '', doc.numero, lignes.map(l => [l.produit_id || '', l.article_id || '', num(l.quantite), num(l.prix_unitaire), l.unite || ''])]);
@@ -236,13 +249,14 @@
       '<label>Remise (DA)<input id="cm-remise" type="number" min="0" step="any" inputmode="decimal" value="' + (Number(doc.remise) || '') + '" placeholder="0"></label>' +
       (doc.type === 'devis' ? '<label>Statut<select id="cm-statut">' + Object.keys(STATUTS_DEVIS).map(k => '<option value="' + k + '"' + (doc.statut === k ? ' selected' : '') + '>' + STATUTS_DEVIS[k] + '</option>').join('') + '</select></label>' : '') +
       '<label style="grid-column:1/-1">Note<input id="cm-notes" maxlength="300" value="' + esc(doc.notes || '') + '" placeholder="Facultatif : conditions, délai…"></label></div></div>';
-    if (bon) h += '<div class="card" style="margin-top:12px"><h3 style="margin-top:0">' + (br ? 'Produits finis et éléments reçus' : 'Produits livrés') + '</h3><div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>' + (br ? 'Produit fini ou élément' : 'Produit (stock)') + '</th><th>Réf.</th><th>Désignation</th>' + (br ? '<th>Unité</th>' : '') + '<th>Qté</th><th>Prix unitaire (DA)</th><th class="n">En stock</th><th class="n">Montant</th><th></th></tr></thead><tbody id="cm-lignes">' +
+    if (bon) h += '<div class="card" style="margin-top:12px"><h3 style="margin-top:0">' + (br ? 'Produits finis et éléments reçus' : 'Produits livrés') + '</h3><div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>' + (br ? 'Produit fini ou élément' : 'Produit (stock)') + '</th><th>Réf.</th><th>Désignation</th>' + (br ? '<th>Unité</th>' : '') + '<th>Qté</th>' + (br ? '' : '<th class="n">Coût / pièce</th>') + '<th>Prix ' + (br ? 'unitaire' : 'de vente') + ' (DA)</th>' + (br ? '' : '<th class="n">Marge</th>') + '<th class="n">En stock</th><th class="n">Montant</th><th></th></tr></thead><tbody id="cm-lignes">' +
       ed.lignes.map((l, i) => '<tr data-i="' + i + '"><td><select data-f="ref">' + optsRef(doc.type, l) + '</select></td><td><input class="iv-t" data-f="code" maxlength="40" style="width:90px" value="' + esc(l.ref || '') + '" placeholder="Réf."></td><td><input class="iv-t" data-f="des" maxlength="200" value="' + esc(l.designation) + '" placeholder="Désignation"></td>' +
-        (br ? '<td><input class="iv-t" data-f="uni" maxlength="20" style="width:80px" value="' + esc(l.unite) + '"></td>' : '') + '<td><input class="iv-q" data-f="qte" type="number" min="0" step="any" inputmode="decimal" value="' + (l.quantite || '') + '"></td><td><input class="iv-p" data-f="pu" type="number" min="0" step="any" inputmode="decimal" value="' + (l.prix_unitaire || '') + '"></td>' +
-        '<td class="n cm-st">' + stockTxt(doc.type, l) + '</td><td class="n cm-mt">' + money(r2(num(l.quantite) * num(l.prix_unitaire))) + '</td><td class="n"><button class="btn s d" type="button" data-rm="' + i + '">×</button></td></tr>').join('') + '</tbody></table></div>' +
+        (br ? '<td><input class="iv-t" data-f="uni" maxlength="20" style="width:80px" value="' + esc(l.unite) + '"></td>' : '') + '<td><input class="iv-q" data-f="qte" type="number" min="0" step="any" inputmode="decimal" value="' + (l.quantite || '') + '"></td>' + (br ? '' : '<td class="n cm-ct">' + (coutLigne(l) != null ? money(coutLigne(l)) : '<small>—</small>') + '</td>') + '<td><input class="iv-p" data-f="pu" type="number" min="0" step="any" inputmode="decimal" value="' + (l.prix_unitaire || '') + '"></td>' +
+        (br ? '' : '<td class="n cm-mg">' + margeTxt(l) + '</td>') + '<td class="n cm-st">' + stockTxt(doc.type, l) + '</td><td class="n cm-mt">' + money(r2(num(l.quantite) * num(l.prix_unitaire))) + '</td><td class="n"><button class="btn s d" type="button" data-rm="' + i + '">×</button></td></tr>').join('') + '</tbody></table></div>' +
       '<div class="at-actions"><button class="btn s" type="button" id="cm-addl">+ Ajouter une ligne</button></div>' +
       '<p class="iv-help">' + (br ? '<b>À l’enregistrement, les quantités entrent en stock</b> : produits finis (avec leur prix d’achat ou coût de fabrication) et éléments (avec leur prix d’achat et le fournisseur). '
         : '<b>À l’enregistrement, les pièces sortent du stock des produits finis</b> (livraison au client, historique mis à jour). ') + 'Si vous modifiez ou supprimez le bon, le stock suit automatiquement.</p>' +
+      (br ? '' : '<p class="cm-mgt" id="cm-mgt">' + mgtHtml() + '</p>') +
       '<div class="cm-tot" id="cm-tot">' + totHtml(t, doc) + '</div></div>';
     else h += '<div class="card" style="margin-top:12px"><h3 style="margin-top:0">Lignes</h3><div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>' + (bc ? 'Élément' : 'Produit') + '</th><th>Désignation</th><th>' + (bc ? 'Unité' : 'Qté') + '</th><th>' + (bc ? 'Qté' : 'Prix (DA)') + '</th>' + (bc ? '<th>Prix (DA)</th>' : '') + '<th class="n">En stock</th>' + (bc ? '' : '<th class="n">Livré</th>') + '<th class="n">Montant</th>' + (bc ? '<th class="n iv-opt">Reçu</th>' : '') + '<th></th></tr></thead><tbody id="cm-lignes">' +
       ed.lignes.map((l, i) => '<tr data-i="' + i + '"><td><select data-f="ref">' + optsRef(doc.type, l) + '</select></td><td><input class="iv-t" data-f="des" maxlength="200" value="' + esc(l.designation) + '" placeholder="Désignation"></td>' +
@@ -277,6 +291,7 @@
     }
     return h + '</div>';
   }
+  function mgtHtml() { const m = margeTotale(ed.lignes), t = totaux(ed.doc, ed.lignes); return m == null ? '' : 'Marge du bon : <b class="' + (m - t.remise < 0 ? 'py-due' : 'py-av') + '">' + money(r2(m - t.remise)) + '</b>' + (t.remise ? ' <small>(après la remise de ' + money(t.remise) + ')</small>' : '') + ' <small>— visible seulement ici, pas sur le PDF</small>'; }
   function totHtml(t, doc) {
     return '<table class="cm-tt"><tr><td>Sous-total</td><td>' + money(t.sous) + '</td></tr>' + (t.remise ? '<tr><td>Remise</td><td>− ' + money(t.remise) + '</td></tr>' : '') + '<tr><td>Total HT</td><td>' + money(t.ht) + '</td></tr>' +
       (Number(doc.tva_taux) ? '<tr><td>TVA ' + nf(doc.tva_taux, 2) + ' %</td><td>' + money(t.tva) + '</td></tr>' : '') + '<tr class="cm-ttc"><td>TOTAL TTC</td><td>' + money(t.ttc) + '</td></tr></table>';
@@ -411,7 +426,7 @@
   }
 
   /* ---------- Lignes : saisie ---------- */
-  function majTotaux() { lireEntete(); const t = totaux(ed.doc, ed.lignes), e = $('#cm-tot'); if (e) e.innerHTML = totHtml(t, ed.doc); }
+  function majTotaux() { lireEntete(); const t = totaux(ed.doc, ed.lignes), e = $('#cm-tot'); if (e) e.innerHTML = totHtml(t, ed.doc); const g = $('#cm-mgt'); if (g) g.innerHTML = mgtHtml(); }
   function onInput(e) {
     const el = e.target, tr = el.closest('tr[data-i]');
     if (!ed) return;
@@ -440,6 +455,10 @@
     else if (f === 'qte') l.quantite = Math.max(0, num(el.value));
     else if (f === 'pu') l.prix_unitaire = Math.max(0, num(el.value));
     tr.querySelector('.cm-mt').textContent = money(r2(num(l.quantite) * num(l.prix_unitaire)));
+    const ct = tr.querySelector('.cm-ct'), mg = tr.querySelector('.cm-mg'), mgt = $('#cm-mgt');
+    if (ct) ct.innerHTML = coutLigne(l) != null ? money(coutLigne(l)) : '<small>—</small>';
+    if (mg) mg.innerHTML = margeTxt(l);
+    if (mgt) mgt.innerHTML = mgtHtml();
     majStocks(); majTotaux();
   }
 
