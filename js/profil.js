@@ -100,8 +100,19 @@
       diff(P.sf ? P.sf.solde : 0, 'nous lui devons encore', 'nous avons payé en plus (avance chez lui)');
     if (P.client && P.ben && P.ventes.length) { const b = P.ben;
       h += '<div class="ct-kpi"><span>Bénéfice avec ce client</span><b class="' + (b.ben < 0 ? 'py-due' : 'py-av') + '">' + money(b.ben) + '</b><small>' + (b.ca > 0 ? Math.round(b.ben / b.ca * 100) + ' % des ventes' : '') + (b.remises ? ' · remises déduites : ' + money(b.remises) : '') + (b.sansCout ? ' · ⚠ ' + b.sansCout + ' vente(s) sans coût renseigné' : '') + '</small></div>'; }
-    if (CR.length) h += '<div class="ct-kpi"><span>Crédits (prêts)</span><b class="' + (Math.abs(P.cred) > 0.004 ? 'py-due' : '') + '">' + (Math.abs(P.cred) < 0.005 ? 'Soldé' : P.cred > 0 ? 'nous doit ' + money(P.cred) : 'nous lui devons ' + money(-P.cred)) + '</b><small>' + CR.length + ' opération(s)</small></div>';
     h += '</div>';
+    // Crédits : ce que nous lui avons prêté, ce qu'il nous a prêté, et la différence ; puis la position globale (crédits + compte commercial)
+    if (CR.length) {
+      const som = n => r2(CR.filter(o => o.nature === n).reduce((x, o) => x + Number(o.montant || 0), 0));
+      const donne = r2(som('pret_donne') - som('remb_recu')), recu = r2(som('pret_recu') - som('remb_fait')), dc = r2(donne - recu);
+      const com = P.four && !P.client ? -(P.sf ? P.sf.solde : 0) : (P.sc ? P.sc.solde : 0) - (P.sf ? P.sf.solde : 0);      // + = il nous doit
+      const net = r2(dc + com), sg = v => (Math.abs(v) < 0.005 ? '0 DA' : (v > 0 ? '+ ' : '− ') + money(Math.abs(v)));
+      h += '<h3 class="pr-sous">Crédits (prêts)</h3><div class="ct-kpis">' +
+        '<div class="ct-kpi"><span>Nous lui avons prêté</span><b>' + money(donne) + '</b><small>prêts donnés' + (som('remb_recu') ? ' − remboursés ' + money(som('remb_recu')) : '') + '</small></div>' +
+        '<div class="ct-kpi"><span>Il nous a prêté</span><b>' + money(recu) + '</b><small>prêts reçus' + (som('remb_fait') ? ' − remboursés ' + money(som('remb_fait')) : '') + '</small></div>' +
+        '<div class="ct-kpi"><span>Différence des crédits</span><b class="' + (Math.abs(dc) < 0.005 ? 'py-av' : dc > 0 ? 'py-due' : 'pr-moins') + '">' + sg(dc) + '</b><small>' + (Math.abs(dc) < 0.005 ? '✔ crédits soldés' : dc > 0 ? 'il nous doit (prêts)' : 'nous lui devons (prêts)') + '</small></div>' +
+        '<div class="ct-kpi pr-net"><span>Position globale</span><b class="' + (Math.abs(net) < 0.005 ? 'py-av' : net > 0 ? 'py-due' : 'pr-moins') + '">' + sg(net) + '</b><small>' + (Math.abs(net) < 0.005 ? '✔ tout est soldé' : net > 0 ? 'au total, il nous doit' : 'au total, nous lui devons') + ' (crédits ' + sg(dc) + ' et compte ' + sg(com) + ')</small></div></div>';
+    }
     // onglets
     const T = [['releve', 'Relevé de compte'], P.client ? ['ventes', 'Ventes (' + P.ventes.length + ')'] : null, P.four ? ['achats', 'Achats (' + P.achats.length + ')'] : null, ['versements', 'Versements (' + P.pays.length + ')'], ['credits', 'Crédits (' + CR.length + ')'], ['docs', 'Documents (' + P.docs.length + ')']].filter(Boolean);
     if (!T.some(t => t[0] === onglet)) onglet = 'releve';

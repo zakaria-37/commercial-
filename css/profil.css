@@ -17,3 +17,5 @@ body.pr-open{overflow:hidden}
 @media (max-width:700px){#pr-bg{padding:0}#pr-box{border-radius:0;min-height:100%;padding:12px}}
 .pr-head a.btn{text-decoration:none}
 .pr-moins{color:#2a5db0}
+.pr-sous{margin:4px 0 8px;font-size:15px}
+.pr-net{border:2px solid #000}
