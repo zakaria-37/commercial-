@@ -854,6 +854,62 @@ function creerPdfProduit(p) {
   return { doc, name: ('Cout_de_revient_' + p.nom + '_' + today).replace(/[^\w\-]+/g, '_') + '.pdf' };
 }
 
+/* Fiche matières d'une production de N pièces : à partir du coût de revient déjà saisi (aucune ressaisie).
+   Pour chaque ligne : quantité pour 1 pièce, chute, quantité totale pour N pièces (en mètres ET en rouleaux / bobines…),
+   stock disponible, quantité à acheter, coût. */
+function creerFicheMatieres(p, N) {
+  if (!(window.jspdf && window.jspdf.jsPDF)) throw new Error('Bibliothèque PDF non chargée.');
+  const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 12, r = recap(p), today = isoD(new Date());
+  const T = v => txtD(String(v ?? '').replace(/[\u00a0\u202f]/g, ' '));
+  let aAcheter = 0;
+  const lignes = r.list.map(l => {
+    const tot = Number(l.quantite || 0) * (1 + Number(l.perte_pct || 0) / 100) * N;
+    const a = l.article_id && window.StockAPI ? StockAPI.byId(l.article_id) : null;
+    let totTxt = numD(tot, 2) + ' ' + l.unite, condTxt = '', stockTxt = '—', achatTxt = '—';
+    if (a) {
+      const base = StockAPI.toBase(a, tot, l.unite), st = StockAPI.qty(a.id);
+      if (base != null) {
+        if (StockAPI.aCond(a)) { const nb = base / StockAPI.condQte(a); condTxt = numD(nb, 2) + ' ' + StockAPI.plur(a.cond_nom, nb) + ' (' + numD(Math.ceil(nb - 1e-9), 0) + ' à prévoir)'; }
+        const f = StockAPI.fmtQty(a, st); stockTxt = f.main + (f.sub ? ' (' + f.sub + ')' : '');
+        const manque = base - st;
+        if (manque > 1e-6) { const fm = StockAPI.fmtQty(a, manque); achatTxt = fm.main + (fm.sub ? ' (' + fm.sub + ')' : ''); aAcheter++; } else achatTxt = 'OK';
+      }
+    }
+    return [catLbl(l.categorie), nomLigne(l), numD(l.quantite, 4) + ' ' + l.unite, Number(l.perte_pct) ? numD(l.perte_pct, 1) + ' %' : '-', totTxt, condTxt || '-', stockTxt, achatTxt, moneyD(coutLigne(l) * N)].map(T);
+  });
+  if (typeof LOGO_PDF !== 'undefined' && LOGO_PDF) doc.addImage(LOGO_PDF, 'PNG', M, 8, 20, 20);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(T('FICHE MATIÈRES DE PRODUCTION'), M + 24, 16);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90); doc.text(T('MARIA BAG  |  Édité le ' + fdD(today)), M + 24, 22);
+  doc.setFillColor(17, 17, 17); doc.roundedRect(W - M - 82, 8, 82, 18, 2, 2, 'F'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+  doc.text(T(p.nom), W - M - 41, 15, { align: 'center', maxWidth: 78 }); doc.setFontSize(14); doc.text(T(numD(N, 0) + ' pièces à fabriquer'), W - M - 41, 22.5, { align: 'center' });
+  doc.setTextColor(0); doc.setDrawColor(217, 168, 178); doc.setLineWidth(0.8); doc.line(M, 31, W - M, 31);
+  doc.autoTable({
+    startY: 35, margin: { left: M, right: M, bottom: 30 },
+    head: [['Catégorie', 'Désignation', 'Pour 1 pièce', 'Chute', 'Total pour ' + numD(N, 0) + ' pcs', 'En rouleaux / bobines', 'En stock', 'À acheter', 'Coût'].map(T)],
+    body: lignes, foot: [['', T('Total matières et fournitures'), '', '', '', '', '', T(aAcheter ? aAcheter + ' à acheter' : 'Tout est en stock'), T(moneyD(r.mat * N))]],
+    theme: 'grid', styles: { font: 'helvetica', fontSize: 8.6, cellPadding: 2.2, textColor: 0, lineColor: 190, lineWidth: 0.15 },
+    headStyles: { fillColor: [17, 17, 17], textColor: 255, fontStyle: 'bold' }, footStyles: { fillColor: [245, 240, 242], textColor: 0, fontStyle: 'bold' },
+    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'center' }, 4: { halign: 'right', fontStyle: 'bold' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } },
+    didParseCell: d => { if (d.section === 'body' && d.column.index === 7 && d.cell.raw && d.cell.raw !== 'OK' && d.cell.raw !== '—') d.cell.styles.textColor = [179, 38, 30]; }
+  });
+  let y = doc.lastAutoTable.finalY + 7; if (y > H - 45) { doc.addPage(); y = 20; }
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+  doc.text(T('Coût matières : ' + moneyD(r.mat) + ' / pièce  ×  ' + numD(N, 0) + ' = ' + moneyD(r.mat * N) + (Number(p.mo_pieces) ? '     |     Main d’œuvre : ' + moneyD(r.mo * N) + '     |     Coût de revient total : ' + moneyD(r.total * N) : '')), M, y);
+  const bw = (W - 2 * M - 10) / 3; ['Préparé par', 'Sorti du stock par', 'Reçu par (atelier / chef de production)'].forEach((t, i) => { const x = M + i * (bw + 5);
+    doc.setDrawColor(190); doc.roundedRect(x, y + 5, bw, 20, 1.5, 1.5); doc.setFontSize(8); doc.setTextColor(90); doc.text(T(t), x + 3, y + 10); });
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(T('MARIA BAG - Fiche matières ' + p.nom + ' - ' + numD(N, 0) + ' pièces - Page ' + i + '/' + n), W / 2, H - 6, { align: 'center' }); }
+  return { doc, name: ('Fiche_matieres_' + p.nom + '_' + N + 'pcs_' + today).replace(/[^\w\-]+/g, '_') + '.pdf' };
+}
+function ficheMatieresPdf() {
+  const p = produitCourant(); if (!p) return;
+  const N = Math.max(0, Math.floor(Number($d('#pd-qte').value) || 0));
+  if (!N) { toastD('Indiquez d’abord la quantité à fabriquer (case « Simulation : quantité à fabriquer »).'); $d('#pd-qte').focus(); return; }
+  try { const r = creerFicheMatieres(p, N); r.doc.save(r.name); toastD('Fiche matières enregistrée : ' + r.name); }
+  catch (e) { toastD('Erreur PDF : ' + e.message); }
+}
+
 function telechargerPdfProduit() {
   const p = produitCourant(); if (!p) return;
   try { const r = creerPdfProduit(p); r.doc.save(r.name); toastD('PDF enregistré : ' + r.name); }
