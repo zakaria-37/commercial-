@@ -273,7 +273,10 @@
         const a = arts.get(String(m.article_id)); if (!a) return;
         const k = cle(m, 'fournisseur', 'Fournisseur');
         const pu = Number(m.prix_achat) || 0, unit = pu > 0 ? (StockAPI.aCond(a) ? pu / StockAPI.condQte(a) : pu) : 0;
-        ops.push({ sens: 'achat', date: String(m.date_mvt || ''), key: k.key, id: k.id, nom: k.nom || 'Fournisseur non indiqué', libelle: a.nom, qte: StockAPI.fmtQty(a, Number(m.quantite)).main, montant: unit * Number(m.quantite), ref: m.reference || '', sansPrix: !(pu > 0) });
+        // quantité dans l'unité d'achat (rouleaux, bobines, cartons…) et prix de cette unité
+        const cnd = StockAPI.aCond(a), nb = cnd ? Number(m.quantite) / StockAPI.condQte(a) : Number(m.quantite);
+        const qteA = cnd ? (Math.round(nb * 100) / 100).toLocaleString('fr-FR') + ' ' + StockAPI.plur(a.cond_nom, nb) : /^(m|cm|mm|kg|g|l|ml|pcs|pc)$/i.test(a.unite || '') ? StockAPI.fmtQty(a, Number(m.quantite)).main : (Math.round(nb * 100) / 100).toLocaleString('fr-FR') + ' ' + StockAPI.plur(a.unite, nb);
+        ops.push({ sens: 'achat', date: String(m.date_mvt || ''), key: k.key, id: k.id, nom: k.nom || 'Fournisseur non indiqué', libelle: a.nom, qte: qteA, nb, pu: pu > 0 ? pu : null, montant: unit * Number(m.quantite), ref: m.reference || '', sansPrix: !(pu > 0) });
       });
     }
     if (window.PFAPI) {
