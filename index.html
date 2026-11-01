@@ -235,8 +235,9 @@
       <label>Nom *<input id="emp-nom" required maxlength="100"></label>
       <label>Prénom<input id="emp-prenom" maxlength="100"></label>
       <label>Poste<input id="emp-poste" maxlength="100" placeholder="Ex : couturière, coupeur…"></label>
-      <label>Salaire mensuel (DA)<input id="emp-salaire" type="number" min="0" step="0.01" placeholder="Facultatif : ex. 55000 pour un mois complet"></label>
-      <label>Taux horaire normal (DA/h)<input id="emp-taux" type="number" min="0" step="0.01" placeholder="Calculé si salaire mensuel"></label>
+      <label>Paie du mois idéal (DA) *<input id="emp-salaire" type="number" min="0" step="0.01" placeholder="Ex : 55000 pour un mois complet"></label>
+      <label>Taux horaire (DA/h) — calculé<input id="emp-taux" type="number" min="0" step="0.01" placeholder="Se calcule depuis le mois idéal"></label>
+      <small id="emp-sal-hint" class="pr-help" style="grid-column:1/-1;margin:0"></small>
       <label>Taux heure supplémentaire (DA/h)<input id="emp-taux-sup" type="number" min="0" step="0.01" placeholder="Si vide : taux normal"></label>
       <label>Fin de journée normale (après = heures sup)<input id="emp-fin-normale" type="time" value="19:00" required></label>
       <label style="grid-column:1/-1">Notes<textarea id="emp-notes"></textarea></label>
@@ -244,7 +245,7 @@
     <div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="cancelFormEmploye()">Annuler</button></div>
   </form>
   <div class="card"><h2>Salaires du mois : paie ordinaire − acomptes ; heures sup mises de côté à part</h2>
-    <div class="at-scroll"><table id="emp-table"><thead><tr><th>Employé</th><th>Taux horaire</th><th>Jours · heures</th><th>Paie ordinaire</th><th>Paie heures sup</th><th>Acomptes</th><th>Reste à payer</th><th>Crédit perso</th><th>H. sup à remettre</th><th>Actions</th></tr></thead><tbody id="emp-tbody"><tr><td colspan="10" class="at-empty">Chargement…</td></tr></tbody></table></div>
+    <div class="at-scroll"><table id="emp-table"><thead><tr><th>Employé</th><th>Mois idéal · taux</th><th>Jours · heures</th><th>Paie ordinaire</th><th>Paie heures sup</th><th>Acomptes</th><th>Reste à payer</th><th>Crédit perso</th><th>H. sup à remettre</th><th>Actions</th></tr></thead><tbody id="emp-tbody"><tr><td colspan="10" class="at-empty">Chargement…</td></tr></tbody></table></div>
   </div>
   <div class="card" style="margin-top:16px"><div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">Cumul des heures sup mises de côté (mois par mois)</h2><button class="btn" type="button" onclick="hsCumulPdf()">Imprimer (PDF)</button><button class="btn" type="button" onclick="hsCumulExcel()">Exporter Excel</button></div>
     <p class="pr-help" style="margin:4px 0 10px">Le total de ce que vous devez remettre à chaque employé le jour où vous payez ses heures sup : somme de tous les mois, moins ce qui a déjà été remis.</p>

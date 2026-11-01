@@ -94,6 +94,8 @@ function heuresPrevues(emp, mois) {
   return j * heuresParJour(emp);
 }
 const estMensuel = emp => Number(emp && emp.salaire_mensuel) > 0;
+/* Paie du mois idéal = paie d'un mois complet (tous les jours ouvrés, journée entière) : salaire mensuel, ou taux horaire × heures prévues du mois */
+function moisIdeal(emp, mois) { return estMensuel(emp) ? Number(emp.salaire_mensuel) : round2(Number(emp.taux_horaire || 0) * heuresPrevues(emp, mois)); }
 function tauxNormal(emp, mois) {
   if (!estMensuel(emp)) return Number(emp.taux_horaire || 0);
   const hp = heuresPrevues(emp, String(mois || isoE(new Date())).slice(0, 7));
@@ -214,7 +216,7 @@ function renderEmployes() {
     const po = paieOrdinaire(e, mois), ps = paieSup(e, mois), ac = totalAcomptes(e.id, mois), rt = retenueMois(e.id, mois), reste = round2(po - ac - rt), st = statut(reste), solde = soldeSup(e), cred = soldeCredit(e.id);
     return '<tr' + (String(e.id) === String(selEmploye) ? ' style="background:var(--nb)"' : '') + '>' +
       '<td><b>' + escE(e.nom) + '</b> ' + escE(e.prenom) + (e.poste ? '<small>' + escE(e.poste) + '</small>' : '') + '</td>' +
-      '<td>' + (estMensuel(e) ? money(e.salaire_mensuel) + ' / mois<small>' + money(tauxNormal(e, mois)) + ' / h ce mois (' + fmtH(heuresPrevues(e, mois)) + ') \u00b7 Sup : ' + money(tauxSup(e)) + ' / h</small>' : money(e.taux_horaire) + ' / h<small>Sup : ' + money(tauxSup(e)) + ' / h</small>') + '</td>' +
+      '<td><b>' + money(moisIdeal(e, mois)) + '</b> / mois<small>' + money(tauxNormal(e, mois)) + ' / h \u00b7 ' + fmtH(heuresPrevues(e, mois)) + ' ce mois \u00b7 Sup : ' + money(tauxSup(e)) + ' / h</small></td>' +
       '<td><b>' + fmtH(hn) + '</b><small>' + j + ' jour' + (j > 1 ? 's' : '') + ' \u00b7 Sup : ' + (hs > 0 ? fmtH(hs) : '\u2014') + '</small></td>' +
       '<td>' + money(po) + '</td>' +
       '<td>' + (ps > 0 ? '<b style="color:#8a5a12">' + money(ps) + '</b><br><small>mise de côté</small>' : '\u2014') + '</td>' +
@@ -250,7 +252,8 @@ function showFormEmploye(id) {
   $e('#emp-prenom').value    = emp ? (emp.prenom || '') : '';
   $e('#emp-poste').value     = emp ? (emp.poste || '') : '';
   $e('#emp-taux').value      = emp ? (emp.taux_horaire || '') : '';
-  if ($e('#emp-salaire')) $e('#emp-salaire').value = emp && Number(emp.salaire_mensuel) > 0 ? emp.salaire_mensuel : '';
+  if ($e('#emp-salaire')) $e('#emp-salaire').value = emp ? (moisIdeal(emp, curMonth()) || '') : '';
+  lienSalaire();
   $e('#emp-taux-sup').value  = emp ? (emp.taux_heure_sup || '') : '';
   $e('#emp-fin-normale').value = emp ? (String(emp.heure_fin_normale || '19:00').slice(0, 5)) : '19:00';
   $e('#emp-notes').value     = emp ? (emp.notes || '') : '';
@@ -265,6 +268,16 @@ function hideFormEmploye() {
 // Alias utilisé par le bouton Annuler dans le HTML
 function cancelFormEmploye() { hideFormEmploye(); }
 
+/* Formulaire : « Paie du mois idéal » et « Taux horaire » sont liés (l'un calcule l'autre avec les heures prévues du mois affiché) */
+function hpForm() { return heuresPrevues({ heure_fin_normale: $e('#emp-fin-normale').value || '19:00' }, curMonth()); }
+function lienSalaire(src) {
+  const hp = hpForm(), sal = $e('#emp-salaire'), tx = $e('#emp-taux'), h = $e('#emp-sal-hint'); if (!sal || !tx) return;
+  if (src === 'sal' && hp > 0) tx.value = sal.value ? round2(parseFloat(sal.value) / hp) : '';
+  if (src === 'taux') sal.value = tx.value ? round2(parseFloat(tx.value) * hp) : '';
+  if (h) h.textContent = 'Mois de ' + curMonth().split('-').reverse().join('/') + ' : ' + fmtH(hp) + ' prévues (tous les jours ouvrés, journée complète). Le salaire du mois idéal est payé en entier pour un mois complet, au prorata sinon.';
+}
+['emp-salaire', 'emp-taux', 'emp-fin-normale'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('input', () => lienSalaire(id === 'emp-salaire' ? 'sal' : id === 'emp-taux' ? 'taux' : 'sal')); });
+
 /* ---------- Sauvegarde employé ---------- */
 async function saveEmploye() {
   const nom = $e('#emp-nom').value.trim();
@@ -277,8 +290,8 @@ async function saveEmploye() {
   const notes = $e('#emp-notes').value.trim();
 
   if (!nom) { toastE('Le nom est obligatoire.'); return; }
-  // salaire mensuel : le taux horaire enregistré devient le taux d'un mois type (26 jours) — il sert aux heures sup si leur taux est vide
-  if (salaire > 0) taux = round2(salaire / (26 * heuresParJour({ heure_fin_normale: finNorm }) || 260));
+  // salaire du mois idéal : l'employé est payé au mois ; le taux enregistré est celui du mois affiché (il sert aux heures sup si leur taux est vide)
+  if (salaire > 0) { const hp = heuresPrevues({ heure_fin_normale: finNorm }, curMonth()); if (hp > 0) taux = round2(salaire / hp); }
   if (taux <= 0) { toastE('Indiquez un taux horaire ou un salaire mensuel.'); return; }
 
   const payload = { nom, prenom, poste, salaire_mensuel: salaire, taux_horaire: taux, taux_heure_sup: tauxS, heure_fin_normale: finNorm, notes };
