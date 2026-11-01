@@ -31,3 +31,8 @@ begin
   end if;
 end $$;
 notify pgrst, 'reload schema';
+
+-- Remboursement direct (l'employé rend l'argent, sans retenue sur salaire)
+alter table public.credits_employes drop constraint if exists credits_employes_type_check;
+alter table public.credits_employes add constraint credits_employes_type_check check (type in ('credit', 'retenue', 'report', 'remboursement'));
+notify pgrst, 'reload schema';

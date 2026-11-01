@@ -121,7 +121,8 @@ function paieSup(emp, mois) { return round2(pointagesDuMois(emp.id, mois).reduce
 /* Crédit personnel : crédits accordés + soldes de départ − retenues sur salaire = reste dû par l'employé */
 function opsCr(empId) { return CREDITS.filter(r => String(r.employe_id) === String(empId)).sort((a, b) => String(b.date_op).localeCompare(String(a.date_op))); }
 function crSomme(empId, type) { return round2(opsCr(empId).filter(r => r.type === type).reduce((s, r) => s + Number(r.montant || 0), 0)); }
-function soldeCredit(empId) { return round2(crSomme(empId, 'credit') + crSomme(empId, 'report') - crSomme(empId, 'retenue')); }
+/* Remboursement direct : l'employé rend l'argent de la main à la main → le crédit diminue SANS toucher au salaire du mois */
+function soldeCredit(empId) { return round2(crSomme(empId, 'credit') + crSomme(empId, 'report') - crSomme(empId, 'retenue') - crSomme(empId, 'remboursement')); }
 function retenueMois(empId, mois) { return round2(opsCr(empId).filter(r => r.type === 'retenue' && String(r.date_op || '').startsWith(mois)).reduce((s, r) => s + Number(r.montant || 0), 0)); }
 function resteSalaire(emp, mois) { return round2(paieOrdinaire(emp, mois) - totalAcomptes(emp.id, mois) - retenueMois(emp.id, mois)); }
 /* Heures sup mises de côté, tous mois confondus : gagné + soldes de départ − remises déjà faites */
@@ -418,24 +419,26 @@ document.addEventListener('submit', ev => { if (ev.target.id === 'hs-form') { ev
 function renderCredit(emp, mois) {
   const box = $e('#cr-box'); if (!box) return;
   if (crErr) { box.innerHTML = '<div class="at-stat" style="color:var(--r)">' + escE(crErr) + '</div>'; return; }
-  const cr = crSomme(emp.id, 'credit'), rep = crSomme(emp.id, 'report'), ret = crSomme(emp.id, 'retenue'), solde = soldeCredit(emp.id), ops = opsCr(emp.id), rt = retenueMois(emp.id, mois);
-  const T = { credit: 'Cr\u00e9dit accord\u00e9', retenue: 'Retenue sur salaire', report: 'Solde de d\u00e9part' };
-  let h = '<h2>Cr\u00e9dit personnel</h2><p class="pr-help">Argent que vous avancez \u00e0 l\u2019employ\u00e9 <b>en dehors du travail</b> (mariage, urgence\u2026). Chaque fin de mois, enregistrez la <b>retenue sur salaire</b> : elle est d\u00e9duite du reste \u00e0 payer du mois et le cr\u00e9dit diminue automatiquement.</p>' +
+  const cr = crSomme(emp.id, 'credit'), rep = crSomme(emp.id, 'report'), ret = crSomme(emp.id, 'retenue'), remb = crSomme(emp.id, 'remboursement'), solde = soldeCredit(emp.id), ops = opsCr(emp.id), rt = retenueMois(emp.id, mois);
+  const T = { credit: 'Cr\u00e9dit accord\u00e9', retenue: 'Retenue sur salaire', report: 'Solde de d\u00e9part', remboursement: 'Remboursement direct (hors salaire)' };
+  let h = '<h2>Cr\u00e9dit personnel</h2><p class="pr-help">Argent que vous avancez \u00e0 l\u2019employ\u00e9 <b>en dehors du travail</b> (mariage, urgence\u2026). Il se rembourse de deux fa\u00e7ons : la <b>retenue sur salaire</b> (d\u00e9duite du reste \u00e0 payer du mois) ou le <b>remboursement direct</b> (l\u2019employ\u00e9 rend l\u2019argent, le salaire n\u2019est pas touch\u00e9). Dans les deux cas, le cr\u00e9dit diminue automatiquement.</p>' +
     '<div class="at-stats"><div class="at-stat"><span>Cr\u00e9dits accord\u00e9s' + (rep ? ' (+ ' + money(rep) + ' avant la plateforme)' : '') + '</span><b>' + money(cr + rep) + '</b></div>' +
-    '<div class="at-stat"><span>D\u00e9j\u00e0 rembours\u00e9</span><b>' + money(ret) + '</b></div>' +
+    '<div class="at-stat"><span>D\u00e9j\u00e0 rembours\u00e9</span><b>' + money(ret + remb) + '</b>' + (remb ? '<small>dont ' + money(ret) + ' sur salaire et ' + money(remb) + ' en direct</small>' : '') + '</div>' +
     '<div class="at-stat"><span>Retenue ce mois-ci</span><b>' + money(rt) + '</b></div>' +
     '<div class="at-stat"><span>' + (solde < 0 ? 'Trop rembours\u00e9' : 'Reste \u00e0 rembourser') + '</span><b style="color:' + (solde > 0.004 ? '#b3261e' : solde < -0.004 ? '#8a5a12' : '#1e6e32') + '">' + money(Math.abs(solde)) + '</b></div></div>';
   if (crForm) {
     const t = crForm.type, aff = escE(emp.nom), reste = round2(paieOrdinaire(emp, mois) - totalAcomptes(emp.id, mois) - rt);
-    h += '<form id="cr-form" class="at-form" style="display:block"><h3 style="margin-top:0">' + (t === 'credit' ? 'Nouveau cr\u00e9dit pour ' + aff : t === 'retenue' ? 'Retenue sur le salaire de ' + aff + ' (' + mois.split('-').reverse().join('/') + ')' : 'Solde de d\u00e9part (cr\u00e9dit d\u00fb avant la plateforme)') + '</h3>' +
+    h += '<form id="cr-form" class="at-form" style="display:block"><h3 style="margin-top:0">' + (t === 'credit' ? 'Nouveau cr\u00e9dit pour ' + aff : t === 'retenue' ? 'Retenue sur le salaire de ' + aff + ' (' + mois.split('-').reverse().join('/') + ')' : t === 'remboursement' ? 'Remboursement direct de ' + aff + ' (sans toucher au salaire)' : 'Solde de d\u00e9part (cr\u00e9dit d\u00fb avant la plateforme)') + '</h3>' +
       '<div class="at-fields"><label>Date<input id="cr-date" type="date" value="' + (t === 'retenue' && !isoE(new Date()).startsWith(mois) ? mois + '-' + String(joursDansMois(mois)).padStart(2, '0') : isoE(new Date())) + '"></label>' +
       '<label>Montant (DA) *<input id="cr-montant" type="number" min="0" step="0.01" inputmode="decimal" required value="' + (t === 'retenue' && solde > 0 ? Math.min(solde, Math.max(0, reste)) : '') + '"></label>' +
+      (t === 'remboursement' ? '<label>Mode<select id="cr-mode"><option>Esp\u00e8ces</option><option>Ch\u00e8que</option><option>Virement</option></select></label>' : '') +
       '<label>Note<input id="cr-note" maxlength="150" placeholder="' + (t === 'credit' ? 'Ex : mariage, urgence\u2026' : 'Facultatif') + '"></label></div>' +
+      (t === 'remboursement' ? '<p class="pr-help" style="margin:4px 0">Cr\u00e9dit \u00e0 rembourser : <b>' + money(Math.max(0, solde)) + '</b>. Le salaire du mois reste inchang\u00e9.</p>' : '') +
       (t === 'retenue' ? '<p class="pr-help" style="margin:4px 0">Reste \u00e0 payer ce mois avant retenue : <b>' + money(reste + 0) + '</b> \u00b7 cr\u00e9dit \u00e0 rembourser : <b>' + money(Math.max(0, solde)) + '</b></p>' : '') +
       '<div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="crFermer()">Annuler</button></div></form>';
-  } else h += '<div class="at-actions"><button class="btn p" type="button" onclick="crOuvrir(\'credit\')">+ Accorder un cr\u00e9dit</button><button class="btn" type="button" onclick="crOuvrir(\'retenue\')">Retenue sur le salaire du mois</button><button class="btn" type="button" onclick="crOuvrir(\'report\')">Solde de d\u00e9part</button></div>';
+  } else h += '<div class="at-actions"><button class="btn p" type="button" onclick="crOuvrir(\'credit\')">+ Accorder un cr\u00e9dit</button><button class="btn" type="button" onclick="crOuvrir(\'retenue\')">Retenue sur le salaire du mois</button><button class="btn" type="button" onclick="crOuvrir(\'remboursement\')">Remboursement direct</button><button class="btn" type="button" onclick="crOuvrir(\'report\')">Solde de d\u00e9part</button></div>';
   h += ops.length ? '<div class="at-scroll"><table style="min-width:0"><thead><tr><th>Date</th><th>Type</th><th>Montant</th><th>Note</th><th></th></tr></thead><tbody>' +
-    ops.map(r => '<tr><td>' + fdE(r.date_op) + '</td><td>' + T[r.type] + '</td><td><b style="color:' + (r.type === 'retenue' ? '#1e6e32' : '#b3261e') + '">' + (r.type === 'retenue' ? '\u2212 ' : '+ ') + money(r.montant) + '</b></td><td>' + escE(r.note || '') + '</td><td><button class="btn s d" type="button" onclick="crSupprimer(\'' + r.id + '\')">Supprimer</button></td></tr>').join('') + '</tbody></table></div>' : '';
+    ops.map(r => { const moins = r.type === 'retenue' || r.type === 'remboursement'; return '<tr><td>' + fdE(r.date_op) + '</td><td>' + (T[r.type] || r.type) + '</td><td><b style="color:' + (moins ? '#1e6e32' : '#b3261e') + '">' + (moins ? '\u2212 ' : '+ ') + money(r.montant) + '</b></td><td>' + escE(r.note || '') + '</td><td><button class="btn s d" type="button" onclick="crSupprimer(\'' + r.id + '\')">Supprimer</button></td></tr>'; }).join('') + '</tbody></table></div>' : '';
   box.innerHTML = h;
 }
 function crOuvrir(type) { crForm = { type }; const emp = EMPLOYES.find(x => String(x.id) === String(selEmploye)); if (emp) renderCredit(emp, curMonth()); const m = $e('#cr-montant'); if (m) { m.focus(); m.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }
@@ -445,11 +448,12 @@ async function crEnregistrer() {
   const montant = parseFloat($e('#cr-montant').value) || 0, date = $e('#cr-date').value, type = crForm.type;
   if (montant <= 0) { toastE('Le montant doit \u00eatre sup\u00e9rieur \u00e0 0.'); return; }
   if (!date) { toastE('La date est obligatoire.'); return; }
+  if (type === 'remboursement' && montant > soldeCredit(emp.id) + 0.004 && !confirm('Ce remboursement (' + money(montant) + ') d\u00e9passe le cr\u00e9dit \u00e0 rembourser (' + money(Math.max(0, soldeCredit(emp.id))) + ').\nContinuer ?')) return;
   if (type === 'retenue' && montant > soldeCredit(emp.id) + 0.004 && !confirm('Cette retenue (' + money(montant) + ') d\u00e9passe le cr\u00e9dit \u00e0 rembourser (' + money(Math.max(0, soldeCredit(emp.id))) + ').\nContinuer ?')) return;
-  const r = await sb.from('credits_employes').insert([{ employe_id: emp.id, date_op: date, type, montant: round2(montant), note: $e('#cr-note').value.trim() }]).select();
+  const r = await sb.from('credits_employes').insert([{ employe_id: emp.id, date_op: date, type, montant: round2(montant), note: [type === 'remboursement' && $e('#cr-mode') ? $e('#cr-mode').value : '', $e('#cr-note').value.trim()].filter(Boolean).join(' \u00b7 ') }]).select();
   if (r.error) { toastE('Erreur : ' + errMsgE(r.error)); return; }
   CREDITS.push(r.data[0]); crForm = null;
-  toastE(type === 'credit' ? 'Cr\u00e9dit enregistr\u00e9 : ' + money(montant) : type === 'retenue' ? 'Retenue enregistr\u00e9e : ' + money(montant) + ' \u2014 d\u00e9duite du salaire.' : 'Solde de d\u00e9part enregistr\u00e9.');
+  toastE(type === 'credit' ? 'Cr\u00e9dit enregistr\u00e9 : ' + money(montant) : type === 'retenue' ? 'Retenue enregistr\u00e9e : ' + money(montant) + ' \u2014 d\u00e9duite du salaire.' : type === 'remboursement' ? 'Remboursement enregistr\u00e9 : ' + money(montant) + ' \u2014 le salaire n\u2019est pas touch\u00e9.' : 'Solde de d\u00e9part enregistr\u00e9.');
   renderPanel(true); renderEmployes();
 }
 async function crSupprimer(id) {
