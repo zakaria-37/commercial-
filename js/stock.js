@@ -336,6 +336,9 @@ function majArticleLabels() {
   } else if (cond) h.push('⚠ Indiquez le contenu d’un ' + escS(cond) + ' pour calculer le prix par ' + escS(unite) + '.');
   const seuil = parseFloat($s('#st-aseuil').value) || 0;
   if (seuil && cond && cq > 0) h.push('Seuil d’alerte = ' + numS(seuil / cq, 2) + ' ' + plur(cond, seuil / cq));
+  // prix total du stock de départ : quantité × prix d'une unité (bobine, rouleau…)
+  const init = parseFloat($s('#st-ainit').value) || 0, ui = cond && cq > 0 ? cond : unite;
+  if (init > 0 && prix > 0 && $s('#st-ainit-wrap').style.display !== 'none') h.push('Prix total du stock de départ : ' + numS(init, 2) + ' ' + escS(plur(ui, init)) + ' × ' + moneyS(prix) + ' = <b>' + moneyS(init * prix) + '</b>');
   $s('#st-ahint').innerHTML = h.join('<br>');
 }
 function onCatChange() {
@@ -597,7 +600,7 @@ $s('#st-aunite').innerHTML = STK_UNITES.map(u => '<option>' + u + '</option>').j
 $s('#st-aform').addEventListener('submit', ev => { ev.preventDefault(); saveArticle(); });
 $s('#st-mform').addEventListener('submit', ev => { ev.preventDefault(); saveMvt(); });
 $s('#st-acat').addEventListener('change', onCatChange);
-['#st-aunite', '#st-acond', '#st-acqte', '#st-aprix', '#st-aseuil'].forEach(s => $s(s).addEventListener('input', majArticleLabels));
+['#st-aunite', '#st-acond', '#st-acqte', '#st-aprix', '#st-aseuil', '#st-ainit'].forEach(s => $s(s).addEventListener('input', majArticleLabels));
 $s('#st-marticle').addEventListener('change', () => onMvtArticle(true));
 $s('#st-mtype').addEventListener('change', () => { majMvt(); });
 ['#st-mqte', '#st-mprix'].forEach(s => $s(s).addEventListener('input', majMvt));

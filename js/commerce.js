@@ -128,8 +128,8 @@
     const root = $('#cm-root'); if (!root) return;
     if (err) { root.innerHTML = '<div class="card"><div class="iv-err">' + esc(err) + '</div></div>'; return; }
     if (ed) { root.innerHTML = editeur(); return; }
-    let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Commerce</h2><p>Bons de livraison et de réception, factures, devis, bons de commande, versements, crédits, journal des opérations et caisse.</p></div></div>';
-    h += '<div class="at-tabs" id="cm-tabs">' + ['bon_livraison', 'bon_reception', 'facture', 'devis', 'bon_commande'].map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + TYPES[t].lp + '</button>').join('') +
+    let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Commerce</h2><p>Bons de livraison (avec facture) et bons de réception, paiements, versements, crédits, journal des opérations et caisse.</p></div></div>';
+    h += '<div class="at-tabs" id="cm-tabs">' + ['bon_livraison', 'bon_reception', 'facture', 'devis', 'bon_commande'].filter(t => isBon(t) || DOCS.some(d => d.type === t) || tab === t).map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + TYPES[t].lp + '</button>').join('') +
       ['versements', 'credits', 'journal'].map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + ({ versements: 'Versements', credits: 'Crédits', journal: 'Journal & caisse' })[t] + '</button>').join('') + '<button type="button" data-t="entreprise" class="' + (tab === 'entreprise' ? 'on' : '') + '">Mon entreprise</button></div>';
     h += tab === 'entreprise' ? paneEntreprise() : (tab === 'versements' || tab === 'credits' || tab === 'journal') ? (window.CommerceFin ? CommerceFin.html(tab) : '') : paneListe(tab);
     root.innerHTML = h;
@@ -230,6 +230,7 @@
       '<label>Numéro<input id="cm-num" value="' + esc(doc.numero) + '" maxlength="30"></label><label>Date<input id="cm-date" type="date" value="' + esc(doc.date_doc) + '"></label>' +
       (fac || bon ? '' : '<label>' + (doc.type === 'devis' ? 'Valable jusqu’au' : 'Livraison prévue') + '<input id="cm-ech" type="date" value="' + esc(doc.echeance || '') + '"></label>') +
       (bon ? '<label>' + (br ? 'N° de facture du fournisseur' : 'Réf. du client (son bon de commande)') + '<input id="cm-refext" maxlength="60" value="' + esc(doc.ref_externe || '') + '" placeholder="Facultatif"></label>' : '') +
+      (bon ? '<label>Mode de paiement<select id="cm-modep">' + [['especes', 'Espèces'], ['cheque', 'Chèque'], ['virement', 'Virement'], ['autre', 'Autre']].map(o => '<option value="' + o[0] + '"' + ((doc.mode_paiement || 'especes') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' : '') +
       (fac || bc || bon ? '<label>Paiement<select id="cm-paie">' + [['cash', 'Cash (payé comptant)'], ['terme', 'À terme (paiement plus tard)'], ['versement', 'Versement (par tranches)']].map(o => '<option value="' + o[0] + '"' + ((doc.paiement || 'terme') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' : '') +
       '<label>TVA<select id="cm-tva">' + [0, 9, 19].map(v => '<option value="' + v + '"' + (Number(doc.tva_taux) === v ? ' selected' : '') + '>' + (v ? v + ' %' : 'Sans TVA') + '</option>').join('') + '</select></label>' +
       '<label>Remise (DA)<input id="cm-remise" type="number" min="0" step="any" inputmode="decimal" value="' + (Number(doc.remise) || '') + '" placeholder="0"></label>' +
@@ -269,7 +270,7 @@
       h += '<button class="btn" type="button" id="cm-pdf">PDF</button>';
       if (doc.type === 'devis' && doc.statut !== 'facture') h += '<button class="btn" type="button" id="cm-tofac">Transformer en facture</button>';
       if (bc) h += '<button class="btn" type="button" id="cm-rec">Réceptionner</button>';
-      if (doc.type === 'bon_livraison' && doc.statut !== 'facture') h += '<button class="btn" type="button" id="cm-blfac">Facturer ce bon</button>';
+      if (doc.type === 'bon_livraison') h += '<button class="btn" type="button" id="cm-pdffac">PDF facture</button>';
       if (fac && etatFacture(doc).l !== 'Annulée' && ed.lignes.some(l => l.produit_id && num(l.quantite) > num(l.quantite_recue))) h += '<button class="btn p" type="button" id="cm-livrer">Sortir du stock</button>';
       if (fac && etatFacture(doc).l !== 'Annulée') h += '<button class="btn" type="button" id="cm-annul">Annuler la facture</button>';
       h += '<button class="btn d" type="button" id="cm-del">Supprimer</button>';
@@ -284,7 +285,7 @@
   function formPaiement(doc, reste) {
     const fac = encaisse(doc);
     return '<form id="cm-payform" class="at-form" style="display:block"><div class="at-fields"><label>Montant (DA) *<input id="cm-pm" type="number" min="0" step="any" inputmode="decimal" value="' + (reste > 0 ? reste : '') + '"></label><label>Date<input id="cm-pd" type="date" value="' + today() + '"></label>' +
-      '<label>Mode<select id="cm-pmode"><option value="especes">Espèces</option><option value="cheque">Chèque</option><option value="virement">Virement</option><option value="autre">Autre</option></select></label><label>Référence<input id="cm-pref" maxlength="80" placeholder="N° de chèque, reçu…"></label></div>' +
+      '<label>Mode<select id="cm-pmode">' + [['especes', 'Espèces'], ['cheque', 'Chèque'], ['virement', 'Virement'], ['autre', 'Autre']].map(o => '<option value="' + o[0] + '"' + ((doc.mode_paiement || 'especes') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label><label>Référence<input id="cm-pref" maxlength="80" placeholder="N° de chèque, reçu…"></label></div>' +
       '<div class="at-actions"><button class="btn p" type="submit">' + (fac ? 'Enregistrer l’encaissement' : 'Enregistrer le règlement') + '</button><button class="btn" type="button" id="cm-pno">Annuler</button></div></form>';
   }
   function formReception(doc) {
@@ -306,6 +307,7 @@
     d.tva_taux = num($('#cm-tva').value); d.remise = Math.max(0, num($('#cm-remise').value)); d.notes = $('#cm-notes').value.trim();
     if ($('#cm-statut')) d.statut = $('#cm-statut').value;
     if ($('#cm-refext')) d.ref_externe = $('#cm-refext').value.trim();
+    if ($('#cm-modep')) d.mode_paiement = $('#cm-modep').value;
   }
   /* Facture : le stock des produits finis suit toujours la facture (sortie à l'enregistrement, retour si on diminue ou supprime une ligne) */
   async function synchroniserStock(infoSuppr) {
@@ -336,7 +338,7 @@
     const c = cById(d.contact_id), fac = encaisse(d);
     if (paye > ttc) for (const p of liees) await sb.from('paiements').delete().eq('id', p.id);
     const du = paye > ttc ? ttc : r2(ttc - paye);
-    if (du > 0) await sb.from('paiements').insert([{ date_paiement: d.date_doc || today(), sens: fac ? 'encaissement' : 'reglement', contact_id: d.contact_id, contact_nom: c ? lbl(c) : d.contact_nom, montant: du, mode: 'especes', reference: d.numero, note: TYPES[d.type].l + ' ' + d.numero + ' : paiement comptant', document_id: d.id }]);
+    if (du > 0) await sb.from('paiements').insert([{ date_paiement: d.date_doc || today(), sens: fac ? 'encaissement' : 'reglement', contact_id: d.contact_id, contact_nom: c ? lbl(c) : d.contact_nom, montant: du, mode: d.mode_paiement || 'especes', reference: d.numero, note: TYPES[d.type].l + ' ' + d.numero + ' : paiement comptant', document_id: d.id }]);
     if (window.PayAPI) await PayAPI.load();
   }
 
@@ -382,7 +384,7 @@
     const ls = ed.lignes.filter(l => String(l.designation).trim() || num(l.quantite) > 0);
     if (!ls.length) { say('Ajoutez au moins une ligne.'); return false; }
     if (ls.some(l => !String(l.designation).trim())) { say('Chaque ligne doit avoir une désignation.'); return false; }
-    const row = { type: d.type, numero: d.numero, date_doc: d.date_doc, echeance: d.echeance, paiement: d.paiement || 'terme', contact_id: d.contact_id, contact_nom: d.contact_nom, statut: d.statut, source_id: d.source_id, commande_id: d.commande_id, tva_taux: d.tva_taux, remise: r2(d.remise), notes: d.notes, ref_externe: d.ref_externe || '' };
+    const row = { type: d.type, numero: d.numero, date_doc: d.date_doc, echeance: d.echeance, paiement: d.paiement || 'terme', contact_id: d.contact_id, contact_nom: d.contact_nom, statut: d.statut, source_id: d.source_id, commande_id: d.commande_id, tva_taux: d.tva_taux, remise: r2(d.remise), notes: d.notes, ref_externe: d.ref_externe || '', mode_paiement: d.mode_paiement || 'especes' };
     let id = d.id;
     if (id) { const u = await sb.from('documents').update(row).eq('id', id); if (u.error) { say('Erreur : ' + u.error.message); return false; } }
     else { const i = await sb.from('documents').insert([row]).select(); if (i.error || !i.data || !i.data[0]) { say('Erreur : ' + ((i.error && i.error.message) || 'enregistrement impossible')); return false; } id = i.data[0].id; d.id = id; }
@@ -447,13 +449,13 @@
     await load(true);
     const r = await sb.from('commandes').select('*, productions(modele_nom, produit_id)').eq('id', cmdId).single();
     if (r.error || !r.data) { say('Commande introuvable.'); return; }
-    const c = r.data, existante = DOCS.find(d => d.type === 'facture' && String(d.commande_id) === String(cmdId) && d.statut !== 'annulee');
-    if (existante && !confirm('Une facture existe déjà pour cette commande (' + existante.numero + ').\nEn créer une autre ?')) { ouvrir(existante.id); return; }
+    const c = r.data, existante = DOCS.find(d => (d.type === 'facture' || d.type === 'bon_livraison') && String(d.commande_id) === String(cmdId) && d.statut !== 'annulee');
+    if (existante && !confirm('Un bon de livraison existe déjà pour cette commande (' + existante.numero + ').\nEn créer une autre ?')) { ouvrir(existante.id); return; }
     const nom = (c.productions && c.productions.modele_nom) || 'Produit';
     const pf = window.PFAPI ? PFAPI.produits() : [];
     const prod = (c.productions && c.productions.produit_id && pf.find(p => String(p.id) === String(c.productions.produit_id))) || pf.find(p => norm(p.nom) === norm(nom)) || null;
     const ct = c.contact_id ? cById(c.contact_id) : null;
-    tab = 'facture'; nouveauDoc('facture', { commande_id: cmdId, contact_id: ct ? ct.id : null, contact_nom: ct ? lbl(ct) : '', notes: 'Commande ' + (c.commande_numero || '') });
+    tab = 'bon_livraison'; nouveauDoc('bon_livraison', { commande_id: cmdId, contact_id: ct ? ct.id : null, contact_nom: ct ? lbl(ct) : '', notes: 'Commande ' + (c.commande_numero || '') });
     ed.lignes = [{ id: null, produit_id: prod ? prod.id : null, article_id: null, designation: nom, unite: 'pcs', quantite: Number(c.quantite_commandee) || 1, prix_unitaire: Number(c.prix_unitaire) || (prod ? Number(prod.prix_vente) : 0) || 0, quantite_recue: 0 }];
     render();
   }
@@ -553,11 +555,12 @@
 
   /* ---------- PDF ---------- */
   const pdfT = s => String(s ?? '').replace(/œ/g, 'oe').replace(/Œ/g, 'OE').replace(/[  ]/g, ' ');
-  function pdf() {
+  /* asFacture : le bon de livraison imprimé comme FACTURE (même numéro, mêmes lignes, paiement) */
+  function pdf(asFacture) {
     if (!(window.jspdf && window.jspdf.jsPDF)) { say('Bibliothèque PDF non chargée.'); return; }
     lireEntete();
-    const d = ed.doc, T = TYPES[d.type], t = totaux(d, ed.lignes), doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), M = 14, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
-    const c = cById(d.contact_id), fac = d.type === 'facture';
+    const d = ed.doc, asF = !!asFacture && d.type === 'bon_livraison', T = asF ? Object.assign({}, TYPES[d.type], { l: 'Facture' }) : TYPES[d.type], t = totaux(d, ed.lignes), doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), M = 14, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    const c = cById(d.contact_id), fac = d.type === 'facture' || asF;
     if (typeof LOGO_PDF !== 'undefined' && LOGO_PDF) doc.addImage(LOGO_PDF, 'PNG', M, 9, 22, 22);
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text(pdfT(ENT.nom || 'MARIA BAG'), M + 26, 17);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(90);
@@ -566,11 +569,11 @@
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(pdfT(T.l.toUpperCase()), W - M, 17, { align: 'right' });
     doc.setFontSize(11); doc.text(pdfT('N° ' + d.numero), W - M, 24, { align: 'right' });
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.text(pdfT('Date : ' + fd(d.date_doc)), W - M, 30, { align: 'right' });
-    if (fac || d.type === 'bon_commande' || isBon(d.type)) doc.text(pdfT('Paiement : ' + ({ cash: 'Cash', terme: 'A terme', versement: 'Versement' })[d.paiement || 'terme']), W - M, d.echeance ? 40 : 35, { align: 'right' });
+    if (fac || d.type === 'bon_commande' || isBon(d.type)) doc.text(pdfT('Paiement : ' + ({ cash: 'Cash', terme: 'A terme', versement: 'Versement' })[d.paiement || 'terme'] + (d.paiement === 'cash' && d.mode_paiement && d.mode_paiement !== 'especes' ? ' (' + ({ cheque: 'cheque', virement: 'virement', autre: 'autre' })[d.mode_paiement] + ')' : '')), W - M, d.echeance ? 40 : 35, { align: 'right' });
     if (d.echeance && !isBon(d.type)) doc.text(pdfT((d.type === 'devis' ? 'Valable jusqu\'au : ' : fac ? 'Echeance : ' : 'Livraison prevue : ') + fd(d.echeance)), W - M, 35, { align: 'right' });
     doc.setDrawColor(0); doc.setLineWidth(0.6); doc.line(M, 44, W - M, 44);
     const bonP = isBon(d.type), brP = d.type === 'bon_reception';
-    doc.setFontSize(8.5); doc.setTextColor(90); doc.text(pdfT(d.type === 'bon_livraison' ? 'LIVRE A / CLIENT' : brP ? 'FOURNISSEUR / PROVENANCE' : T.cible === 'Client' ? 'FACTURE A / CLIENT' : 'FOURNISSEUR'), M, 50);
+    doc.setFontSize(8.5); doc.setTextColor(90); doc.text(pdfT(asF ? 'FACTURE A / CLIENT' : d.type === 'bon_livraison' ? 'LIVRE A / CLIENT' : brP ? 'FOURNISSEUR / PROVENANCE' : T.cible === 'Client' ? 'FACTURE A / CLIENT' : 'FOURNISSEUR'), M, 50);
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(pdfT(c ? lbl(c) : d.contact_nom), M, 56);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); if (c) doc.text(pdfT([c.ville, c.tel].filter(Boolean).join('  -  ')), M, 61);
     const lignesP = ed.lignes.filter(l => String(l.designation).trim());
@@ -591,14 +594,14 @@
     doc.text(doc.splitTextToSize(pdfT(phrase), W - 2 * M), M, y); y += 12;
     if (d.notes) { doc.setFontSize(9); doc.setTextColor(90); doc.text(doc.splitTextToSize(pdfT('Note : ' + d.notes), W - 2 * M), M, y); y += 10; doc.setTextColor(0); }
     if (ENT.rib && fac) { doc.setFontSize(9); doc.text(pdfT('Reglement par virement : ' + ENT.rib), M, y); y += 6; }
-    if (bonP) {     // cadres de signature
+    if (bonP && !asF) {     // cadres de signature
       if (y > H - 50) { doc.addPage(); y = 20; }
       const bw = (W - 2 * M - 10) / 2, gauche = brP ? 'Remis par (fournisseur / atelier)' : 'Livre par (MARIA BAG)', droite = brP ? 'Receptionne par (MARIA BAG)' : 'Recu conforme par le client (signature et cachet)';
       doc.setDrawColor(120); doc.setLineWidth(0.2); doc.rect(M, y + 2, bw, 28); doc.rect(M + bw + 10, y + 2, bw, 28);
       doc.setFontSize(8.5); doc.setTextColor(90); doc.text(pdfT(gauche), M + 3, y + 7); doc.text(pdfT(droite), M + bw + 13, y + 7); doc.setTextColor(0);
     }
     doc.setFontSize(8.5); doc.setTextColor(110); doc.text(pdfT(ENT.pied || 'Merci pour votre confiance'), W / 2, H - 8, { align: 'center' });
-    doc.save(norm(T.l).replace(/ /g, '-') + '-' + String(d.numero).replace(/[^A-Za-z0-9-]/g, '') + '.pdf');
+    doc.save((asF ? 'facture' : norm(T.l).replace(/ /g, '-')) + '-' + String(d.numero).replace(/[^A-Za-z0-9-]/g, '') + '.pdf');
   }
 
   /* ---------- Événements ---------- */
@@ -616,6 +619,7 @@
     const rm = t.closest('[data-rm]'); if (rm) { lireEntete(); const l = ed.lignes[Number(rm.dataset.rm)]; if (l && l.id) { if (ed.doc.type === 'bon_commande' && num(l.quantite_recue) > 0) { say('Cette ligne a déjà été reçue : impossible de la supprimer.'); return; } ed.supprimes.push(l.id); if (ed.doc.type === 'facture' && l.produit_id && num(l.quantite_recue) > 0) (ed.supprInfo = ed.supprInfo || []).push({ produit_id: l.produit_id, q: num(l.quantite_recue) }); } ed.lignes.splice(Number(rm.dataset.rm), 1); render(); return; }
     const pdl = t.closest('[data-pdel]'); if (pdl) { if (confirm('Supprimer ce paiement ?')) { const r = await sb.from('paiements').delete().eq('id', pdl.dataset.pdel); if (r.error) say('Erreur : ' + r.error.message); if (window.PayAPI) await PayAPI.load(); render(); } return; }
     if (t.closest('#cm-pdf')) { pdf(); return; }
+    if (t.closest('#cm-pdffac')) { pdf(true); return; }
     if (t.closest('#cm-livrer')) { await livrerFacture(); return; }
     if (t.closest('#cm-tofac')) { await devisEnFacture(); return; }
     if (t.closest('#cm-blfac')) { await bonEnFacture(); return; }

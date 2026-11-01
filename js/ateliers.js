@@ -472,7 +472,7 @@ function renderCommandes() {
     <td>${escA(c.contact_nom || 'N/A')}</td><td>${Number(c.quantite_commandee)||0}${Number(c.prix_unitaire)>0?'<small>Vente : '+(Number(c.quantite_commandee)*Number(c.prix_unitaire)).toLocaleString('fr-FR')+' DA</small>':''}${Number(c.cout_unitaire)>0?'<small>Production : '+(Number(c.quantite_commandee)*Number(c.cout_unitaire)).toLocaleString('fr-FR')+' DA</small>':''}${Number(c.prix_unitaire)>0&&Number(c.cout_unitaire)>0?'<small style="color:'+(Number(c.prix_unitaire)>=Number(c.cout_unitaire)?'#1e6e32':'#b3261e')+'">Marge : '+(Number(c.quantite_commandee)*(Number(c.prix_unitaire)-Number(c.cout_unitaire))).toLocaleString('fr-FR')+' DA</small>':''}</td><td>${Number(c.quantite_recue)||0}</td>
     <td>${fdA(c.date_commande)}</td><td>${fdA(c.date_reception_prevue)}</td><td>${escA(c.statut || 'En attente')}</td>
     <td>${c.statut!=='Reçue'&&c.statut!=='Annulée'?`<button class="btn xs p" type="button" onclick="livrerCommande('${escA(c.id)}')">Livrer au client</button> `:''}<button class="btn xs" type="button" onclick="editCommande('${escA(c.id)}')">Modifier</button>
-    <button class="btn xs" type="button" onclick="if(window.CommerceAPI)CommerceAPI.facturerCommande('${escA(c.id)}')">Facturer</button>
+    <button class="btn xs" type="button" onclick="if(window.CommerceAPI)CommerceAPI.facturerCommande('${escA(c.id)}')">Bon de livraison</button>
     <button class="btn xs r" type="button" onclick="removeCommande('${escA(c.id)}')">Supprimer</button></td></tr>`).join('') :
     '<tr><td colspan="9" class="at-empty">Aucune commande correspondante.</td></tr>';
 }

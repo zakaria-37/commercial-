@@ -40,3 +40,4 @@ body.mode-simple .back-stock{display:block}
 #st-tabs::-webkit-scrollbar{display:none}
 #st-tabs button{flex:none;white-space:nowrap}
 @media (max-width:700px){#bMode{display:none}}
+.sp-tot{margin-top:6px;font-size:15px;background:#f7f1f3;border-radius:8px;padding:8px 10px}

@@ -112,7 +112,10 @@
     const noms = mat ? (catDefaut().noms || []) : [];
     $('#sp-nnoms').innerHTML = noms.map(n => '<option value="' + esc(n) + '">').join('');
     const cq = parseFloat($('#sp-ncqte').value) || 0, pr = parseFloat($('#sp-nprix').value) || 0;
-    $('#sp-nhint').innerHTML = mat && cond && cq > 0 && pr > 0 ? '1 ' + esc(cond) + ' = ' + num(cq) + ' ' + esc(unite) + ' → <b>' + money(pr / cq) + ' / ' + esc(unite) + '</b> (prix utilisé dans les coûts)' : '';
+    const qi = parseFloat($('#sp-ninit').value) || 0, u = mat ? (cond || unite) : 'pièce';
+    // prix total : quantité × prix d'une unité (bobine, rouleau, pièce…)
+    const tot = qi > 0 && pr > 0 ? '<div class="sp-tot">' + (mat ? 'Prix total du stock' : 'Valeur de vente du stock') + ' : ' + num(qi) + ' ' + esc(StockAPI.plur ? StockAPI.plur(u, qi) : u) + ' × ' + money(pr) + ' = <b>' + money(qi * pr) + '</b></div>' : '';
+    $('#sp-nhint').innerHTML = (mat && cond && cq > 0 && pr > 0 ? '1 ' + esc(cond) + ' = ' + num(cq) + ' ' + esc(unite) + ' → <b>' + money(pr / cq) + ' / ' + esc(unite) + '</b> (prix utilisé dans les coûts)' : '') + tot;
   }
   const catDefaut = () => (typeof STK_CATS !== 'undefined' ? (STK_CATS.find(c => c.k === $('#sp-ncat').value) || STK_CATS[0]) : { unite: 'pcs', cond: '', noms: [] });
 
@@ -419,7 +422,7 @@
   document.querySelectorAll('input[name="sp-ntype"]').forEach(r => r.addEventListener('change', () => majNouveau(true)));
   $('#sp-ncat').addEventListener('change', () => majNouveau(true));
   ['#sp-nunite', '#sp-ncond'].forEach(s => $(s).addEventListener('change', () => majNouveau(false)));
-  ['#sp-ncqte', '#sp-nprix'].forEach(s => $(s).addEventListener('input', () => majNouveau(false)));
+  ['#sp-ncqte', '#sp-nprix', '#sp-ninit'].forEach(s => $(s).addEventListener('input', () => majNouveau(false)));
   ['#sp-qqte', '#sp-qprix'].forEach(s => $(s).addEventListener('input', majQ));
   $('#sp-qunite').addEventListener('change', majQ);
   $('#sp-qcmd').addEventListener('change', majQ);

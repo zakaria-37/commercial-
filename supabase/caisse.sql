@@ -22,3 +22,6 @@ create policy "caisse_all" on public.caisse for all using (true) with check (tru
 grant select, insert, update, delete on public.caisse to anon, authenticated, service_role;
 alter table public.documents add column if not exists ref_externe text default '';
 notify pgrst, 'reload schema';
+-- Mode de paiement d'un bon payé cash (espèces, chèque, virement)
+alter table public.documents add column if not exists mode_paiement text default 'especes';
+notify pgrst, 'reload schema';
