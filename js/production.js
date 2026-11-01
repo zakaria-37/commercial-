@@ -75,8 +75,44 @@ async function loadProduction() {
   if (c.error) { MODELES = m.data || []; COMPOSANTS = []; toastP('Erreur : ' + errMsgP(c.error)); renderAll(errMsgP(c.error)); return; }
   MODELES = m.data || [];
   COMPOSANTS = c.data || [];
+  if (await depuisProduits()) return loadProduction();
   if (!MODELES.some(x => String(x.id) === String(selModele))) selModele = MODELES.length ? MODELES[0].id : null;
   renderAll();
+}
+
+/* ---------- Produits (coût de revient) → modèles de la fiche matières ----------
+   Chaque produit qui a des lignes de coût devient un modèle ici (même nom), avec ses composants repris des lignes :
+   rien à ressaisir. « ↻ Reprendre du produit » remet le modèle à jour si le produit a changé. */
+let PRODS_P = [], LIGNES_P = [];
+const normP = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+function composantsDepuis(produitId, modeleId) {
+  return LIGNES_P.filter(l => String(l.produit_id) === String(produitId)).map((l, i) => l.categorie === 'Finition'
+    ? { modele_id: modeleId, nom: l.designation || 'Finition', unite: 'pcs', quantite: Number(l.quantite) || 1, perte_pct: 0, note: l.note || '', ordre: i, type: 'finition', prix_unitaire: Number(l.prix_unitaire) || 0, article_id: null }
+    : { modele_id: modeleId, nom: l.designation || 'Composant', unite: l.unite || 'pcs', quantite: Number(l.quantite) || 0, perte_pct: Number(l.perte_pct) || 0, note: l.note || '', ordre: i, type: 'matiere', prix_unitaire: 0, article_id: l.article_id || null });
+}
+async function depuisProduits() {
+  const pr = await sb.from('produits').select('*'), li = await sb.from('produit_lignes').select('*');
+  if (pr.error || li.error) return false;
+  PRODS_P = pr.data || []; LIGNES_P = li.data || [];
+  let cree = 0;
+  for (const p of PRODS_P) {
+    if (!LIGNES_P.some(l => String(l.produit_id) === String(p.id))) continue;
+    let m = MODELES.find(x => String(x.id) === String(p.modele_id)) || MODELES.find(x => normP(x.nom) === normP(p.nom));
+    if (!m) { const r = await sb.from('modeles').insert([{ nom: p.nom, description: 'Créé depuis Produits (coût de revient)' }]).select(); if (r.error || !r.data) continue; m = r.data[0]; MODELES.push(m); cree++; }
+    if (String(p.modele_id) !== String(m.id)) await sb.from('produits').update({ modele_id: m.id }).eq('id', p.id);
+    if (!composantsDe(m.id).length) { const rows = composantsDepuis(p.id, m.id); if (rows.length) { const r = await sb.from('composants').insert(rows); if (!r.error) cree++; } }
+  }
+  if (cree) toastP('Fiche matières créée depuis les Produits : vos modèles avec coût de revient sont dans la liste.');
+  return cree > 0;
+}
+const produitDuModele = id => PRODS_P.find(p => String(p.modele_id) === String(id) && LIGNES_P.some(l => String(l.produit_id) === String(p.id)));
+async function reprendreDuProduit() {
+  const m = modeleCourant(), p = m && produitDuModele(m.id); if (!p) { toastP('Ce modèle n’est lié à aucun produit avec coût de revient.'); return; }
+  if (!confirm('Remplacer les composants de « ' + m.nom + ' » par les lignes du coût de revient du produit « ' + p.nom + ' » ?')) return;
+  for (const c of composantsDe(m.id)) await sb.from('composants').delete().eq('id', c.id);
+  const r = await sb.from('composants').insert(composantsDepuis(p.id, m.id));
+  if (r.error) { toastP('Erreur : ' + errMsgP(r.error)); return; }
+  toastP('Composants repris du produit « ' + p.nom + ' ».'); await loadProduction();
 }
 
 /* ---------- Affichage ---------- */
@@ -90,6 +126,7 @@ function renderAll(errText) {
   $p('#pr-main').style.display = has ? '' : 'none';
   $p('#pr-empty').style.display = has ? 'none' : '';
   ['#pr-btn-edit', '#pr-btn-dup', '#pr-btn-del'].forEach(i => { $p(i).disabled = !has; });
+  const rp = $p('#pr-btn-reprendre'); if (rp) rp.style.display = has && produitDuModele(selModele) ? '' : 'none';
   if (errText) {
     $p('#pr-empty').innerHTML = '<p style="color:#b00020">⚠ ' + escP(errText) + '</p>';
     return;

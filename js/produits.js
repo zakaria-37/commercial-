@@ -910,6 +910,33 @@ function ficheMatieresPdf() {
   catch (e) { toastD('Erreur PDF : ' + e.message); }
 }
 
+/* Sortie de stock des matières pour N pièces, en un clic (après la fiche matières) */
+async function sortieStockProduit() {
+  const p = produitCourant(); if (!p) return;
+  const N = Math.max(0, Math.floor(Number($d('#pd-qte').value) || 0));
+  if (!N) { toastD('Indiquez d’abord la quantité à fabriquer.'); $d('#pd-qte').focus(); return; }
+  if (!window.StockAPI) { toastD('Module stock non chargé.'); return; }
+  try { await StockAPI.load(); } catch (e) {}
+  const items = [], manques = [], exclus = [];
+  recap(p).list.forEach(l => {
+    if (l.categorie === 'Finition') return;
+    const a = l.article_id ? StockAPI.byId(l.article_id) : null;
+    if (!a) { exclus.push(nomLigne(l)); return; }
+    const base = StockAPI.toBase(a, Number(l.quantite || 0) * (1 + Number(l.perte_pct || 0) / 100) * N, l.unite);
+    if (base == null) { exclus.push(nomLigne(l) + ' (unité incompatible)'); return; }
+    items.push({ article_id: a.id, qte: base, nom: a.nom, txt: StockAPI.fmtQty(a, base).main });
+    if (base > StockAPI.qty(a.id) + 1e-6) manques.push(a.nom + ' : manque ' + StockAPI.fmtQty(a, base - StockAPI.qty(a.id)).main);
+  });
+  if (!items.length) { toastD('Aucune ligne liée au Stock : rien à sortir.'); return; }
+  const d = isoD(new Date()), ref = 'BS-' + d.replace(/-/g, '') + '-' + String(new Date().getHours()).padStart(2, '0') + String(new Date().getMinutes()).padStart(2, '0');
+  if (!confirm('Sortir du stock les matières pour ' + numD(N, 0) + ' « ' + p.nom + ' » (bon ' + ref + ') :\n\n' + items.map(i => '• ' + i.nom + ' : ' + i.txt).join('\n') +
+    (exclus.length ? '\n\nNon sortis (non liés au Stock) : ' + exclus.join(', ') : '') + (manques.length ? '\n\n⚠ Stock insuffisant (il deviendra négatif) :\n' + manques.join('\n') : '') + '\n\nConfirmer ?')) return;
+  const r = await StockAPI.sortie(items, ref, 'Production ' + p.nom + ' × ' + N + ' pièces', 'production');
+  if (r.error) { toastD('Erreur : ' + (r.error.message || r.error)); return; }
+  toastD('Stock mis à jour : ' + items.length + ' matière(s) sortie(s) pour ' + numD(N, 0) + ' pièces (bon ' + ref + ').');
+  if (typeof renderCout === 'function') renderCout();
+}
+
 function telechargerPdfProduit() {
   const p = produitCourant(); if (!p) return;
   try { const r = creerPdfProduit(p); r.doc.save(r.name); toastD('PDF enregistré : ' + r.name); }
