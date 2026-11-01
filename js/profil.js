@@ -70,7 +70,9 @@
   /* Relevé : opérations datées ; « débit » augmente ce que la personne nous doit (client) ou ce que nous lui devons (fournisseur) */
   function releve(sens) {
     const cl = sens === 'client', L = [];
-    (cl ? P.ventes : P.achats).forEach(o => L.push({ d: o.date, op: o.qte ? (cl ? 'Vente : ' : 'Achat : ') + o.libelle + ' (' + o.qte + ')' : o.libelle, ref: o.ref || '', debit: o.montant > 0 ? o.montant : 0, credit: o.montant < 0 ? -o.montant : 0 }));
+    // une ligne par modèle : nom du modèle, quantité, prix d'une unité, prix total
+    (cl ? P.ventes : P.achats).forEach(o => { const n = o.qte ? parseFloat(String(o.qte).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0 : 0;
+      L.push({ d: o.date, op: o.libelle, qte: o.qte || '', pu: n ? Math.abs(o.montant) / n : null, ref: o.ref || '', debit: o.montant > 0 ? o.montant : 0, credit: o.montant < 0 ? -o.montant : 0 }); });
     P.pays.filter(p => p.sens === (cl ? 'report_client' : 'report_fournisseur')).forEach(p => L.push({ d: p.date_paiement, op: 'Solde de départ', ref: p.reference || '', debit: Number(p.montant), credit: 0 }));
     P.pays.filter(p => p.sens === (cl ? 'encaissement' : 'reglement')).forEach(p => L.push({ d: p.date_paiement, op: (cl ? 'Versement reçu' : 'Versement fait') + ' (' + (MODES[p.mode] || p.mode || '') + ')' + (p.note ? ' · ' + p.note : ''), ref: p.reference || '', debit: 0, credit: Number(p.montant) }));
     L.sort((a, b) => String(a.d).localeCompare(String(b.d)) || (b.debit - a.debit));
@@ -121,8 +123,8 @@
     if (onglet === 'releve') {
       [P.client ? 'client' : null, P.four ? 'fournisseur' : null].filter(Boolean).forEach(s => {
         const L = releve(s), cl = s === 'client';
-        h += '<h3>' + (cl ? 'Compte client' : 'Compte fournisseur') + '</h3>' + table(['Date', 'Opération', 'Réf.', 'n:' + (cl ? 'Vendu' : 'Acheté'), 'n:' + (cl ? 'Versé' : 'Payé'), 'n:Solde'],
-          L.map(x => '<tr><td>' + fd(x.d) + '</td><td>' + esc(x.op) + '</td><td>' + esc(x.ref) + '</td><td class="n">' + (x.debit ? money(x.debit) : '') + '</td><td class="n">' + (x.credit ? '<span class="py-av">' + money(x.credit) + '</span>' : '') + '</td><td class="n"><b class="' + (x.solde > 0.004 ? 'py-due' : '') + '">' + money(x.solde) + '</b></td></tr>'), 'Aucune opération.');
+        h += '<h3>' + (cl ? 'Compte client' : 'Compte fournisseur') + '</h3>' + table(['Date', 'Modèle / opération', 'n:Quantité', 'n:Prix unité', 'n:Prix total', 'n:' + (cl ? 'Versé' : 'Payé'), 'n:Solde', 'Réf.'],
+          L.map(x => '<tr><td>' + fd(x.d) + '</td><td>' + (x.qte ? '<b>' + esc(x.op) + '</b>' : esc(x.op)) + '</td><td class="n">' + esc(x.qte || '') + '</td><td class="n">' + (x.pu != null ? money(x.pu) : '') + '</td><td class="n">' + (x.debit ? money(x.debit) : x.qte && x.credit ? '− ' + money(x.credit) : '') + '</td><td class="n">' + (x.credit && !x.qte ? '<span class="py-av">' + money(x.credit) + '</span>' : '') + '</td><td class="n"><b class="' + (x.solde > 0.004 ? 'py-due' : '') + '">' + money(x.solde) + '</b></td><td>' + esc(x.ref) + '</td></tr>'), 'Aucune opération.');
       });
       if (!P.client && !P.four) h += '<div class="iv-empty">Aucune vente ni achat pour ce contact.</div>';
     }
@@ -175,9 +177,9 @@
     [P.client ? 'client' : null, P.four ? 'fournisseur' : null].filter(Boolean).forEach(s => {
       const L = releve(s), cl = s === 'client';
       doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(pdfT(cl ? 'Compte client' : 'Compte fournisseur'), M, y);
-      doc.autoTable({ startY: y + 3, margin: { left: M, right: M }, head: [['Date', 'Operation', 'Ref.', cl ? 'Vendu' : 'Achete', cl ? 'Verse' : 'Paye', 'Solde'].map(pdfT)],
-        body: L.map(x => [fd(x.d), x.op, x.ref, x.debit ? money(x.debit) : '', x.credit ? money(x.credit) : '', money(x.solde)].map(pdfT)), theme: 'grid',
-        styles: { fontSize: 8.5, cellPadding: 2 }, headStyles: { fillColor: [0, 0, 0], textColor: 255 }, columnStyles: { 0: { cellWidth: 20 }, 3: { halign: 'right', cellWidth: 27 }, 4: { halign: 'right', cellWidth: 27 }, 5: { halign: 'right', cellWidth: 28 } } });
+      doc.autoTable({ startY: y + 3, margin: { left: M, right: M }, head: [['Date', 'Modele / operation', 'Qte', 'Prix unite', 'Prix total', cl ? 'Verse' : 'Paye', 'Solde'].map(pdfT)],
+        body: L.map(x => [fd(x.d), x.op + (x.ref ? ' (' + x.ref + ')' : ''), x.qte || '', x.pu != null ? money(x.pu) : '', x.debit ? money(x.debit) : x.qte && x.credit ? '- ' + money(x.credit) : '', x.credit && !x.qte ? money(x.credit) : '', money(x.solde)].map(pdfT)), theme: 'grid',
+        styles: { fontSize: 8.5, cellPadding: 2 }, headStyles: { fillColor: [0, 0, 0], textColor: 255 }, columnStyles: { 0: { cellWidth: 19 }, 2: { halign: 'right', cellWidth: 16 }, 3: { halign: 'right', cellWidth: 22 }, 4: { halign: 'right', cellWidth: 25 }, 5: { halign: 'right', cellWidth: 24 }, 6: { halign: 'right', cellWidth: 25 } } });
       y = doc.lastAutoTable.finalY + 7;
       const fin = L.length ? L[L.length - 1].solde : 0;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(pdfT((cl ? (fin >= 0 ? 'Reste du a MARIA BAG : ' : 'Avance du client : ') : (fin >= 0 ? 'Reste a payer par MARIA BAG : ' : 'Avance au fournisseur : ')) + money(Math.abs(fin))), W - M, y, { align: 'right' });
