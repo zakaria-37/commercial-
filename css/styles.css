@@ -286,4 +286,5 @@ footer b{font:italic 400 16px "Brush Script MT","Segoe Script",cursive;color:#00
 .nf .ntx{flex:1;min-width:0}
 .nf .ntx b{display:block}
 .nf .ntx small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nf .bd{flex:none;background:#fff}
+.nf .bd{flex:none;background:#fff}/* les formulaires et cartes ouverts par un bouton s'arrêtent sous l'en-tête fixe */
+form, .card, .at-form, section > div[id] { scroll-margin-top: calc(var(--hdr-h, 150px) + 12px); }

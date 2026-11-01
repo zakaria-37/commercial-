@@ -7,6 +7,19 @@
 
 // Base locale sur l'ordinateur (js/local-db.js), synchronisée avec Supabase quand internet est disponible
 const sb = LocalDB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* Ouverture d'un formulaire : il défile juste sous l'en-tête fixe (sans être caché dessous),
+   et le curseur placé dans la première case n'interrompt plus le défilement (sinon la page « glisse »). */
+(function () {
+  const hdr = () => { const h = document.querySelector('header'); document.documentElement.style.setProperty('--hdr-h', (h ? h.getBoundingClientRect().height : 0) + 'px'); };
+  window.addEventListener('resize', hdr); document.addEventListener('DOMContentLoaded', hdr); setTimeout(hdr, 500);
+  try { const h = document.querySelector('header'); if (h && window.ResizeObserver) new ResizeObserver(hdr).observe(h); } catch (e) {}
+  let dernier = 0;
+  const siv = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function (o) { dernier = Date.now(); hdr(); return siv.call(this, o); };
+  const foc = HTMLElement.prototype.focus;
+  HTMLElement.prototype.focus = function (o) { return foc.call(this, Date.now() - dernier < 900 ? Object.assign({}, o || {}, { preventScroll: true }) : o); };
+})();
 const TABLE = 'contacts';
 
 const $ = s => document.querySelector(s);
