@@ -32,7 +32,7 @@
     const presents = new Set(pts.filter(p => hrs(p) > 0).map(p => p.date_pointage));
     const absences = joursAbsents(emp.id, du, au);
     let hn = 0, hs = 0, po = 0, ps = 0;
-    pts.forEach(p => { const x = detail(p, emp); hn += x.norm; hs += x.sup; po += x.norm * Number(emp.taux_horaire || 0); ps += x.sup * tauxSup(emp); });
+    pts.forEach(p => { const x = detail(p, emp); hn += x.norm; hs += x.sup; po += x.norm * tauxNormal(emp, p.date_pointage); ps += x.sup * tauxSup(emp); });
     const ac = round2(acs.reduce((s, a) => s + Number(a.montant || 0), 0));
     const rets = CREDITS.filter(r => String(r.employe_id) === String(emp.id) && r.type === 'retenue' && r.date_op >= du && r.date_op <= au);
     const ret = round2(rets.reduce((s, r) => s + Number(r.montant || 0), 0));
@@ -53,7 +53,7 @@
 
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); T((emp.nom || '') + ' ' + (emp.prenom || ''), M, 39);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(70);
-    T([emp.poste, 'Taux horaire : ' + money(emp.taux_horaire) + '/h', 'Heure sup : ' + money(tauxSup(emp)) + '/h', 'Journee normale jusqu\'a ' + finNormale(emp)].filter(Boolean).join('   -   '), M, 44);
+    T([emp.poste, (estMensuel(emp) ? 'Salaire mensuel : ' + money(emp.salaire_mensuel) : 'Taux horaire : ' + money(emp.taux_horaire) + '/h'), 'Heure sup : ' + money(tauxSup(emp)) + '/h', 'Journee normale jusqu\'a ' + finNormale(emp)].filter(Boolean).join('   -   '), M, 44);
 
     // Statistiques
     doc.autoTable({
@@ -102,7 +102,7 @@
     let y = doc.lastAutoTable.finalY + 8;
     if (y > H - 62) { doc.addPage(); y = 20; }
     const L = (l, v, bold, color) => { doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(bold ? 12 : 10); doc.setTextColor(...(color || [0, 0, 0])); T(l, M, y); T(v, W - M, y, { align: 'right' }); y += bold ? 8 : 6; };
-    L('Salaire ordinaire (' + fmtH(D.hn) + ' x ' + money(emp.taux_horaire) + ')', money(D.po));
+    L(estMensuel(emp) ? 'Salaire ordinaire (salaire mensuel ' + money(emp.salaire_mensuel) + ', ' + fmtH(D.hn) + ' travaillees)' : 'Salaire ordinaire (' + fmtH(D.hn) + ' x ' + money(emp.taux_horaire) + ')', money(D.po));
     L('Acomptes deja retires', '- ' + money(D.ac));
     if (D.ret > 0) L('Retenue credit personnel', '- ' + money(D.ret));
     doc.setDrawColor(120); doc.line(M, y - 3, W - M, y - 3); y += 1;

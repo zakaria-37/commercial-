@@ -108,7 +108,7 @@
     let t = '== EMPLOYÉS (mois affiché dans la page Employés : ' + mois + ') ==\nRÈGLE ABSOLUE : « le salaire » d\'un employé = SALAIRE FINAL À PAYER = paie des heures normales (jusqu\'à 19h) − acomptes − retenue de crédit personnel. Les heures supplémentaires sont gardées à part par l\'employeur : ne les ajoute JAMAIS au salaire et ne calcule aucun « total brut » avec elles. Donne en premier le SALAIRE FINAL.\n';
     let tot = { po: 0, ps: 0, reste: 0, cred: 0, sup: 0 };
     const ligne = e => { const po = paieOrdinaire(e, mois), ps = paieSup(e, mois), ac = totalAcomptes(e.id, mois), rt = retenueMois(e.id, mois), reste = resteSalaire(e, mois), cred = soldeCredit(e.id), sup = soldeSup(e), hn = heuresNormales(e, mois), hs = heuresSup(e, mois), j = joursTravailles(e.id, mois);
-      return '- ' + e.nom + ' ' + (e.prenom || '') + (e.poste ? ' (' + e.poste + ')' : '') + ' : SALAIRE FINAL À PAYER ' + f2(reste) + ' DA = paie des heures normales ' + f2(po) + ' DA (' + f2(hn) + ' h × ' + f2(e.taux_horaire) + ' DA/h, ' + j + ' jours travaillés) − acomptes ' + f2(ac) + ' DA' + (rt > 0 ? ' − retenue crédit personnel ' + f2(rt) + ' DA' : '') +
+      return '- ' + e.nom + ' ' + (e.prenom || '') + (e.poste ? ' (' + e.poste + ')' : '') + ' : SALAIRE FINAL À PAYER ' + f2(reste) + ' DA = paie des heures normales ' + f2(po) + ' DA (' + f2(hn) + ' h × ' + f2(typeof tauxNormal === 'function' ? tauxNormal(e, mois) : e.taux_horaire) + ' DA/h' + (Number(e.salaire_mensuel) > 0 ? ' [salaire mensuel ' + f2(e.salaire_mensuel) + ' DA pour un mois complet]' : '') + ', ' + j + ' jours travaillés) − acomptes ' + f2(ac) + ' DA' + (rt > 0 ? ' − retenue crédit personnel ' + f2(rt) + ' DA' : '') +
         ' ‖ à part, NON inclus dans le salaire : heures sup du mois ' + f2(hs) + ' h (' + f2(ps) + ' DA mis de côté), heures sup cumulées à remettre ' + f2(sup) + ' DA ‖ crédit personnel restant à rembourser ' + f2(cred) + ' DA'; };
     EMPLOYES.forEach(e => { try { tot.po += paieOrdinaire(e, mois); tot.ps += paieSup(e, mois); tot.reste += resteSalaire(e, mois); tot.cred += Math.max(0, soldeCredit(e.id)); tot.sup += Math.max(0, soldeSup(e)); } catch (x) { /* ignoré */ } });
     t += lst.map(e => { try { return ligne(e); } catch (x) { return '- ' + e.nom + ' : calcul indisponible'; } }).join('\n') + '\n';
@@ -158,7 +158,7 @@
     EMPLOYES.forEach(e => {
       const mine = pts.filter(p => String(p.employe_id) === String(e.id));
       let hn = 0, hs = 0, pn = 0, ps = 0, j = 0, abs = 0; const det = [];
-      mine.forEach(p => { if (p.absent && !(hrs(p) > 0)) { abs++; return; } const d = detail(p, e); if (d.norm + d.sup <= 0) return; j++; hn += d.norm; hs += d.sup; pn += d.norm * Number(e.taux_horaire || 0); ps += d.sup * tauxSup(e); if (unJour) det.push(hm(p.heure_debut) && hm(p.heure_fin) ? hm(p.heure_debut) + '–' + hm(p.heure_fin) : f2(hrs(p)) + ' h'); });
+      mine.forEach(p => { if (p.absent && !(hrs(p) > 0)) { abs++; return; } const d = detail(p, e); if (d.norm + d.sup <= 0) return; j++; hn += d.norm; hs += d.sup; pn += d.norm * (typeof tauxNormal === 'function' ? tauxNormal(e, p.date_pointage) : Number(e.taux_horaire || 0)); ps += d.sup * tauxSup(e); if (unJour) det.push(hm(p.heure_debut) && hm(p.heure_fin) ? hm(p.heure_debut) + '–' + hm(p.heure_fin) : f2(hrs(p)) + ' h'); });
       const ac = somme(acs.filter(a => String(a.employe_id) === String(e.id)), 'montant');
       if (abs && !j) { absents.push(e.nom); return; }
       if (!j && !ac) return;

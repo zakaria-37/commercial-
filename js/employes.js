@@ -81,6 +81,24 @@ function hrs(p) {
   }
   return Number(p.heures || 0);
 }
+/* Salaire mensuel (facultatif) : un mois complet (tous les jours ouvrés, de l'heure de début habituelle à la fin normale)
+   donne exactement ce salaire ; un mois incomplet est payé au prorata des heures normales travaillées.
+   Le taux horaire du mois = salaire mensuel ÷ heures prévues du mois. Sans salaire mensuel : taux horaire saisi. */
+function heuresParJour(emp) {
+  const deb = toMin(($e('#pt-debut') && $e('#pt-debut').value) || '08:00'), fin = toMin(finNormale(emp));
+  return Math.max(0, fin - deb - Math.max(0, Math.min(fin, PAUSE_FIN) - Math.max(deb, PAUSE_DEB))) / 60;
+}
+function heuresPrevues(emp, mois) {
+  const repos = $e('#pt-repos') ? Number($e('#pt-repos').value) : 5, [y, m] = mois.split('-').map(Number), n = new Date(y, m, 0).getDate();
+  let j = 0; for (let d = 1; d <= n; d++) if (jourSemaine(mois + '-' + String(d).padStart(2, '0')) !== repos) j++;
+  return j * heuresParJour(emp);
+}
+const estMensuel = emp => Number(emp && emp.salaire_mensuel) > 0;
+function tauxNormal(emp, mois) {
+  if (!estMensuel(emp)) return Number(emp.taux_horaire || 0);
+  const hp = heuresPrevues(emp, String(mois || isoE(new Date())).slice(0, 7));
+  return hp > 0 ? Number(emp.salaire_mensuel) / hp : Number(emp.taux_horaire || 0);
+}
 function tauxSup(emp) { return Number(emp.taux_heure_sup) > 0 ? Number(emp.taux_heure_sup) : Number(emp.taux_horaire || 0); }
 function finNormale(emp) { return String(emp.heure_fin_normale || '19:00').slice(0, 5); }
 function detail(p, emp) {
@@ -95,7 +113,7 @@ function detail(p, emp) {
 }
 function gainPointage(p, emp) {
   const d = detail(p, emp);
-  return d.norm * Number(emp.taux_horaire || 0) + d.sup * tauxSup(emp);
+  return d.norm * tauxNormal(emp, p.date_pointage) + d.sup * tauxSup(emp);
 }
 /* Jours d'absence : jour marqué « Absent » (même un jour de repos) + jour ouvré passé sans aucune heure pointée */
 function joursAbsents(empId, du, au) {
@@ -116,7 +134,7 @@ function joursTravailles(empId, mois) { return pointagesDuMois(empId, mois).filt
 function salaireDuMois(emp, mois) { return round2(pointagesDuMois(emp.id, mois).reduce((s, p) => s + gainPointage(p, emp), 0)); }
 /* Paie ordinaire (heures normales) et paie des heures supplémentaires, séparées :
    les acomptes se déduisent de la paie ordinaire ; les heures sup sont mises de côté et remises plus tard */
-function paieOrdinaire(emp, mois) { return round2(pointagesDuMois(emp.id, mois).reduce((s, p) => s + detail(p, emp).norm * Number(emp.taux_horaire || 0), 0)); }
+function paieOrdinaire(emp, mois) { return round2(pointagesDuMois(emp.id, mois).reduce((s, p) => s + detail(p, emp).norm * tauxNormal(emp, mois), 0)); }
 function paieSup(emp, mois) { return round2(pointagesDuMois(emp.id, mois).reduce((s, p) => s + detail(p, emp).sup * tauxSup(emp), 0)); }
 /* Crédit personnel : crédits accordés + soldes de départ − retenues sur salaire = reste dû par l'employé */
 function opsCr(empId) { return CREDITS.filter(r => String(r.employe_id) === String(empId)).sort((a, b) => String(b.date_op).localeCompare(String(a.date_op))); }
@@ -196,7 +214,7 @@ function renderEmployes() {
     const po = paieOrdinaire(e, mois), ps = paieSup(e, mois), ac = totalAcomptes(e.id, mois), rt = retenueMois(e.id, mois), reste = round2(po - ac - rt), st = statut(reste), solde = soldeSup(e), cred = soldeCredit(e.id);
     return '<tr' + (String(e.id) === String(selEmploye) ? ' style="background:var(--nb)"' : '') + '>' +
       '<td><b>' + escE(e.nom) + '</b> ' + escE(e.prenom) + (e.poste ? '<small>' + escE(e.poste) + '</small>' : '') + '</td>' +
-      '<td>' + money(e.taux_horaire) + ' / h<small>Sup : ' + money(tauxSup(e)) + ' / h</small></td>' +
+      '<td>' + (estMensuel(e) ? money(e.salaire_mensuel) + ' / mois<small>' + money(tauxNormal(e, mois)) + ' / h ce mois (' + fmtH(heuresPrevues(e, mois)) + ') \u00b7 Sup : ' + money(tauxSup(e)) + ' / h</small>' : money(e.taux_horaire) + ' / h<small>Sup : ' + money(tauxSup(e)) + ' / h</small>') + '</td>' +
       '<td><b>' + fmtH(hn) + '</b><small>' + j + ' jour' + (j > 1 ? 's' : '') + ' \u00b7 Sup : ' + (hs > 0 ? fmtH(hs) : '\u2014') + '</small></td>' +
       '<td>' + money(po) + '</td>' +
       '<td>' + (ps > 0 ? '<b style="color:#8a5a12">' + money(ps) + '</b><br><small>mise de côté</small>' : '\u2014') + '</td>' +
@@ -232,6 +250,7 @@ function showFormEmploye(id) {
   $e('#emp-prenom').value    = emp ? (emp.prenom || '') : '';
   $e('#emp-poste').value     = emp ? (emp.poste || '') : '';
   $e('#emp-taux').value      = emp ? (emp.taux_horaire || '') : '';
+  if ($e('#emp-salaire')) $e('#emp-salaire').value = emp && Number(emp.salaire_mensuel) > 0 ? emp.salaire_mensuel : '';
   $e('#emp-taux-sup').value  = emp ? (emp.taux_heure_sup || '') : '';
   $e('#emp-fin-normale').value = emp ? (String(emp.heure_fin_normale || '19:00').slice(0, 5)) : '19:00';
   $e('#emp-notes').value     = emp ? (emp.notes || '') : '';
@@ -251,15 +270,18 @@ async function saveEmploye() {
   const nom = $e('#emp-nom').value.trim();
   const prenom = $e('#emp-prenom').value.trim();
   const poste = $e('#emp-poste').value.trim();
-  const taux = parseFloat($e('#emp-taux').value) || 0;
+  const salaire = parseFloat(($e('#emp-salaire') || {}).value) || 0;
+  let taux = parseFloat($e('#emp-taux').value) || 0;
   const tauxS = parseFloat($e('#emp-taux-sup').value) || 0;   // 0 = utiliser le taux normal (colonne NOT NULL)
   const finNorm = $e('#emp-fin-normale').value || '19:00';
   const notes = $e('#emp-notes').value.trim();
 
   if (!nom) { toastE('Le nom est obligatoire.'); return; }
-  if (taux <= 0) { toastE('Le taux horaire doit \u00eatre sup\u00e9rieur \u00e0 0.'); return; }
+  // salaire mensuel : le taux horaire enregistré devient le taux d'un mois type (26 jours) — il sert aux heures sup si leur taux est vide
+  if (salaire > 0) taux = round2(salaire / (26 * heuresParJour({ heure_fin_normale: finNorm }) || 260));
+  if (taux <= 0) { toastE('Indiquez un taux horaire ou un salaire mensuel.'); return; }
 
-  const payload = { nom, prenom, poste, taux_horaire: taux, taux_heure_sup: tauxS, heure_fin_normale: finNorm, notes };
+  const payload = { nom, prenom, poste, salaire_mensuel: salaire, taux_horaire: taux, taux_heure_sup: tauxS, heure_fin_normale: finNorm, notes };
 
   let res;
   if (curEmploye) {
@@ -314,7 +336,7 @@ function renderPanel(skipGrid) {
   const emp = EMPLOYES.find(x => String(x.id) === String(selEmploye));
   if (!emp) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  const mois = curMonth(), taux = Number(emp.taux_horaire || 0);
+  const mois = curMonth(), taux = tauxNormal(emp, mois);
   const items = acomptesDuMois(emp.id, mois);
   const jours = joursTravailles(emp.id, mois);
   const po = paieOrdinaire(emp, mois), ps = paieSup(emp, mois), ac = totalAcomptes(emp.id, mois), rt = retenueMois(emp.id, mois);
@@ -348,7 +370,7 @@ function renderPanel(skipGrid) {
   for (let s = 1; s <= nbSem; s++) {
     let hN = 0, hS = 0, gain = 0, gainS = 0;
     pointagesDuMois(emp.id, mois).filter(p => semaineDuMois(p.date_pointage) === s).forEach(p => {
-      const d = detail(p, emp); hN += d.norm; hS += d.sup; gain += d.norm * Number(emp.taux_horaire || 0); gainS += d.sup * tauxSup(emp);
+      const d = detail(p, emp); hN += d.norm; hS += d.sup; gain += d.norm * tauxNormal(emp, p.date_pointage); gainS += d.sup * tauxSup(emp);
     });
     gain = round2(gain); gainS = round2(gainS);
     const a = round2(items.filter(x => semaineDuMois(x.date_acompte) === s).reduce((t, x) => t + Number(x.montant || 0), 0));

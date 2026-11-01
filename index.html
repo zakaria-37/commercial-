@@ -235,7 +235,8 @@
       <label>Nom *<input id="emp-nom" required maxlength="100"></label>
       <label>Prénom<input id="emp-prenom" maxlength="100"></label>
       <label>Poste<input id="emp-poste" maxlength="100" placeholder="Ex : couturière, coupeur…"></label>
-      <label>Taux horaire normal (DA/h) *<input id="emp-taux" type="number" min="0" step="0.01" required></label>
+      <label>Salaire mensuel (DA)<input id="emp-salaire" type="number" min="0" step="0.01" placeholder="Facultatif : ex. 55000 pour un mois complet"></label>
+      <label>Taux horaire normal (DA/h)<input id="emp-taux" type="number" min="0" step="0.01" placeholder="Calculé si salaire mensuel"></label>
       <label>Taux heure supplémentaire (DA/h)<input id="emp-taux-sup" type="number" min="0" step="0.01" placeholder="Si vide : taux normal"></label>
       <label>Fin de journée normale (après = heures sup)<input id="emp-fin-normale" type="time" value="19:00" required></label>
       <label style="grid-column:1/-1">Notes<textarea id="emp-notes"></textarea></label>

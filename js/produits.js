@@ -703,7 +703,7 @@ async function calculerMo(mode) {
       const e = emps.find(x => String(x.id) === String(p.employe_id));
       if (!e || hrs(p) <= 0) return;
       const d = detail(p, e);
-      nEmp++; normT += d.norm * Number(e.taux_horaire || 0); supT += d.sup * tauxSup(e);
+      nEmp++; normT += d.norm * (typeof tauxNormal === 'function' ? tauxNormal(e, p.date_pointage) : Number(e.taux_horaire || 0)); supT += d.sup * tauxSup(e);
     });
     if (nEmp) { normT = r2D(normT); supT = r2D(supT); sal = r2D(normT + (avecHS ? supT : 0)); }
   }
