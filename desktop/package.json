@@ -1,7 +1,7 @@
 {
   "name": "mariabag-erp",
   "productName": "MARIA BAG",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "MARIA BAG — logiciel de gestion commerciale et atelier (fonctionne hors ligne)",
   "author": "Benouadah Zakaria",
   "main": "main.js",
@@ -25,6 +25,7 @@
     },
     "files": [
       "main.js",
+      "preload.js",
       "app/**/*",
       "build/icon.png",
       "splash/**/*"

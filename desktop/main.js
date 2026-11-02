@@ -8,7 +8,7 @@
      version de l'application depuis le site en ligne, la garde sur le PC et l'utilise au démarrage
      suivant (ou tout de suite si on accepte de redémarrer). Aucune réinstallation nécessaire.
    ============================================================ */
-const { app, BrowserWindow, Menu, protocol, net, shell, dialog } = require('electron');
+const { app, BrowserWindow, Menu, protocol, net, shell, dialog, ipcMain } = require('electron');
 const path = require('path'), fs = require('fs'), { pathToFileURL } = require('url');
 
 const APP_DIR = path.join(__dirname, 'app');
@@ -36,6 +36,12 @@ function choisirRacine() {
 }
 const versionLocale = () => versionDe(RACINE);
 
+function rendreClavier() { setTimeout(() => { if (win && !win.isDestroyed() && win.isFocused()) win.webContents.focus(); }, 30); }
+ipcMain.on('rendre-clavier', () => { if (!win || win.isDestroyed()) return; win.blur(); win.focus(); win.webContents.focus(); });
+// toutes nos boîtes de dialogue rendent aussi le clavier à la page en se fermant
+const montrerMessage = dialog.showMessageBox.bind(dialog);
+dialog.showMessageBox = async (...a) => { try { return await montrerMessage(...a); } finally { if (win && !win.isDestroyed()) { win.focus(); rendreClavier(); } } };
+
 /* Taille et position de la fenêtre gardées d'une ouverture à l'autre */
 const ETAT = () => path.join(app.getPath('userData'), 'fenetre.json');
 function lireEtat() { try { return JSON.parse(fs.readFileSync(ETAT(), 'utf8')); } catch (e) { return { width: 1366, height: 860, max: true }; } }
@@ -54,7 +60,7 @@ function creerFenetre() {
   win = new BrowserWindow({
     x: e.x, y: e.y, width: e.width || 1366, height: e.height || 860, minWidth: 360, minHeight: 500,
     title: 'MARIA BAG', icon: path.join(__dirname, 'build', 'icon.png'), backgroundColor: '#000000', show: false,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true }
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true, preload: path.join(__dirname, 'preload.js') }
   });
   // la fenêtre principale se charge derrière l'animation d'ouverture, puis s'affiche à la fin de celle-ci
   let pret = false, animFinie = !splash;
@@ -63,6 +69,9 @@ function creerFenetre() {
   if (splash) splash.webContents.on('did-navigate-in-page', (ev, url) => { if (url.endsWith('#fin')) { animFinie = true; montrer(); } });
   if (splash) splash.on('closed', () => { if (!animFinie) { animFinie = true; montrer(); } });
   win.on('close', garderEtat);
+  // Défaut de Windows : après une boîte de dialogue (confirm, alert, message), la fenêtre reprend le focus mais pas la page
+  // → on ne peut plus écrire dans les cases. On rend donc le clavier à la page à chaque retour sur la fenêtre.
+  ['focus', 'restore', 'show'].forEach(ev => win.on(ev, rendreClavier));
   win.webContents.session.setSpellCheckerLanguages(['fr']);
   // Liens externes (WhatsApp, e-mail, téléphone, sites) : ouverts dans le navigateur ou l'application du PC
   win.webContents.setWindowOpenHandler(({ url }) => { if (!url.startsWith('app://')) shell.openExternal(url); return { action: 'deny' }; });

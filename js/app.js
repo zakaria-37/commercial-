@@ -8,6 +8,16 @@
 // Base locale sur l'ordinateur (js/local-db.js), synchronisée avec Supabase quand internet est disponible
 const sb = LocalDB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/* Logiciel PC (Windows) : après une boîte « OK / Annuler » (confirm, alert, prompt), on redemande le clavier au logiciel,
+   sinon on ne peut plus écrire dans les cases jusqu'à l'actualisation de la page. */
+(function () {
+  if (!window.mariabagPC || !window.mariabagPC.rendreClavier) return;
+  ['confirm', 'alert', 'prompt'].forEach(f => {
+    const orig = window[f].bind(window);
+    window[f] = function () { const a = document.activeElement; try { return orig.apply(null, arguments); } finally { window.mariabagPC.rendreClavier(); setTimeout(() => { try { if (a && a.focus && document.contains(a)) a.focus({ preventScroll: true }); } catch (e) {} }, 60); } };
+  });
+})();
+
 /* Ouverture d'un formulaire : il défile juste sous l'en-tête fixe (sans être caché dessous),
    et le curseur placé dans la première case n'interrompt plus le défilement (sinon la page « glisse »). */
 (function () {
