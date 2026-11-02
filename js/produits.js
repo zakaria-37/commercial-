@@ -39,7 +39,8 @@ const CATS_D = [
   { k: 'Broderie',    lbl: 'Broderie / impression',       u: 'pcs',    ex: 'Ex : broderie logo, sérigraphie' },
   { k: 'Transport',   lbl: 'Transport / livraison',       u: 'pcs',    ex: 'Ex : transport des matières, livraison' },
   { k: 'Finition',    lbl: 'Finition extérieure (payée à la pièce)', u: 'pcs', ex: 'Ex : finition, assemblage, repassage (payé par pièce)' },
-  { k: 'Autre outil', lbl: 'Autres outils / fournitures', u: 'pcs',    ex: 'Ex : tout ce qui ne rentre pas ailleurs…' }
+  { k: 'Autre outil', lbl: 'Autres outils / fournitures', u: 'pcs',    ex: 'Ex : tout ce qui ne rentre pas ailleurs…' },
+  { k: 'Pack',        lbl: 'Produit du pack',             u: 'pcs',    ex: '' }      // ligne qui contient un autre produit (packs)
 ];
 const UNITES_D = ['m', 'cm', 'pcs', 'paire', 'kg', 'g', 'L', 'bobine', 'rouleau'];
 
@@ -86,7 +87,12 @@ function qteReelle(l) { return Number(l.quantite || 0) * (1 + Number(l.perte_pct
 /* Prix d'une unité : repris EN DIRECT du stock si la ligne est liée à un article
    (prix du rouleau ÷ mètres du rouleau), sinon le prix saisi à la main */
 function articleLigne(l) { return l.article_id && window.StockAPI ? StockAPI.byId(l.article_id) : null; }
+/* PACKS : une ligne peut contenir un autre produit (sous_produit_id). Son prix = coût de revient complet de ce produit. */
+const sousProduit = l => l && l.sous_produit_id ? PRODUITS.find(x => String(x.id) === String(l.sous_produit_id)) || null : null;
+let profondeurPack = 0;
 function prixLigne(l) {
+  const sp = sousProduit(l);
+  if (sp) { if (profondeurPack > 5) return 0; profondeurPack++; try { return recap(sp).total; } finally { profondeurPack--; } }
   const a = articleLigne(l);
   if (a) { const p = StockAPI.priceFor(a, l.unite); if (p != null) return p; }
   return Number(l.prix_unitaire || 0);
@@ -96,7 +102,21 @@ const CAT_PRODUIT_VERS_STOCK = { 'Matière': 'Tissu principal', 'Doublure': 'Dou
   'Éponge': 'Éponge', 'Poignée': 'Poignée', 'Boucle': 'Boucle', 'Fil': 'Fil', 'Étiquette': 'Étiquette', 'Emballage': 'Emballage', 'Autre outil': 'Accessoire' };
 let autoLie = false;     // la liaison au stock a été trouvée automatiquement d'après le nom saisi
 /* Nom affiché : celui de l'article du Stock (si on le renomme dans le Stock, il change partout) */
-function nomLigne(l) { const a = articleLigne(l); return a ? a.nom : l.designation; }
+function nomLigne(l) { const sp = sousProduit(l); if (sp) return sp.nom; const a = articleLigne(l); return a ? a.nom : l.designation; }
+/* Matières d'un produit pour 1 pièce, packs dépliés : les lignes des produits du pack sont multipliées par leur quantité
+   et regroupées (même article du Stock ou même désignation). La chute est incluse dans la quantité. */
+function lignesMatieres(p, mult, prof, acc) {
+  mult = mult == null ? 1 : mult; prof = prof || 0; acc = acc || new Map();
+  if (prof > 5) return [...acc.values()];
+  lignesDe(p.id).forEach(l => {
+    const sp = sousProduit(l);
+    if (sp) { lignesMatieres(sp, mult * Number(l.quantite || 0), prof + 1, acc); return; }
+    const k = (l.article_id ? 'a' + l.article_id : 'd' + String(l.categorie) + '|' + String(l.designation).toLowerCase()) + '|' + l.unite;
+    const x = acc.get(k) || Object.assign({}, l, { quantite: 0, perte_pct: 0 });
+    x.quantite += qteReelle(l) * mult; acc.set(k, x);
+  });
+  return [...acc.values()];
+}
 const CAT_STOCK_VERS_PRODUIT = { 'Tissu principal': 'Matière', 'Doublure': 'Doublure', 'Sangle': 'Sangle', 'Curseur': 'Curseur', 'Fermeture': 'Fermeture', 'Éponge': 'Éponge',
   'Poignée': 'Poignée', 'Boucle': 'Boucle', 'Fil': 'Fil', 'Étiquette': 'Étiquette', 'Emballage': 'Emballage', 'Accessoire': 'Autre outil' };
 function coutLigne(l) { return qteReelle(l) * prixLigne(l); }
@@ -233,10 +253,10 @@ function renderLignes() {
     '<tr><td><span class="pd-cat pd-cat-' + ordre(l.categorie) + '">' + escD(catLbl(l.categorie)) + '</span></td>' +
     '<td><b>' + escD(nomLigne(l)) + '</b>' + (l.note ? '<small class="pd-note">' + escD(l.note) + '</small>' : '') + '</td>' +
     '<td>' + numD(l.quantite, 4) + ' ' + escD(l.unite) + '</td>' +
-    '<td>' + numD(prixLigne(l), 2) + ' DA / ' + escD(l.unite) + (articleLigne(l) ? '<small class="pd-note">✔ Synchronisé avec le Stock</small>' : '') + '</td>' +
+    '<td>' + numD(prixLigne(l), 2) + ' DA / ' + escD(l.unite) + (articleLigne(l) ? '<small class="pd-note">✔ Synchronisé avec le Stock</small>' : l.sous_produit_id ? '<small class="pd-note">coût de revient du produit</small>' : '') + '</td>' +
     '<td>' + (Number(l.perte_pct) ? numD(l.perte_pct, 2) + ' %' : '—') + '</td>' +
     '<td><b>' + moneyD(coutLigne(l)) + '</b></td>' +
-    '<td class="emp-act"><button class="btn s" type="button" onclick="showFormLigne(\'' + escD(l.id) + '\')">Modifier</button> ' +
+    '<td class="emp-act"><button class="btn s" type="button" onclick="' + (l.sous_produit_id ? 'showFormPack' : 'showFormLigne') + '(\'' + escD(l.id) + '\')">Modifier</button> ' +
     '<button class="btn s d" type="button" onclick="removeLigne(\'' + escD(l.id) + '\')">Supprimer</button></td></tr>'
   ).join('') +
     '<tr class="pr-total"><td colspan="5">Total matières et fournitures (1 pièce)</td><td>' + moneyD(coutMatieres(list)) + '</td><td></td></tr>'
@@ -473,6 +493,33 @@ function majLienParNom() {
   }
   majApercuLigne();
 }
+/* ---------- Pack : ajouter un produit (avec sa quantité) dans le produit affiché ---------- */
+let curPack = null;
+function showFormPack(id) {
+  const p = produitCourant(); if (!p) return;
+  curPack = id || null; const l = id ? LIGNES.find(x => String(x.id) === String(id)) : null;
+  const deja = new Set(lignesDe(p.id).filter(x => x.sous_produit_id && String(x.id) !== String(id)).map(x => String(x.sous_produit_id)));
+  $d('#pd-pksel').innerHTML = '<option value="">— Choisir un produit —</option>' + PRODUITS.filter(x => String(x.id) !== String(p.id) && !deja.has(String(x.id)))
+    .map(x => '<option value="' + escD(x.id) + '"' + (l && String(l.sous_produit_id) === String(x.id) ? ' selected' : '') + '>' + escD(x.nom) + ' — ' + moneyD(recap(x).total) + '</option>').join('');
+  $d('#pd-pkqte').value = l ? l.quantite : 1;
+  $d('#pd-pkform').style.display = 'block'; $d('#pd-lform').style.display = 'none';
+  $d('#pd-pkform').scrollIntoView({ behavior: 'smooth', block: 'center' }); $d('#pd-pksel').focus();
+}
+function cancelFormPack() { curPack = null; $d('#pd-pkform').style.display = 'none'; }
+async function savePack() {
+  const p = produitCourant(); if (!p) return;
+  const sp = PRODUITS.find(x => String(x.id) === String($d('#pd-pksel').value)), q = parseFloat($d('#pd-pkqte').value) || 0;
+  if (!sp) { toastD('Choisissez le produit à mettre dans le pack.'); return; }
+  if (!(q > 0)) { toastD('Indiquez la quantité de ce produit dans le pack.'); return; }
+  // pas de boucle : le produit choisi ne doit pas contenir le pack lui-même
+  const contient = (x, cible, n) => n < 6 && lignesDe(x.id).some(l => l.sous_produit_id && (String(l.sous_produit_id) === String(cible) || contient(PRODUITS.find(y => String(y.id) === String(l.sous_produit_id)) || { id: null }, cible, n + 1)));
+  if (contient(sp, p.id, 0)) { toastD('Impossible : « ' + sp.nom + ' » contient déjà « ' + p.nom + ' ».'); return; }
+  const row = { produit_id: p.id, categorie: 'Pack', designation: sp.nom, unite: 'pcs', quantite: q, prix_unitaire: 0, perte_pct: 0, sous_produit_id: sp.id, article_id: null };
+  const r = curPack ? await sb.from('produit_lignes').update(row).eq('id', curPack) : await sb.from('produit_lignes').insert([Object.assign(row, { ordre: lignesDe(p.id).length })]);
+  if (r.error) { toastD('Erreur : ' + errMsgD(r.error)); return; }
+  cancelFormPack(); toastD('« ' + sp.nom + ' » × ' + numD(q, 2) + ' dans le pack ' + p.nom + '.'); await loadProduits();
+}
+
 function cancelFormLigne() { curLigne = null; $d('#pd-lform').style.display = 'none'; }
 
 /* Aperçu du coût de la ligne pendant la saisie */
@@ -863,8 +910,10 @@ function creerFicheMatieres(p, N) {
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 12, r = recap(p), today = isoD(new Date());
   const T = v => txtD(String(v ?? '').replace(/[\u00a0\u202f]/g, ' '));
   let aAcheter = 0;
-  const lignes = r.list.map(l => {
-    const tot = Number(l.quantite || 0) * (1 + Number(l.perte_pct || 0) / 100) * N;
+  const LM = lignesMatieres(p), matU = LM.reduce((x, l) => x + coutLigne(l), 0);      // matières d'une pièce (packs dépliés)
+  const pack = lignesDe(p.id).filter(l => l.sous_produit_id).map(l => numD(l.quantite, 2) + ' x ' + nomLigne(l));
+  const lignes = LM.map(l => {
+    const tot = Number(l.quantite || 0) * N;
     const a = l.article_id && window.StockAPI ? StockAPI.byId(l.article_id) : null;
     let totTxt = numD(tot, 2) + ' ' + l.unite, condTxt = '', stockTxt = '—', achatTxt = '—';
     if (a) {
@@ -882,12 +931,13 @@ function creerFicheMatieres(p, N) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(T('FICHE MATIÈRES DE PRODUCTION'), M + 24, 16);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90); doc.text(T('MARIA BAG  |  Édité le ' + fdD(today)), M + 24, 22);
   doc.setFillColor(17, 17, 17); doc.roundedRect(W - M - 82, 8, 82, 18, 2, 2, 'F'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-  doc.text(T(p.nom), W - M - 41, 15, { align: 'center', maxWidth: 78 }); doc.setFontSize(14); doc.text(T(numD(N, 0) + ' pièces à fabriquer'), W - M - 41, 22.5, { align: 'center' });
+  doc.text(T(p.nom), W - M - 41, 15, { align: 'center', maxWidth: 78 }); doc.setFontSize(14); doc.text(T(numD(N, 0) + (pack.length ? ' packs à fabriquer' : ' pièces à fabriquer')), W - M - 41, 22.5, { align: 'center' });
   doc.setTextColor(0); doc.setDrawColor(217, 168, 178); doc.setLineWidth(0.8); doc.line(M, 31, W - M, 31);
+  if (pack.length) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90); doc.text(T('Pack : ' + pack.join('  +  ') + ' — matières de tous les produits regroupées pour ' + numD(N, 0) + ' pack(s)'), M, 30); doc.setTextColor(0); }
   doc.autoTable({
     startY: 35, margin: { left: M, right: M, bottom: 30 },
-    head: [['Catégorie', 'Désignation', 'Pour 1 pièce', 'Chute', 'Total pour ' + numD(N, 0) + ' pcs', 'En rouleaux / bobines', 'En stock', 'À acheter', 'Coût'].map(T)],
-    body: lignes, foot: [['', T('Total matières et fournitures'), '', '', '', '', '', T(aAcheter ? aAcheter + ' à acheter' : 'Tout est en stock'), T(moneyD(r.mat * N))]],
+    head: [['Catégorie', 'Désignation', pack.length ? 'Pour 1 pack' : 'Pour 1 pièce', 'Chute', 'Total pour ' + numD(N, 0) + (pack.length ? ' packs' : ' pcs'), 'En rouleaux / bobines', 'En stock', 'À acheter', 'Coût'].map(T)],
+    body: lignes, foot: [['', T('Total matières et fournitures'), '', '', '', '', '', T(aAcheter ? aAcheter + ' à acheter' : 'Tout est en stock'), T(moneyD(matU * N))]],
     theme: 'grid', styles: { font: 'helvetica', fontSize: 8.6, cellPadding: 2.2, textColor: 0, lineColor: 190, lineWidth: 0.15 },
     headStyles: { fillColor: [17, 17, 17], textColor: 255, fontStyle: 'bold' }, footStyles: { fillColor: [245, 240, 242], textColor: 0, fontStyle: 'bold' },
     columnStyles: { 2: { halign: 'right' }, 3: { halign: 'center' }, 4: { halign: 'right', fontStyle: 'bold' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } },
@@ -895,7 +945,7 @@ function creerFicheMatieres(p, N) {
   });
   let y = doc.lastAutoTable.finalY + 7; if (y > H - 45) { doc.addPage(); y = 20; }
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
-  doc.text(T('Coût matières : ' + moneyD(r.mat) + ' / pièce  ×  ' + numD(N, 0) + ' = ' + moneyD(r.mat * N) + (Number(p.mo_pieces) ? '     |     Main d’œuvre : ' + moneyD(r.mo * N) + '     |     Coût de revient total : ' + moneyD(r.total * N) : '')), M, y);
+  doc.text(T('Coût matières : ' + moneyD(matU) + (pack.length ? ' / pack' : ' / pièce') + '  ×  ' + numD(N, 0) + ' = ' + moneyD(matU * N) + '     |     Coût de revient total : ' + moneyD(r.total) + ' × ' + numD(N, 0) + ' = ' + moneyD(r.total * N)), M, y);
   const bw = (W - 2 * M - 10) / 3; ['Préparé par', 'Sorti du stock par', 'Reçu par (atelier / chef de production)'].forEach((t, i) => { const x = M + i * (bw + 5);
     doc.setDrawColor(190); doc.roundedRect(x, y + 5, bw, 20, 1.5, 1.5); doc.setFontSize(8); doc.setTextColor(90); doc.text(T(t), x + 3, y + 10); });
   const n = doc.getNumberOfPages();
@@ -918,11 +968,11 @@ async function sortieStockProduit() {
   if (!window.StockAPI) { toastD('Module stock non chargé.'); return; }
   try { await StockAPI.load(); } catch (e) {}
   const items = [], manques = [], exclus = [];
-  recap(p).list.forEach(l => {
+  lignesMatieres(p).forEach(l => {
     if (l.categorie === 'Finition') return;
     const a = l.article_id ? StockAPI.byId(l.article_id) : null;
     if (!a) { exclus.push(nomLigne(l)); return; }
-    const base = StockAPI.toBase(a, Number(l.quantite || 0) * (1 + Number(l.perte_pct || 0) / 100) * N, l.unite);
+    const base = StockAPI.toBase(a, Number(l.quantite || 0) * N, l.unite);
     if (base == null) { exclus.push(nomLigne(l) + ' (unité incompatible)'); return; }
     items.push({ article_id: a.id, qte: base, nom: a.nom, txt: StockAPI.fmtQty(a, base).main });
     if (base > StockAPI.qty(a.id) + 1e-6) manques.push(a.nom + ' : manque ' + StockAPI.fmtQty(a, base - StockAPI.qty(a.id)).main);
@@ -961,7 +1011,7 @@ async function partagerPdfProduit() {
 }
 
 /* ---------- Initialisation et événements ---------- */
-$d('#pd-lcat').innerHTML = CATS_D.map(c => '<option value="' + escD(c.k) + '">' + escD(c.lbl) + '</option>').join('');
+$d('#pd-lcat').innerHTML = CATS_D.filter(c => c.k !== 'Pack').map(c => '<option value="' + escD(c.k) + '">' + escD(c.lbl) + '</option>').join('');
 $d('#pd-lunite').innerHTML = UNITES_D.map(u => '<option>' + u + '</option>').join('');
 $d('#pd-qte').value = 1000;
 

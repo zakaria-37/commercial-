@@ -56,7 +56,7 @@
     rendez_vous: { heure: null, type: 'Client', contact_id: null, contact_nom: '', tel: '', lieu: '', objet: '', statut: 'Prévu', resultat: '', relance: null },
     inventaires: { annee: 0, date_inventaire: null, statut: 'brouillon', debut_periode: null, ventes: 0, achats: 0, valeur_nette: 0, stock_applique: false, notes: '', cloture_le: null },
     inventaire_lignes: { ref_id: null, libelle: '', detail: '', unite: '', quantite_theorique: null, quantite: null, prix_unitaire: 0, cond_nom: '', cond_qte: 0, prix_vente: 0, montant: 0, note: '', ordre: 0 },
-    produit_lignes: { categorie: 'Autre outil', designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, perte_pct: 0, note: '', ordre: 0, article_id: null }
+    produit_lignes: { categorie: 'Autre outil', designation: '', unite: 'pcs', quantite: 0, prix_unitaire: 0, perte_pct: 0, note: '', ordre: 0, article_id: null, sous_produit_id: null }
   };
 
   // Contraintes « unique » (pour afficher la même erreur que Supabase)
@@ -70,7 +70,7 @@
   // Suppressions en cascade (comme « on delete cascade / set null » dans Supabase)
   var CASCADE = [
     ['modeles', 'composants', 'modele_id', 'cascade'], ['modeles', 'produits', 'modele_id', 'null'],
-    ['produits', 'produit_lignes', 'produit_id', 'cascade'],
+    ['produits', 'produit_lignes', 'produit_id', 'cascade'], ['produits', 'produit_lignes', 'sous_produit_id', 'cascade'],
     ['stock_articles', 'stock_mouvements', 'article_id', 'cascade'], ['stock_articles', 'composants', 'article_id', 'null'],
     ['stock_articles', 'produit_lignes', 'article_id', 'null'],
     ['produits', 'pf_mouvements', 'produit_id', 'cascade'], ['produits', 'productions', 'produit_id', 'null'],

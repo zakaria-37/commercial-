@@ -92,10 +92,22 @@ async function loadProduction() {
    rien à ressaisir. « ↻ Reprendre du produit » remet le modèle à jour si le produit a changé. */
 let PRODS_P = [], LIGNES_P = [];
 const normP = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+/* Lignes d'un produit pour 1 pièce, packs dépliés (les produits du pack × leur quantité), regroupées par article / désignation */
+function lignesProduitP(produitId, mult, prof, acc) {
+  mult = mult == null ? 1 : mult; prof = prof || 0; acc = acc || new Map();
+  if (prof > 5) return acc;
+  LIGNES_P.filter(l => String(l.produit_id) === String(produitId)).forEach(l => {
+    if (l.sous_produit_id) { lignesProduitP(l.sous_produit_id, mult * (Number(l.quantite) || 0), prof + 1, acc); return; }
+    const fin = l.categorie === 'Finition', k = (fin ? 'f' : l.article_id ? 'a' + l.article_id : 'd' + String(l.designation).toLowerCase()) + '|' + (l.unite || '') + (fin ? '|' + l.prix_unitaire : '');
+    const x = acc.get(k) || Object.assign({}, l, { quantite: 0, perte_pct: 0 });
+    x.quantite += (Number(l.quantite) || 0) * (fin ? 1 : 1 + (Number(l.perte_pct) || 0) / 100) * mult; acc.set(k, x);
+  });
+  return acc;
+}
 function composantsDepuis(produitId, modeleId) {
-  return LIGNES_P.filter(l => String(l.produit_id) === String(produitId)).map((l, i) => l.categorie === 'Finition'
+  return [...lignesProduitP(produitId).values()].map((l, i) => l.categorie === 'Finition'
     ? { modele_id: modeleId, nom: l.designation || 'Finition', unite: 'pcs', quantite: Number(l.quantite) || 1, perte_pct: 0, note: l.note || '', ordre: i, type: 'finition', prix_unitaire: Number(l.prix_unitaire) || 0, article_id: null }
-    : { modele_id: modeleId, nom: l.designation || 'Composant', unite: l.unite || 'pcs', quantite: Number(l.quantite) || 0, perte_pct: Number(l.perte_pct) || 0, note: l.note || '', ordre: i, type: 'matiere', prix_unitaire: 0, article_id: l.article_id || null });
+    : { modele_id: modeleId, nom: l.designation || 'Composant', unite: l.unite || 'pcs', quantite: Math.round((Number(l.quantite) || 0) * 10000) / 10000, perte_pct: 0, note: l.note || '', ordre: i, type: 'matiere', prix_unitaire: 0, article_id: l.article_id || null });
 }
 async function depuisProduits() {
   const pr = await sb.from('produits').select('*'), li = await sb.from('produit_lignes').select('*');
