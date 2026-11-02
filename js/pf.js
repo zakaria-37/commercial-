@@ -240,7 +240,7 @@
         '<td><span class="bd ' + e.c + '">' + e.l + '</span></td>' +
         '<td class="emp-act"><button class="btn s p" type="button" onclick="pfShowMvt(\'entree\',\'' + esc(p.id) + '\')">+ Entrée</button> ' +
         '<button class="btn s" type="button" onclick="pfShowMvt(\'livraison\',\'' + esc(p.id) + '\')">Livrer</button> ' +
-        '<button class="btn s" type="button" onclick="pfShowProduit(\'' + esc(p.id) + '\')">Prix / coût</button> ' +
+        '<button class="btn s" type="button" onclick="pfShowProduit(\'' + esc(p.id) + '\')">Modifier</button> ' +
         '<button class="btn s" type="button" onclick="pfVoirHist(\'' + esc(p.id) + '\')">Historique</button></td></tr>';
     }).join('') : '<tr><td colspan="8" class="at-empty">Aucun produit ne correspond.</td></tr>';
   }
@@ -293,7 +293,8 @@
   function showProduit(id) {
     const p = produitById(id); if (!p) return;
     curProduit = id;
-    $('#pf-pform-title').textContent = 'Produit fini — ' + p.nom;
+    $('#pf-pform-title').textContent = 'Modifier le produit fini — ' + p.nom;
+    $('#pf-pnom').value = p.nom || ''; $('#pf-pdesc').value = p.description || '';
     $('#pf-pprix').value = Number(p.prix_vente) || '';
     $('#pf-pachat').value = coutSaisi(p) || '';
     $('#pf-pseuil').value = Number(p.seuil_pf) || '';
@@ -302,12 +303,15 @@
     $('#pf-phint').textContent = 'Prix d’achat (produit acheté pour la revente) ou coût de fabrication d’une pièce (produit fabriqué chez nous ou en atelier). ' +
       (calc > 0 ? 'Laissez vide pour utiliser le coût calculé dans l’onglet Produits : ' + money(calc, 2) + ' par pièce.' : 'Il sert à calculer la marge et la valeur du stock.');
     $('#pf-mform').style.display = 'none'; $('#pf-pform').style.display = 'block';
-    $('#pf-pform').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('#pf-pprix').focus();
+    $('#pf-pform').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('#pf-pnom').focus();
   }
   function cancelProduit() { curProduit = null; $('#pf-pform').style.display = 'none'; }
   async function saveProduit() {
     if (!curProduit) return;
-    const r = await sb.from('produits').update({ prix_vente: parseFloat($('#pf-pprix').value) || 0, prix_achat: Math.max(0, parseFloat($('#pf-pachat').value) || 0), seuil_pf: Math.round(parseFloat($('#pf-pseuil').value) || 0), modele_id: $('#pf-pmodele').value || null }).eq('id', curProduit);
+    const nom = $('#pf-pnom').value.trim();
+    if (!nom) { toast('Le nom du produit est obligatoire.'); return; }
+    if (PR.some(x => String(x.id) !== String(curProduit) && norm(x.nom) === norm(nom))) { toast('Un autre produit porte déjà ce nom.'); return; }
+    const r = await sb.from('produits').update({ nom, description: $('#pf-pdesc').value.trim(), prix_vente: parseFloat($('#pf-pprix').value) || 0, prix_achat: Math.max(0, parseFloat($('#pf-pachat').value) || 0), seuil_pf: Math.round(parseFloat($('#pf-pseuil').value) || 0), modele_id: $('#pf-pmodele').value || null }).eq('id', curProduit);
     if (r.error) { toast('Erreur : ' + errMsg(r.error)); return; }
     toast('Produit enregistré.'); cancelProduit(); await load();
     if (typeof loadProduits === 'function') loadProduits();

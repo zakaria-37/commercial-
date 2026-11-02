@@ -511,6 +511,8 @@
     <form id="pf-pform" class="at-form">
       <h2 id="pf-pform-title" style="margin-top:0">Produit fini</h2>
       <div class="at-fields">
+        <label style="grid-column:span 2">Nom du produit *<input id="pf-pnom" maxlength="120" required></label>
+        <label style="grid-column:span 2">Description<input id="pf-pdesc" maxlength="250" placeholder="Facultatif : taille, couleur, référence…"></label>
         <label>Prix d’achat ou coût de fabrication d’une pièce (DA)<input id="pf-pachat" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Vide = calcul de l’onglet Produits"></label>
         <label>Prix de vente d’une pièce (DA)<input id="pf-pprix" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex : 1500"></label>
         <label>Alerte quand le stock est ≤ (pièces)<input id="pf-pseuil" type="number" min="0" step="1" inputmode="numeric" placeholder="Facultatif"></label>
