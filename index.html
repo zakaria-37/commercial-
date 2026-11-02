@@ -577,7 +577,16 @@
     <button class="btn" type="button" id="pr-btn-dup" onclick="duplicateModele()">Dupliquer</button>
     <button class="btn d" type="button" id="pr-btn-del" onclick="removeModele()">Supprimer</button>
     <button class="btn" type="button" id="pr-btn-reprendre" onclick="reprendreDuProduit()" style="display:none" title="Recopie les lignes du coût de revient du produit">↻ Reprendre du produit</button>
+    <button class="btn p" type="button" onclick="ouvrirPack()" title="Assembler plusieurs modèles finis dans un seul pack">＋ Composer un pack</button>
   </div>
+  <form id="pr-pkform" class="at-form" onsubmit="event.preventDefault();enregistrerPack()">
+    <h2 style="margin-top:0">Composer un pack</h2>
+    <p class="pr-help">Assemblez plusieurs modèles finis (ex : grand, moyen et petit modèle du 380) : le pack aura <b>une seule fiche matières</b> avec les matières de tous les modèles additionnées, et son coût de revient = la somme des coûts des modèles.</p>
+    <div class="at-fields"><label>Pack<select id="pr-pkcible" onchange="lirePack();majPackForm()"></select></label><label id="pr-pknom-w" style="grid-column:span 2">Nom du nouveau pack *<input id="pr-pknom" maxlength="120" placeholder="Ex : 3 pieces 380"></label></div>
+    <div id="pr-pklignes"></div>
+    <div class="at-actions"><button class="btn s" type="button" onclick="lirePack();packLignes.push({id:'',q:1});majPackForm()">+ Ajouter un modèle</button></div>
+    <div class="at-actions"><button class="btn p" type="submit">Créer la fiche du pack</button><button class="btn" type="button" onclick="fermerPack()">Fermer</button></div>
+  </form>
   <form id="pr-mform" class="at-form">
     <h2 id="pr-mform-title" style="margin-top:0">Nouveau modèle</h2>
     <div class="at-fields">

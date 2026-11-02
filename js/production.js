@@ -114,17 +114,65 @@ async function depuisProduits() {
   if (pr.error || li.error) return false;
   PRODS_P = pr.data || []; LIGNES_P = li.data || [];
   let cree = 0;
-  for (const p of PRODS_P) {
-    if (!LIGNES_P.some(l => String(l.produit_id) === String(p.id))) continue;
+  for (const p of PRODS_P) {      // chaque produit fini a son modèle ici (même sans coût de revient encore)
     let m = MODELES.find(x => String(x.id) === String(p.modele_id)) || MODELES.find(x => normP(x.nom) === normP(p.nom));
     if (!m) { const r = await sb.from('modeles').insert([{ nom: p.nom, description: 'Créé depuis Produits (coût de revient)' }]).select(); if (r.error || !r.data) continue; m = r.data[0]; MODELES.push(m); cree++; }
     if (String(p.modele_id) !== String(m.id)) await sb.from('produits').update({ modele_id: m.id }).eq('id', p.id);
     if (!composantsDe(m.id).length) { const rows = composantsDepuis(p.id, m.id); if (rows.length) { const r = await sb.from('composants').insert(rows); if (!r.error) cree++; } }
   }
-  if (cree) toastP('Fiche matières créée depuis les Produits : vos modèles avec coût de revient sont dans la liste.');
+  if (cree) toastP('Fiche matières : les produits finis du Stock sont dans la liste des modèles.');
   return cree > 0;
 }
 const produitDuModele = id => PRODS_P.find(p => String(p.modele_id) === String(id) && LIGNES_P.some(l => String(l.produit_id) === String(p.id)));
+const produitLie = id => PRODS_P.find(p => String(p.modele_id) === String(id)) || null;
+
+/* ---------- Composer un pack : plusieurs modèles finis assemblés → une seule fiche matières ---------- */
+let packLignes = [];
+function ouvrirPack() {
+  const m = modeleCourant(), cible = m ? produitLie(m.id) : null;
+  const deja = cible ? LIGNES_P.filter(l => String(l.produit_id) === String(cible.id) && l.sous_produit_id) : [];
+  packLignes = deja.length ? deja.map(l => ({ id: l.sous_produit_id, q: Number(l.quantite) || 1 })) : [{ id: '', q: 1 }, { id: '', q: 1 }, { id: '', q: 1 }];
+  $p('#pr-pkcible').innerHTML = '<option value="__new">— Nouveau pack —</option>' + PRODS_P.slice().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map(x => '<option value="' + escP(x.id) + '"' + (cible && String(cible.id) === String(x.id) ? ' selected' : '') + '>' + escP(x.nom) + '</option>').join('');
+  $p('#pr-pknom').value = ''; majPackForm();
+  $p('#pr-pkform').style.display = 'block'; $p('#pr-pkform').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function fermerPack() { $p('#pr-pkform').style.display = 'none'; }
+function lirePack() { document.querySelectorAll('#pr-pklignes [data-pk]').forEach(r => { const i = Number(r.dataset.pk); packLignes[i] = { id: r.querySelector('select').value, q: parseFloat(r.querySelector('input').value) || 0 }; }); }
+function majPackForm() {
+  const cible = $p('#pr-pkcible').value;
+  $p('#pr-pknom-w').style.display = cible === '__new' ? '' : 'none';
+  const opts = PRODS_P.filter(x => String(x.id) !== String(cible)).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+  $p('#pr-pklignes').innerHTML = packLignes.map((l, i) => '<div class="at-fields" data-pk="' + i + '" style="align-items:end"><label style="grid-column:span 2">Modèle fini ' + (i + 1) + '<select>' +
+    '<option value="">— choisir —</option>' + opts.map(x => '<option value="' + escP(x.id) + '"' + (String(l.id) === String(x.id) ? ' selected' : '') + '>' + escP(x.nom) + (LIGNES_P.some(y => String(y.produit_id) === String(x.id)) ? '' : ' (sans matières)') + '</option>').join('') +
+    '</select></label><label>Quantité dans le pack<input type="number" min="0" step="1" value="' + (l.q || 1) + '"></label><button class="btn s d" type="button" onclick="lirePack();packLignes.splice(' + i + ',1);majPackForm()">×</button></div>').join('');
+}
+async function enregistrerPack() {
+  lirePack();
+  const lignes = packLignes.filter(l => l.id && l.q > 0);
+  if (lignes.length < 2) { toastP('Choisissez au moins 2 modèles finis pour le pack.'); return; }
+  let cible = $p('#pr-pkcible').value, pack = PRODS_P.find(x => String(x.id) === String(cible));
+  if (cible === '__new') {
+    const nom = $p('#pr-pknom').value.trim(); if (!nom) { toastP('Donnez un nom au pack (ex : 3 pieces 380).'); return; }
+    pack = PRODS_P.find(x => normP(x.nom) === normP(nom));
+    if (!pack) { const r = await sb.from('produits').insert([{ nom, description: 'Pack de ' + lignes.length + ' modèles' }]).select(); if (r.error || !r.data) { toastP('Erreur : ' + errMsgP(r.error)); return; } pack = r.data[0]; }
+  }
+  if (lignes.some(l => String(l.id) === String(pack.id))) { toastP('Le pack ne peut pas se contenir lui-même.'); return; }
+  // lignes « produit du pack » remplacées ; les autres lignes du pack (emballage, assemblage…) sont gardées
+  for (const l of LIGNES_P.filter(x => String(x.produit_id) === String(pack.id) && x.sous_produit_id)) await sb.from('produit_lignes').delete().eq('id', l.id);
+  const rows = lignes.map((l, i) => { const sp = PRODS_P.find(x => String(x.id) === String(l.id)); return { produit_id: pack.id, categorie: 'Pack', designation: sp ? sp.nom : 'Produit', unite: 'pcs', quantite: l.q, prix_unitaire: 0, perte_pct: 0, ordre: i, sous_produit_id: l.id, article_id: null }; });
+  const r = await sb.from('produit_lignes').insert(rows); if (r.error) { toastP('Erreur : ' + errMsgP(r.error)); return; }
+  // fiche matières du pack recalculée (matières de tous les modèles regroupées)
+  const li = await sb.from('produit_lignes').select('*'); LIGNES_P = li.data || LIGNES_P;
+  let m = MODELES.find(x => String(x.id) === String(pack.modele_id)) || MODELES.find(x => normP(x.nom) === normP(pack.nom));
+  if (!m) { const rm = await sb.from('modeles').insert([{ nom: pack.nom, description: 'Pack' }]).select(); if (rm.error || !rm.data) { toastP('Erreur : ' + errMsgP(rm.error)); return; } m = rm.data[0]; }
+  await sb.from('produits').update({ modele_id: m.id }).eq('id', pack.id);
+  for (const c of COMPOSANTS.filter(c => String(c.modele_id) === String(m.id))) await sb.from('composants').delete().eq('id', c.id);
+  const comp = composantsDepuis(pack.id, m.id); if (comp.length) await sb.from('composants').insert(comp);
+  fermerPack(); selModele = m.id;
+  const sans = lignes.filter(l => !LIGNES_P.some(y => String(y.produit_id) === String(l.id) && !y.sous_produit_id)).length;
+  toastP('Pack « ' + pack.nom + ' » : ' + comp.length + ' matière(s) regroupée(s) dans une seule fiche.' + (sans ? ' ⚠ ' + sans + ' modèle(s) sans matières : remplissez leur coût de revient (Produits), puis « ↻ Reprendre du produit ».' : ''));
+  await loadProduction();
+}
 async function reprendreDuProduit() {
   const m = modeleCourant(), p = m && produitDuModele(m.id); if (!p) { toastP('Ce modèle n’est lié à aucun produit avec coût de revient.'); return; }
   if (!confirm('Remplacer les composants de « ' + m.nom + ' » par les lignes du coût de revient du produit « ' + p.nom + ' » ?')) return;
