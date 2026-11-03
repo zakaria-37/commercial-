@@ -29,7 +29,10 @@
   let msgs = [], busy = false, deep = true, big = false;
   try { deep = localStorage.getItem('zacksmart_deep') !== '0'; big = localStorage.getItem('zacksmart_big') === '1'; } catch (e) { /* valeurs par défaut */ }
   try { msgs = JSON.parse(localStorage.getItem(KEY) || '[]').slice(-30); } catch (e) { msgs = []; }
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(msgs.slice(-30))); } catch (e) { /* stockage indisponible */ } };   // copie locale : affichage immédiat
+  // messages restés « en cours d'envoi » quand l'application a été fermée : on les renverra ; ceux de plus de 10 minutes jamais partis sont abandonnés
+  // (sinon ils restaient collés en bas de la conversation et l'IA y répondait à la place de la nouvelle question)
+  msgs = msgs.filter(m => m.id || m.note || (m.t0 && Date.now() - m.t0 < 600000)).map(m => { delete m.envoi; return m; });
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(msgs.slice(-30).map(m => { const x = Object.assign({}, m); delete x.envoi; return x; }))); } catch (e) { /* stockage indisponible */ } };   // copie locale : affichage immédiat
   /* Conversation synchronisée : un message = une ligne de la table zacksmart_messages (même profil = même conversation sur PC, téléphone, tablette).
      Lecture et écriture DIRECTES sur le serveur (pas de file d'attente cachée) ; hors ligne, les messages attendent puis partent au retour de la connexion. */
   const TBL = 'zacksmart_messages', MAX = 200;
@@ -70,7 +73,7 @@
     if (busy && !force) return;
     await pousser();
     const l = await lire(); if (!l) return;
-    const attente = msgs.filter(m => !m.id);                      // messages locaux pas encore partis : gardés à la fin
+    const attente = msgs.filter(m => !m.id && !m.note && m.t0 && Date.now() - m.t0 < 600000 && !l.some(x => x.role === m.role && x.content === m.content));   // pas encore partis (récents, pas déjà sur le serveur)
     const sig = a => a.length + ':' + (a.length ? a[a.length - 1].id : '');
     if (sig(l) !== sig(msgs.filter(m => m.id)) || attente.length) { msgs = l.concat(attente); save(); paint(); }
   }
@@ -266,7 +269,7 @@
   }
   async function send(text, tpl) {
     text = String(text || '').trim(); if (!text || busy) return;
-    $('#zs-input').value = ''; const mu = { role: 'user', content: text }; msgs.push(mu); busy = true; $('#zs-send').disabled = true; paint(); save();
+    $('#zs-input').value = ''; const mu = { role: 'user', content: text, t0: Date.now() }; msgs.push(mu); busy = true; $('#zs-send').disabled = true; paint(); save();
     mu.envoi = true; ecrire('user', text).then(id => { mu.envoi = false; if (id) mu.id = id; });
     let rep = null, note = false;
     try {
@@ -277,7 +280,7 @@
       const ctxt = (plus ? st.slice(0, 2400) + '\n' + plus : st).slice(0, 6500);
       const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 60000);
       const r = await fetch(SUPABASE_URL + '/functions/v1/zacksmart', { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
-        body: JSON.stringify({ messages: msgs.filter(m => !m.note).slice(-8).map(m => ({ role: m.role, content: m.content.slice(0, 1500) })), page: page(), deep, contexte: ctxt }) });
+        body: JSON.stringify({ messages: msgs.filter(m => !m.note && (m.id || m === mu || m.role === 'assistant')).slice(-8).map(m => ({ role: m.role, content: m.content.slice(0, 1500) })), page: page(), deep, contexte: ctxt }) });
       clearTimeout(t);
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.reply) rep = d.reply;
@@ -292,7 +295,7 @@
         (salut ? 'Bonjour ! Je suis ZACKsmart 😊 Une fois activé, nous pourrons discuter en profondeur de votre travail commercial et de l’organisation du travail.' : f ? f : 'Je n’ai pas de réponse prête pour cette question. Reformulez avec des mots comme « facture », « rendez-vous », « fiche de paie », « stock »…');
       note = false;
     }
-    const ma = { role: 'assistant', content: rep, note }; msgs.push(ma); busy = false; $('#zs-send').disabled = false; paint(); save();
+    const ma = { role: 'assistant', content: rep, note, t0: Date.now() }; msgs.push(ma); busy = false; $('#zs-send').disabled = false; paint(); save();
     ma.envoi = true; ecrire('assistant', rep).then(id => { ma.envoi = false; if (id) ma.id = id; elaguer(); });
   }
 
