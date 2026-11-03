@@ -288,3 +288,14 @@ footer b{font:italic 400 16px "Brush Script MT","Segoe Script",cursive;color:#00
 .nf .ntx small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nf .bd{flex:none;background:#fff}/* les formulaires et cartes ouverts par un bouton s'arrêtent sous l'en-tête fixe */
 form, .card, .at-form, section > div[id] { scroll-margin-top: calc(var(--hdr-h, 150px) + 12px); }
+
+/* ---------- Onglets (js/onglets.js) ---------- */
+#tabbar{position:sticky;top:var(--hdr-h,150px);z-index:4;display:flex;gap:4px;align-items:flex-end;overflow-x:auto;padding:6px 16px 0;background:#ece8e9;border-bottom:1px solid #d6cfd1;scrollbar-width:thin}
+#tabbar .tb{display:inline-flex;align-items:center;gap:8px;max-width:210px;min-width:110px;padding:8px 10px 8px 14px;border:1px solid #d6cfd1;border-bottom:0;border-radius:10px 10px 0 0;background:#f7f4f5;color:#555;font:600 13px inherit;font-family:inherit;cursor:pointer;flex:none;position:relative;top:1px}
+#tabbar .tb:hover{background:#fff;color:#111}
+#tabbar .tb.on{background:var(--bg,#f6f5f5);color:#000;border-color:#d6cfd1;box-shadow:0 -2px 0 var(--brass,#d9a8b2) inset}
+#tabbar .tb-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:left}
+#tabbar .tb-x{width:20px;height:20px;border-radius:50%;display:inline-grid;place-items:center;color:#888;font-size:15px;line-height:1}
+#tabbar .tb-x:hover{background:#e3dcde;color:#000}
+#tabbar .tb-maj{font-style:normal;color:#c0392b;font-size:10px}
+@media (max-width:700px){#tabbar{display:none}}
