@@ -23,11 +23,13 @@ let lastAutoC = null;      // dernier montant rempli automatiquement (paie du jo
 const $c = s => document.querySelector(s);
 const CAT_PAIE = 'Paie des employés';
 const CAT_VARIABLE = 'Autre charge';
-// Catégories proposées à la saisie : la paie et les charges variables (les charges fixes se règlent plus haut)
+// Saisie : uniquement les charges variables. Les ACOMPTES donnés aux employés (onglet Employés) entrent tout seuls
+// dans les charges du jour ; les charges fixes se règlent plus haut. Les anciennes saisies « Paie » restent modifiables.
 const CATS = [
-  { k: CAT_PAIE,     cls: 'g' },
   { k: CAT_VARIABLE, cls: 'n' }
 ];
+const CATS_COULEUR = [{ k: CAT_PAIE, cls: 'g' }, { k: CAT_VARIABLE, cls: 'n' }];
+let ACOMPTES_C = [];      // acomptes du mois affiché (employés)
 const CATS_FIXES = ['Électricité', 'Loyer', 'Dîner des employés', 'Autre charge fixe'];
 // Une charge fixe s'applique « depuis toujours » sauf si on indique une date de début
 const DEBUT_TOUJOURS = '2000-01-01';
@@ -51,7 +53,7 @@ function jourC(dateStr) { const [y, m, d] = dateStr.split('-').map(Number); retu
 function moisC() { return $c('#ch-mois').value || isoC(new Date()).slice(0, 7); }
 function sumC(list) { return round2C(list.reduce((s, c) => s + Number(c.montant || 0), 0)); }
 function noteC(c) { return [c.note, c.employe_nom ? '(' + c.employe_nom + ')' : ''].filter(Boolean).join(' '); }
-function catClass(k) { const c = CATS.find(x => x.k === k); return c ? c.cls : 'n'; }
+function catClass(k) { const c = CATS_COULEUR.find(x => x.k === k); return c ? c.cls : 'n'; }
 function toastC(msg) {
   const e = $c('#toastC');
   if (!e) return;
@@ -98,11 +100,13 @@ async function loadCharges() {
   const mois = moisC();
   const d1 = mois + '-01', d2 = mois + '-' + String(joursDansMoisC(mois)).padStart(2, '0');
   await loadFixes();
-  const [c, p] = await Promise.all([
+  const [c, p, a] = await Promise.all([
     sb.from('charges').select('*').gte('date_charge', d1).lte('date_charge', d2).order('date_charge', { ascending: false }),
-    sb.from('pointages').select('*').gte('date_pointage', d1).lte('date_pointage', d2)
+    sb.from('pointages').select('*').gte('date_pointage', d1).lte('date_pointage', d2),
+    sb.from('acomptes').select('*').gte('date_acompte', d1).lte('date_acompte', d2)
   ]);
   POINTAGES_C = p.error ? [] : (p.data || []);
+  ACOMPTES_C = a.error ? [] : (a.data || []);
   if (c.error) {
     CHARGES = [];
     toastC('Erreur : ' + errMsgC(c.error));
@@ -122,10 +126,12 @@ function joursDuMois() {
     const d = mois + '-' + String(i).padStart(2, '0');
     if (d > today) break;
     const saisies = CHARGES.filter(c => c.date_charge === d);
-    const paie = sumC(saisies.filter(c => c.categorie === CAT_PAIE));
+    // acomptes donnés ce jour-là (automatique) + anciennes saisies « Paie des employés »
+    const acs = ACOMPTES_C.filter(a => a.date_acompte === d), acomptes = sumC(acs);
+    const paie = round2C(acomptes + sumC(saisies.filter(c => c.categorie === CAT_PAIE)));
     const variables = sumC(saisies.filter(c => c.categorie !== CAT_PAIE));
     const fx = fixesPour(d, POINTAGES_C);
-    if (paie || variables || fx.total) out.push({ d, paie, variables, fixes: fx.total, lignes: fx.lignes, total: round2C(paie + variables + fx.total) });
+    if (paie || variables || fx.total) out.push({ d, paie, nbAc: acs.length, variables, fixes: fx.total, lignes: fx.lignes, total: round2C(paie + variables + fx.total) });
   }
   return out;
 }
@@ -148,7 +154,7 @@ function renderStatsCharges() {
   const pc = v => (total ? Math.round(v / total * 100) : 0) + ' % du total';
   $c('#ch-stats').innerHTML =
     '<div class="at-stat"><span>Total des charges du mois</span><b>' + moneyC(total) + '</b><small style="color:var(--mut)">Moyenne : ' + moneyC(total / nj) + ' / jour travaillé</small></div>' +
-    '<div class="at-stat"><span>Paie des employés</span><b>' + moneyC(paie) + '</b><small style="color:var(--mut)">' + pc(paie) + '</small></div>' +
+    '<div class="at-stat"><span>Acomptes des employés</span><b>' + moneyC(paie) + '</b><small style="color:var(--mut)">automatique (onglet Employés) · ' + pc(paie) + '</small></div>' +
     '<div class="at-stat"><span>Charges fixes</span><b>' + moneyC(fixes) + '</b><small style="color:var(--mut)">' + moneyC(fixesParJourC()) + ' / jour · ' + pc(fixes) + '</small></div>' +
     '<div class="at-stat"><span>Charges variables</span><b>' + moneyC(vars) + '</b><small style="color:var(--mut)">hors main d’œuvre · ' + pc(vars) + '</small></div>';
 }
@@ -186,7 +192,7 @@ function renderCharges(errText) {
   const jours = joursDuMois();
   recap.innerHTML = jours.length ? jours.map(j =>
     '<tr><td><b>' + fdC(j.d) + '</b></td><td>' + jourC(j.d) + '</td>' +
-    '<td>' + (j.paie ? moneyC(j.paie) : '—') + '</td>' +
+    '<td>' + (j.paie ? moneyC(j.paie) + (j.nbAc ? '<small>' + j.nbAc + ' acompte' + (j.nbAc > 1 ? 's' : '') + '</small>' : '') : '—') + '</td>' +
     '<td' + (j.lignes.length ? ' title="' + escC(j.lignes.map(f => f.libelle + ' ' + moneyC(f.montant)).join(' · ')) + '"' : '') + '>' + (j.fixes ? moneyC(j.fixes) : '—') +
       (j.lignes.length ? '<small>' + escC(j.lignes.map(f => f.libelle).join(', ')) + '</small>' : '') + '</td>' +
     '<td>' + (j.variables ? moneyC(j.variables) : '—') + '</td>' +
@@ -205,7 +211,7 @@ function renderCharges(errText) {
     '<td><b>' + moneyC(c.montant) + '</b></td>' +
     '<td class="emp-act"><button class="btn s" type="button" onclick="showFormCharge(\'' + escC(c.id) + '\')">Modifier</button> ' +
     '<button class="btn s d" type="button" onclick="removeCharge(\'' + escC(c.id) + '\')">Supprimer</button></td></tr>'
-  ).join('') : '<tr><td colspan="5" class="at-empty">Aucune charge' + (CHARGES.length ? ' ne correspond au filtre' : ' saisie ce mois-ci. Cliquez sur « + Charge variable / paie »') + '.</td></tr>';
+  ).join('') : '<tr><td colspan="5" class="at-empty">Aucune charge' + (CHARGES.length ? ' ne correspond au filtre' : ' saisie ce mois-ci. Cliquez sur « + Charge variable »') + '.</td></tr>';
 }
 
 /* ---------- Formulaire : paie et charges variables ---------- */
@@ -255,7 +261,7 @@ function showFormCharge(id) {
   const cats = CATS.map(x => x.k);
   if (c && !cats.includes(c.categorie)) cats.push(c.categorie);
   $c('#ch-cat').innerHTML = cats.map(k => '<option value="' + escC(k) + '">' + escC(k === CAT_VARIABLE ? 'Charge variable' : k) + '</option>').join('');
-  $c('#ch-form-title').textContent = c ? 'Modifier la charge' : 'Nouvelle charge (paie ou charge variable)';
+  $c('#ch-form-title').textContent = c ? 'Modifier la charge' : 'Nouvelle charge variable';
   $c('#ch-date').value = c ? c.date_charge : (today.startsWith(mois) ? today : mois + '-01');
   $c('#ch-cat').value = c ? c.categorie : CATS[0].k;
   $c('#ch-montant').value = c ? c.montant : '';

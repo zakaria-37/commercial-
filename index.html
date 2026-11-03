@@ -298,7 +298,7 @@
     <select id="ch-fcat"></select>
     <input id="ch-q" type="search" placeholder="Rechercher : note, employé…">
     <button class="btn" type="button" onclick="exportCharges()">Exporter Excel</button>
-    <button class="btn p" type="button" onclick="showFormCharge()">+ Charge variable / paie</button>
+    <button class="btn p" type="button" onclick="showFormCharge()">+ Charge variable</button>
   </div>
   <div id="ch-stats" class="at-stats"></div>
 
@@ -348,7 +348,7 @@
     <div class="at-actions"><button id="ch-submit" class="btn p" type="submit">Ajouter la charge</button><button class="btn" type="button" onclick="cancelFormCharge()">Fermer</button></div>
   </form>
   <div class="card"><h2>Récapitulatif par jour</h2>
-    <div class="at-scroll"><table style="min-width:640px"><thead><tr><th>Date</th><th>Jour</th><th>Paie des employés</th><th>Charges fixes</th><th>Charges variables</th><th>Total du jour</th></tr></thead><tbody id="ch-jours"><tr><td colspan="6" class="at-empty">Chargement…</td></tr></tbody></table></div>
+    <div class="at-scroll"><table style="min-width:640px"><thead><tr><th>Date</th><th>Jour</th><th>Acomptes des employés</th><th>Charges fixes</th><th>Charges variables</th><th>Total du jour</th></tr></thead><tbody id="ch-jours"><tr><td colspan="6" class="at-empty">Chargement…</td></tr></tbody></table></div>
   </div>
   <div class="card" style="margin-top:16px"><h2>Détail des charges saisies (paie et charges variables)</h2>
     <div class="at-scroll"><table style="min-width:720px"><thead><tr><th>Date</th><th>Catégorie</th><th>Note</th><th>Montant</th><th>Actions</th></tr></thead><tbody id="ch-tbody"><tr><td colspan="5" class="at-empty">Chargement…</td></tr></tbody></table></div>

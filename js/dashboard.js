@@ -160,6 +160,9 @@
       const last = String(new Date(+mois.slice(0, 4), +mois.slice(5, 7), 0).getDate()).padStart(2, '0');
       const c = await sb.from('charges').select('*').gte('date_charge', mois + '-01').lte('date_charge', mois + '-' + last);
       chargesMois = c.error ? null : (c.data || []);
+      // acomptes donnés aux employés : comptés comme charges du jour (comme dans l'onglet Charges)
+      if (chargesMois) { const ac = await sb.from('acomptes').select('*').gte('date_acompte', mois + '-01').lte('date_acompte', mois + '-' + last);
+        if (!ac.error) chargesMois = chargesMois.concat((ac.data || []).map(x => ({ date_charge: x.date_acompte, categorie: 'Paie des employés', montant: x.montant }))); }
       try { if (window.ChargesAPI) fixesMois = await ChargesAPI.moisFixes(mois); } catch (e) { fixesMois = { total: 0, jours: 0, parJour: 0 }; }
       const p = await sb.from('pointages').select('*').eq('date_pointage', today);
       try { if (window.StockAPI) await StockAPI.load(); } catch (e) { /* stock non installé */ }
