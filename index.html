@@ -292,7 +292,7 @@
   <div id="toastE"></div>
 </section>
 <section id="v-charges">
-  <div class="hello"><span class="fl"></span><div><h2>Charges de l’atelier</h2><p>Charges fixes réglées une seule fois (dîner, loyer, électricité…) et charges variables saisies au jour le jour.</p></div></div>
+  <div class="hello"><span class="fl"></span><div><h2>Charges de l’atelier</h2><p>Charges variables saisies au jour le jour, et acomptes des employés ajoutés automatiquement.</p></div></div>
   <div class="tools">
     <label style="display:flex;gap:8px;align-items:center;font-weight:600">Mois <input id="ch-mois" type="month"></label>
     <select id="ch-fcat"></select>
@@ -301,40 +301,6 @@
     <button class="btn p" type="button" onclick="showFormCharge()">+ Charge variable</button>
   </div>
   <div id="ch-stats" class="at-stats"></div>
-
-  <!-- Charges FIXES : saisies une seule fois, appliquées automatiquement à chaque jour -->
-  <div class="card cf-card" id="cf-card">
-    <div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">Charges fixes de chaque jour</h2><button class="btn p" type="button" onclick="showFormFixe()">+ Charge fixe</button></div>
-    <p class="pr-help">Dîner des employés, loyer, électricité… : saisissez le montant <b>par jour</b> une seule fois, il s’applique tout seul à chaque jour, sans rien ressaisir. Ce sont <b>les seules charges comptées dans la main d’œuvre</b> d’une pièce (avec les salaires).</p>
-    <form id="cf-quick" class="at-form" style="display:none">
-      <h2 style="margin-top:0">Vos charges fixes habituelles (montant par jour)</h2>
-      <div class="at-fields">
-        <label>Dîner des employés (DA / jour)<input id="cq-diner" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
-        <label>Loyer (DA / jour)<input id="cq-loyer" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
-        <label>Électricité (DA / jour)<input id="cq-elec" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
-        <label>Autre charge fixe (DA / jour)<input id="cq-autre" type="number" min="0" step="0.01" inputmode="decimal" value="400"></label>
-      </div>
-      <p class="pr-help" style="margin:10px 0 0">Laissez à vide ou à 0 ce qui ne vous concerne pas. Vous pourrez tout modifier ensuite, ou ajouter d’autres charges fixes.</p>
-      <div class="at-actions"><button class="btn p" type="submit">Enregistrer mes charges fixes</button></div>
-    </form>
-    <form id="cf-form" class="at-form">
-      <h2 id="cf-form-title" style="margin-top:0">Nouvelle charge fixe</h2>
-      <div class="at-fields">
-        <label>Nom *<input id="cf-libelle" required maxlength="80" list="cf-noms" placeholder="Ex : Loyer, Dîner des employés…"></label>
-        <label>Catégorie<select id="cf-cat"></select></label>
-        <label>Montant par jour (DA) *<input id="cf-montant" type="number" min="0" step="0.01" inputmode="decimal" required></label>
-        <label>S’applique<select id="cf-jours"><option value="travailles">Aux jours travaillés (pointage)</option><option value="tous">À tous les jours</option></select></label>
-        <label>À partir du (vide = depuis toujours)<input id="cf-debut" type="date"></label>
-        <label>Jusqu’au (facultatif)<input id="cf-fin" type="date"></label>
-        <label style="grid-column:1/-1">Note<input id="cf-note" maxlength="200" placeholder="Facultatif"></label>
-      </div>
-      <datalist id="cf-noms"><option value="Dîner des employés"><option value="Loyer"><option value="Électricité"><option value="Eau"><option value="Gardiennage"><option value="Internet / téléphone"></datalist>
-      <label class="st-check"><input id="cf-actif" type="checkbox" checked> Charge active (décochez pour l’arrêter sans la supprimer)</label>
-      <div id="cf-hint" class="st-hint"></div>
-      <div class="at-actions"><button id="cf-submit" class="btn p" type="submit">Ajouter la charge fixe</button><button class="btn" type="button" onclick="cancelFormFixe()">Fermer</button></div>
-    </form>
-    <div class="at-scroll"><table style="min-width:700px"><thead><tr><th>Charge fixe</th><th>Catégorie</th><th>Montant par jour</th><th>S’applique</th><th>Période</th><th>Actions</th></tr></thead><tbody id="cf-tbody"></tbody></table></div>
-  </div>
 
   <form id="ch-form" class="at-form">
     <h2 id="ch-form-title" style="margin-top:0">Nouvelle charge</h2>
@@ -348,7 +314,7 @@
     <div class="at-actions"><button id="ch-submit" class="btn p" type="submit">Ajouter la charge</button><button class="btn" type="button" onclick="cancelFormCharge()">Fermer</button></div>
   </form>
   <div class="card"><h2>Récapitulatif par jour</h2>
-    <div class="at-scroll"><table style="min-width:640px"><thead><tr><th>Date</th><th>Jour</th><th>Acomptes des employés</th><th>Charges fixes</th><th>Charges variables</th><th>Total du jour</th></tr></thead><tbody id="ch-jours"><tr><td colspan="6" class="at-empty">Chargement…</td></tr></tbody></table></div>
+    <div class="at-scroll"><table style="min-width:640px"><thead><tr><th>Date</th><th>Jour</th><th>Acomptes des employés</th><th>Charges variables</th><th>Total du jour</th></tr></thead><tbody id="ch-jours"><tr><td colspan="5" class="at-empty">Chargement…</td></tr></tbody></table></div>
   </div>
   <div class="card" style="margin-top:16px"><h2>Détail des charges saisies (paie et charges variables)</h2>
     <div class="at-scroll"><table style="min-width:720px"><thead><tr><th>Date</th><th>Catégorie</th><th>Note</th><th>Montant</th><th>Actions</th></tr></thead><tbody id="ch-tbody"><tr><td colspan="5" class="at-empty">Chargement…</td></tr></tbody></table></div>
@@ -701,7 +667,7 @@
 
     <div class="card" style="margin-top:16px">
       <h2>Main d’œuvre d’une pièce</h2>
-      <p class="pr-help">Main d’œuvre = (total des salaires de tous les employés du jour + charges fixes du jour : dîner, loyer, électricité…) ÷ total des pièces fabriquées le même jour. Le bouton « Calculer » reprend le pointage (onglet Employés) et les charges (onglet Charges) du jour choisi.</p>
+      <p class="pr-help">Main d’œuvre = (total des salaires de tous les employés du jour + charges fixes du jour : dîner, loyer, électricité…) ÷ total des pièces fabriquées le même jour. Le bouton « Calculer » reprend le pointage (onglet Employés) et les charges fixes (tableau ci-dessous) du jour choisi.</p>
       <div class="at-fields pd-mo">
         <label>Jour de référence *<input id="pd-mo-date" type="date"></label>
         <label>Salaires du jour (DA)<input id="pd-mo-sal" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Total des salaires"></label>
@@ -712,6 +678,40 @@
       <div id="pd-mo-hint"></div>
       <div id="pd-mo-res"></div>
       <div class="at-actions"><button class="btn" type="button" onclick="calculerMo()">Calculer depuis le pointage et les charges du jour</button><button id="pd-mo-save" class="btn" type="button" onclick="saveMo()">Enregistrer la main d’œuvre</button></div>
+    </div>
+
+  <!-- Charges FIXES : saisies une seule fois, appliquées automatiquement à chaque jour -->
+    <div class="card cf-card" id="cf-card" style="margin-top:16px">
+      <div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">Charges fixes de chaque jour</h2><button class="btn p" type="button" onclick="showFormFixe()">+ Charge fixe</button></div>
+      <p class="pr-help">Dîner des employés, loyer, électricité… : saisissez le montant <b>par jour</b> une seule fois, il s’applique tout seul à chaque jour, sans rien ressaisir. Elles servent <b>uniquement au calcul de la main d’œuvre</b> d’une pièce (avec les salaires) : elles n’apparaissent pas dans la section Charges.</p>
+      <form id="cf-quick" class="at-form" style="display:none">
+        <h2 style="margin-top:0">Vos charges fixes habituelles (montant par jour)</h2>
+        <div class="at-fields">
+          <label>Dîner des employés (DA / jour)<input id="cq-diner" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
+          <label>Loyer (DA / jour)<input id="cq-loyer" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
+          <label>Électricité (DA / jour)<input id="cq-elec" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
+          <label>Autre charge fixe (DA / jour)<input id="cq-autre" type="number" min="0" step="0.01" inputmode="decimal" value="400"></label>
+        </div>
+        <p class="pr-help" style="margin:10px 0 0">Laissez à vide ou à 0 ce qui ne vous concerne pas. Vous pourrez tout modifier ensuite, ou ajouter d’autres charges fixes.</p>
+        <div class="at-actions"><button class="btn p" type="submit">Enregistrer mes charges fixes</button></div>
+      </form>
+      <form id="cf-form" class="at-form">
+        <h2 id="cf-form-title" style="margin-top:0">Nouvelle charge fixe</h2>
+        <div class="at-fields">
+          <label>Nom *<input id="cf-libelle" required maxlength="80" list="cf-noms" placeholder="Ex : Loyer, Dîner des employés…"></label>
+          <label>Catégorie<select id="cf-cat"></select></label>
+          <label>Montant par jour (DA) *<input id="cf-montant" type="number" min="0" step="0.01" inputmode="decimal" required></label>
+          <label>S’applique<select id="cf-jours"><option value="travailles">Aux jours travaillés (pointage)</option><option value="tous">À tous les jours</option></select></label>
+          <label>À partir du (vide = depuis toujours)<input id="cf-debut" type="date"></label>
+          <label>Jusqu’au (facultatif)<input id="cf-fin" type="date"></label>
+          <label style="grid-column:1/-1">Note<input id="cf-note" maxlength="200" placeholder="Facultatif"></label>
+        </div>
+        <datalist id="cf-noms"><option value="Dîner des employés"><option value="Loyer"><option value="Électricité"><option value="Eau"><option value="Gardiennage"><option value="Internet / téléphone"></datalist>
+        <label class="st-check"><input id="cf-actif" type="checkbox" checked> Charge active (décochez pour l’arrêter sans la supprimer)</label>
+        <div id="cf-hint" class="st-hint"></div>
+        <div class="at-actions"><button id="cf-submit" class="btn p" type="submit">Ajouter la charge fixe</button><button class="btn" type="button" onclick="cancelFormFixe()">Fermer</button></div>
+      </form>
+      <div class="at-scroll"><table style="min-width:700px"><thead><tr><th>Charge fixe</th><th>Catégorie</th><th>Montant par jour</th><th>S’applique</th><th>Période</th><th>Actions</th></tr></thead><tbody id="cf-tbody"></tbody></table></div>
     </div>
 
     <div class="card" style="margin-top:16px">

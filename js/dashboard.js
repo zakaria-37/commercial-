@@ -153,7 +153,7 @@
   }
 
   /* ---------- Vue d'ensemble (chiffres clés cliquables) ---------- */
-  let chargesMois = null, pointesAuj = null, dataErr = false, fixesMois = { total: 0, jours: 0, parJour: 0 };
+  let chargesMois = null, pointesAuj = null, dataErr = false;
   async function loadExtras() {
     try {
       const today = iso(new Date()), mois = today.slice(0, 7);
@@ -163,7 +163,6 @@
       // acomptes donnés aux employés : comptés comme charges du jour (comme dans l'onglet Charges)
       if (chargesMois) { const ac = await sb.from('acomptes').select('*').gte('date_acompte', mois + '-01').lte('date_acompte', mois + '-' + last);
         if (!ac.error) chargesMois = chargesMois.concat((ac.data || []).map(x => ({ date_charge: x.date_acompte, categorie: 'Paie des employés', montant: x.montant }))); }
-      try { if (window.ChargesAPI) fixesMois = await ChargesAPI.moisFixes(mois); } catch (e) { fixesMois = { total: 0, jours: 0, parJour: 0 }; }
       const p = await sb.from('pointages').select('*').eq('date_pointage', today);
       try { if (window.StockAPI) await StockAPI.load(); } catch (e) { /* stock non installé */ }
       try { if (window.PFAPI) await PFAPI.load(); } catch (e) { /* stock produits finis non installé */ }
@@ -203,8 +202,8 @@
     const cmds = typeof COMMANDES !== 'undefined' ? COMMANDES.filter(cmdOuverte) : [];
     const cmdLate = cmds.filter(c => c.date_reception_prevue && c.date_reception_prevue < today).length;
     const reste = cmds.reduce((n, c) => n + Math.max(0, (Number(c.quantite_commandee) || 0) - (Number(c.quantite_recue) || 0)), 0);
-    const totCh = chargesMois ? chargesMois.reduce((s, c) => s + Number(c.montant || 0), 0) + fixesMois.total : null;       // saisies + charges fixes calculées
-    const chAuj = chargesMois ? chargesMois.filter(c => c.date_charge === today).reduce((s, c) => s + Number(c.montant || 0), 0) + (fixesMois.parJour && pointesAuj ? fixesMois.parJour : 0) : 0;
+    const totCh = chargesMois ? chargesMois.reduce((s, c) => s + Number(c.montant || 0), 0) : null;       // charges saisies (les charges fixes ne servent qu'à la main d'œuvre)
+    const chAuj = chargesMois ? chargesMois.filter(c => c.date_charge === today).reduce((s, c) => s + Number(c.montant || 0), 0) : 0;
     const nbEmp = typeof EMPLOYES !== 'undefined' ? EMPLOYES.length : 0;
     el.innerHTML =
       kpi(late ? 'u' : '', 'Relances à faire', late + soon, late + ' en retard · ' + soon + ' cette semaine', 'rel') +
@@ -304,7 +303,7 @@
     const box = $q('#d-finance'); if (!box) return;
     if (chargesMois === null) { box.innerHTML = '<div class="empty" style="padding:22px">Charges indisponibles pour le moment.</div>'; return; }
     // paie + charges fixes (calculées chaque jour) + charges variables (saisies, hors main d'œuvre)
-    const cats = { 'Paie des employés': 0, 'Charges fixes': fixesMois.total, 'Charges variables': 0 };
+    const cats = { 'Paie des employés': 0, 'Charges variables': 0 };
     chargesMois.forEach(c => { cats[c.categorie === 'Paie des employés' ? 'Paie des employés' : 'Charges variables'] += Number(c.montant || 0); });
     Object.keys(cats).forEach(k => { if (!cats[k]) delete cats[k]; });
     const tot = Object.values(cats).reduce((s, v) => s + v, 0);

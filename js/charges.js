@@ -130,8 +130,7 @@ function joursDuMois() {
     const acs = ACOMPTES_C.filter(a => a.date_acompte === d), acomptes = sumC(acs);
     const paie = round2C(acomptes + sumC(saisies.filter(c => c.categorie === CAT_PAIE)));
     const variables = sumC(saisies.filter(c => c.categorie !== CAT_PAIE));
-    const fx = fixesPour(d, POINTAGES_C);
-    if (paie || variables || fx.total) out.push({ d, paie, nbAc: acs.length, variables, fixes: fx.total, lignes: fx.lignes, total: round2C(paie + variables + fx.total) });
+    if (paie || variables) out.push({ d, paie, nbAc: acs.length, variables, total: round2C(paie + variables) });      // charges fixes : seulement dans la main d'œuvre (Produits)
   }
   return out;
 }
@@ -148,19 +147,18 @@ function filteredCharges() {
 
 function renderStatsCharges() {
   const jours = joursDuMois();
-  const paie = round2C(jours.reduce((s, j) => s + j.paie, 0)), fixes = round2C(jours.reduce((s, j) => s + j.fixes, 0));
-  const vars = round2C(jours.reduce((s, j) => s + j.variables, 0)), total = round2C(paie + fixes + vars);
+  const paie = round2C(jours.reduce((s, j) => s + j.paie, 0));
+  const vars = round2C(jours.reduce((s, j) => s + j.variables, 0)), total = round2C(paie + vars);
   const nj = jours.length || 1;
   const pc = v => (total ? Math.round(v / total * 100) : 0) + ' % du total';
   $c('#ch-stats').innerHTML =
     '<div class="at-stat"><span>Total des charges du mois</span><b>' + moneyC(total) + '</b><small style="color:var(--mut)">Moyenne : ' + moneyC(total / nj) + ' / jour travaillé</small></div>' +
     '<div class="at-stat"><span>Acomptes des employés</span><b>' + moneyC(paie) + '</b><small style="color:var(--mut)">automatique (onglet Employés) · ' + pc(paie) + '</small></div>' +
-    '<div class="at-stat"><span>Charges fixes</span><b>' + moneyC(fixes) + '</b><small style="color:var(--mut)">' + moneyC(fixesParJourC()) + ' / jour · ' + pc(fixes) + '</small></div>' +
-    '<div class="at-stat"><span>Charges variables</span><b>' + moneyC(vars) + '</b><small style="color:var(--mut)">hors main d’œuvre · ' + pc(vars) + '</small></div>';
+    '<div class="at-stat"><span>Charges variables</span><b>' + moneyC(vars) + '</b><small style="color:var(--mut)">' + pc(vars) + '</small></div>';
 }
 
 function renderFixes() {
-  const body = $c('#cf-tbody'), quick = $c('#cf-quick');
+  const body = $c('#cf-tbody'), quick = $c('#cf-quick'); if (!body) return;
   quick.style.display = (!CHARGES_FIXES.length && !fixesErr && $c('#cf-form').style.display !== 'block') ? 'block' : 'none';
   if (fixesErr) { body.innerHTML = '<tr><td colspan="6" class="at-empty" style="color:#b00020">⚠ ' + escC(fixesErr) + '</td></tr>'; return; }
   const ordre = f => (f.actif !== false ? 0 : 1);
@@ -178,13 +176,13 @@ function renderFixes() {
 }
 
 function renderCharges(errText) {
-  renderStatsCharges(); renderFixes();
+  renderStatsCharges();
   const list = filteredCharges();
   const body = $c('#ch-tbody'), recap = $c('#ch-jours');
 
   if (errText) {
     body.innerHTML = '<tr><td colspan="5" class="at-empty" style="color:#b00020">⚠ ' + escC(errText) + '</td></tr>';
-    recap.innerHTML = '<tr><td colspan="6" class="at-empty">—</td></tr>';
+    recap.innerHTML = '<tr><td colspan="5" class="at-empty">—</td></tr>';
     return;
   }
 
@@ -193,15 +191,13 @@ function renderCharges(errText) {
   recap.innerHTML = jours.length ? jours.map(j =>
     '<tr><td><b>' + fdC(j.d) + '</b></td><td>' + jourC(j.d) + '</td>' +
     '<td>' + (j.paie ? moneyC(j.paie) + (j.nbAc ? '<small>' + j.nbAc + ' acompte' + (j.nbAc > 1 ? 's' : '') + '</small>' : '') : '—') + '</td>' +
-    '<td' + (j.lignes.length ? ' title="' + escC(j.lignes.map(f => f.libelle + ' ' + moneyC(f.montant)).join(' · ')) + '"' : '') + '>' + (j.fixes ? moneyC(j.fixes) : '—') +
-      (j.lignes.length ? '<small>' + escC(j.lignes.map(f => f.libelle).join(', ')) + '</small>' : '') + '</td>' +
     '<td>' + (j.variables ? moneyC(j.variables) : '—') + '</td>' +
     '<td><b>' + moneyC(j.total) + '</b></td></tr>'
   ).join('') +
     '<tr style="font-weight:700;background:var(--nb)"><td colspan="2">Total du mois</td>' +
-    '<td>' + moneyC(jours.reduce((s, j) => s + j.paie, 0)) + '</td><td>' + moneyC(jours.reduce((s, j) => s + j.fixes, 0)) + '</td>' +
+    '<td>' + moneyC(jours.reduce((s, j) => s + j.paie, 0)) + '</td>' +
     '<td>' + moneyC(jours.reduce((s, j) => s + j.variables, 0)) + '</td><td>' + moneyC(jours.reduce((s, j) => s + j.total, 0)) + '</td></tr>'
-    : '<tr><td colspan="6" class="at-empty">Aucune charge pour ce mois.</td></tr>';
+    : '<tr><td colspan="5" class="at-empty">Aucune charge pour ce mois.</td></tr>';
 
   // Détail des charges saisies
   body.innerHTML = list.length ? list.map(c =>
@@ -234,7 +230,7 @@ async function paieDuJour(date) {
 async function updateHint(prefill) {
   const hint = $c('#ch-hint');
   if ($c('#ch-cat').value !== CAT_PAIE) {
-    hint.textContent = 'Charge variable : elle n’entre pas dans la main d’œuvre. Les charges fixes (dîner, loyer, électricité…) se règlent une seule fois dans « Charges fixes de chaque jour ».';
+    hint.textContent = 'Charge variable : elle n’entre pas dans la main d’œuvre. Les charges fixes (dîner, loyer, électricité…) se règlent dans Produits › Coût de revient › « Charges fixes de chaque jour », uniquement pour la main d’œuvre.';
     return;
   }
   const date = $c('#ch-date').value, cat = $c('#ch-cat').value;
@@ -364,7 +360,7 @@ async function saveFixe() {
   if (res.error) { toastC('Erreur : ' + errMsgC(res.error)); return; }
   toastC(curFixe ? 'Charge fixe modifiée.' : 'Charge fixe ajoutée : elle s’applique à chaque jour.');
   curFixe = null; $c('#cf-form').style.display = 'none';
-  await loadCharges();
+  await loadFixes(); renderFixes();
   document.dispatchEvent(new Event('mariabag:charges'));
 }
 async function saveFixesRapides() {
@@ -379,7 +375,7 @@ async function saveFixesRapides() {
   const res = await sb.from('charges_fixes').insert(lignes.map(l => ({ libelle: l[0], categorie: l[1], montant: l[2], jours: 'travailles', date_debut: debut, actif: true, note: '' }))).select();
   if (res.error) { toastC('Erreur : ' + errMsgC(res.error)); return; }
   toastC(lignes.length + ' charge(s) fixe(s) enregistrée(s) : elles s’appliquent automatiquement à chaque jour travaillé.');
-  await loadCharges();
+  await loadFixes(); renderFixes();
   document.dispatchEvent(new Event('mariabag:charges'));
 }
 async function removeFixe(id) {
@@ -388,7 +384,7 @@ async function removeFixe(id) {
   const { error } = await sb.from('charges_fixes').delete().eq('id', id);
   if (error) { toastC('Erreur : ' + errMsgC(error)); return; }
   toastC('Charge fixe supprimée.');
-  await loadCharges();
+  await loadFixes(); renderFixes();
   document.dispatchEvent(new Event('mariabag:charges'));
 }
 
@@ -398,11 +394,9 @@ function exportCharges() {
   const mois = moisC();
   const jours = joursDuMois();
   const parJour = jours.map(j => ({
-    Date: fdC(j.d), Jour: jourC(j.d), 'Paie des employés': j.paie, 'Charges fixes': j.fixes,
-    'Détail charges fixes': j.lignes.map(f => f.libelle + ' ' + f.montant).join(' + '), 'Charges variables': j.variables, 'Total du jour': j.total
+    Date: fdC(j.d), Jour: jourC(j.d), 'Acomptes des employés': j.paie, 'Charges variables': j.variables, 'Total du jour': j.total
   }));
-  parJour.push({ Date: 'TOTAL', Jour: '', 'Paie des employés': round2C(jours.reduce((s, j) => s + j.paie, 0)), 'Charges fixes': round2C(jours.reduce((s, j) => s + j.fixes, 0)),
-    'Détail charges fixes': '', 'Charges variables': round2C(jours.reduce((s, j) => s + j.variables, 0)), 'Total du jour': round2C(jours.reduce((s, j) => s + j.total, 0)) });
+  parJour.push({ Date: 'TOTAL', Jour: '', 'Acomptes des employés': round2C(jours.reduce((s, j) => s + j.paie, 0)), 'Charges variables': round2C(jours.reduce((s, j) => s + j.variables, 0)), 'Total du jour': round2C(jours.reduce((s, j) => s + j.total, 0)) });
   const detail = [...CHARGES].sort((a, b) => a.date_charge.localeCompare(b.date_charge)).map(c => ({
     Date: fdC(c.date_charge), Jour: jourC(c.date_charge), 'Catégorie': c.categorie, Note: noteC(c), 'Montant (DA)': Number(c.montant || 0)
   }));
@@ -413,7 +407,6 @@ function exportCharges() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parJour), 'Par jour ' + mois);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detail), 'Saisies ' + mois);
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fixes), 'Charges fixes');
   XLSX.writeFile(wb, 'MARIA-BAG_charges_' + mois + '.xlsx');
 }
 

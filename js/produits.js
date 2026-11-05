@@ -160,6 +160,7 @@ async function loadProduits() {
   LIGNES = l.data || [];
   if (!PRODUITS.some(x => String(x.id) === String(selProduit))) selProduit = PRODUITS.length ? PRODUITS[0].id : null;
   renderProduits();
+  if (typeof loadFixes === 'function') loadFixes().then(() => { if (typeof renderFixes === 'function') renderFixes(); }).catch(() => {});
   if (await produitsDepuisModeles()) return;      // des produits ont été créés : la liste est rechargée
 }
 
@@ -773,10 +774,10 @@ async function calculerMo(mode) {
   const exclues = (fx.exclues || []).map(x => escD(x.f.libelle) + ' (' + escD(x.raison) + ')');
   let detailCh;
   if (fx.erreur) detailCh = 'charges fixes indisponibles (' + escD(fx.erreur) + ')';
-  else if (!fx.nbDefinies) detailCh = 'aucune charge fixe définie : saisissez-les une seule fois dans Charges › « Charges fixes de chaque jour »';
+  else if (!fx.nbDefinies) detailCh = 'aucune charge fixe définie : saisissez-les une seule fois dans « Charges fixes de chaque jour » (sous la main d’œuvre)';
   else {
     detailCh = fx.lignes.length ? fx.lignes.map(f => escD(f.libelle) + ' ' + moneyD(f.montant)).join(', ') : 'aucune applicable ce jour-là';
-    if (exclues.length) detailCh += ' <span style="color:#b26a00">— non comptées : ' + exclues.join(', ') + (exclues.some(e => /commence le/.test(e)) ? '. Pour qu’elles s’appliquent aussi à ce jour, videz « À partir du » dans Charges › Modifier' : '') + '</span>';
+    if (exclues.length) detailCh += ' <span style="color:#b26a00">— non comptées : ' + exclues.join(', ') + (exclues.some(e => /commence le/.test(e)) ? '. Pour qu’elles s’appliquent aussi à ce jour, videz « À partir du » dans « Charges fixes de chaque jour » › Modifier' : '') + '</span>';
   }
 
   const texte = fdD(date) + ' : ' + srcSal + ' → <b>' + moneyD(sal) + '</b> ; charges fixes : ' + detailCh + ' → <b>' + moneyD(totAutres) + '</b>' +

@@ -203,10 +203,10 @@
     const ch = (await rows('charges', 'date_charge', du, au)).filter(c => admin() || c.categorie !== 'Paie des employés');
     let fx = { total: 0 }; if (window.ChargesAPI && ChargesAPI.moisFixes && (!P || P.mois)) { try { fx = await ChargesAPI.moisFixes(mm); } catch (e) {} }
     const cats = {}; ch.forEach(c => { cats[c.categorie || 'Autre'] = (cats[c.categorie || 'Autre'] || 0) + Number(c.montant || 0); });
-    let t = '== CHARGES — ' + l + ' ==\nTotal des charges saisies : ' + f2(somme(ch, 'montant')) + ' DA' + (fx.total ? ' + charges fixes calculées ' + f2(fx.total) + ' DA (' + (fx.jours || 0) + ' jours travaillés) = ' + f2(somme(ch, 'montant') + fx.total) + ' DA' : '') + '.\n';
+    let t = '== CHARGES — ' + l + ' ==\nTotal des charges saisies : ' + f2(somme(ch, 'montant')) + ' DA' + '' + '.\n';
     if (Object.keys(cats).length) t += 'Par catégorie : ' + Object.keys(cats).sort((a, b) => cats[b] - cats[a]).map(k => k + ' ' + f2(cats[k]) + ' DA').join(' ; ') + '.\n';
     const fixes = window.ChargesAPI ? ChargesAPI.list() : [];
-    if (fixes.length) t += 'Charges fixes définies (par jour travaillé) : ' + fixes.slice(0, 10).map(f => f.libelle + ' ' + f2(f.montant) + ' DA').join(', ') + '.\n';
+    if (fixes.length) t += 'Charges fixes (comptées UNIQUEMENT dans la main d’œuvre des produits, pas dans les charges) : ' + fixes.slice(0, 10).map(f => f.libelle + ' ' + f2(f.montant) + ' DA').join(', ') + '.\n';
     const top = ch.slice().sort((a, b) => Number(b.montant) - Number(a.montant)).slice(0, 10);
     if (top.length) t += 'Plus grosses charges : ' + top.map(c => fd(c.date_charge) + ' ' + (c.libelle || c.categorie) + ' ' + f2(c.montant) + ' DA').join(' ; ') + '.\n';
     return lim(t, 1800);
