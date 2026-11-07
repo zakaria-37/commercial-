@@ -30,6 +30,38 @@ const sb = LocalDB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const foc = HTMLElement.prototype.focus;
   HTMLElement.prototype.focus = function (o) { return foc.call(this, Date.now() - dernier < 900 ? Object.assign({}, o || {}, { preventScroll: true }) : o); };
 })();
+/* Partout : un clic sur « Modifier », « + Nouveau… », « Ajouter »… amène la page sur le formulaire ouvert
+   et place le curseur dans sa première case, prêt à écrire (même si le formulaire était déjà ouvert plus haut). */
+(function () {
+  const SEL = 'form, .at-form';
+  const vis = e => !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length)) && getComputedStyle(e).visibility !== 'hidden';
+  const champs = f => [...f.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=button]):not([type=submit]), select, textarea')]
+    .filter(i => !i.disabled && !i.readOnly && vis(i));
+  const valeurs = f => [...f.querySelectorAll('input,select,textarea')].map(i => i.value).join('\u0001');
+  const ACTION = /modifier|[ée]diter|nouve|ajouter|^\s*\+|valider|saisir|entrer|sortir|composer|ouvrir|paiement|versement|r[èe]glement|acompte|cr[ée]dit|pointer|corriger/i;
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button, a, [role=button], .btn'); if (!b) return;
+    if (b.closest(SEL) || b.closest('nav, #tabbar, #zs-panel, #zs-btn, header')) return;
+    const txt = (b.textContent || '') + ' ' + (b.title || '');
+    const avant = new Map([...document.querySelectorAll(SEL)].map(f => [f, { v: vis(f), s: valeurs(f) }]));
+    const trouver = () => {
+      for (const [f, a] of avant) if (!a.v && document.contains(f) && vis(f) && champs(f).length) return f;        // formulaire qui vient de s'ouvrir
+      if (!ACTION.test(txt)) return null;
+      for (const [f, a] of avant) if (a.v && document.contains(f) && vis(f) && valeurs(f) !== a.s && champs(f).length) return f;   // déjà ouvert, rempli avec la ligne choisie
+      return [...document.querySelectorAll(SEL)].find(f => !avant.has(f) && vis(f) && champs(f).length) || null;     // formulaire créé par le clic
+    };
+    const aller = () => {
+      const f = trouver(); if (!f) return false;
+      const act = document.activeElement, dedans = act && act !== document.body && f.contains(act);
+      const cible = dedans ? act : champs(f)[0]; if (!cible) return true;
+      const r = cible.getBoundingClientRect(), haut = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hdr-h')) || 0) + 8;
+      if (r.top < haut || r.bottom > window.innerHeight - 8) f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (!dedans) try { cible.focus({ preventScroll: true }); if (cible.setSelectionRange && /^(text|search|tel|)$/.test(cible.type || '')) { const n = cible.value.length; cible.setSelectionRange(n, n); } } catch (x) {}
+      return true;
+    };
+    setTimeout(() => { if (!aller()) setTimeout(aller, 400); }, 80);
+  }, true);
+})();
 const TABLE = 'contacts';
 
 const $ = s => document.querySelector(s);
