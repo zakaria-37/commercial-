@@ -267,6 +267,97 @@
     say(n + ' ligne(s) synchronisée(s) avec le Stock' + (err ? ' · ⚠ ' + err + ' erreur(s)' : '') + ' — éléments : ' + money(t.par.matiere) + ' · produits finis : ' + money(t.par.produit_fini) + '.');
   }
 
+  /* Marchandise retrouvée (ex. cachée dans le dépôt) : on l'ajoute au stock initial de cet inventaire.
+     Produit / élément existant ou nouveau ; la quantité s'ajoute à la ligne de l'inventaire et,
+     si coché, au Stock (entrée datée du jour de l'inventaire, donc le stock actuel reste juste). */
+  function trouve(sec) {
+    const i = inv(sel); if (ro(i)) return;
+    const pf = sec === 'produit_fini';
+    const items = pf ? (window.PFAPI ? PFAPI.produits() : []) : (window.StockAPI ? StockAPI.list() : []);
+    const cats = typeof STK_CATS !== 'undefined' ? STK_CATS : [{ k: 'Autre', unite: 'pcs' }];
+    const bg = document.createElement('div'); bg.className = 'cm-nv-bg';
+    bg.innerHTML = '<form class="cm-nv" autocomplete="off"><h3 style="margin:0 0 4px">' + (pf ? 'Produit fini' : 'Élément') + ' trouvé au dépôt</h3>' +
+      '<p class="cm-nv-p">Ajouté au stock initial de « ' + esc(i.nom) + ' » (au ' + fd(i.date_inventaire) + ').</p><div class="at-fields">' +
+      '<label style="grid-column:1/-1">' + (pf ? 'Produit fini' : 'Élément') + ' *<select id="tv-it" data-cherche="1" data-creer-txt="' + (pf ? 'Nouveau produit fini…' : 'Nouvel élément…') + '"><option value="">— tapez le nom —</option>' +
+        items.slice().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map(x => '<option value="' + esc(x.id) + '">' + esc(x.nom) + (pf ? '' : ' (' + esc(x.categorie) + ')') + '</option>').join('') + '</select></label>' +
+      (pf ? '' : '<label class="tv-new" style="display:none">Catégorie<select id="tv-cat" data-nocherche="1">' + cats.map(c => '<option>' + esc(c.k) + '</option>').join('') + '</select></label>' +
+        '<label class="tv-new" style="display:none">Unité<select id="tv-uni" data-nocherche="1">' + ['m', 'pcs', 'kg', 'bobine', 'rouleau', 'paquet', 'sachet', 'l'].map(u => '<option>' + u + '</option>').join('') + '</select></label>') +
+      '<label>Quantité trouvée * <small id="tv-u"></small><input id="tv-q" type="number" min="0" step="any" inputmode="decimal" required></label>' +
+      '<label>' + (pf ? 'Coût / pièce' : 'Prix unitaire') + ' (DA)<input id="tv-pu" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></label></div>' +
+      '<label class="st-check" style="margin-top:8px"><input id="tv-stock" type="checkbox" checked> Ajouter aussi au Stock actuel (entrée datée du ' + fd(i.date_inventaire) + ')</label>' +
+      '<div id="tv-msg" class="cm-nv-p" style="color:#b00020"></div>' +
+      '<div class="at-actions"><button class="btn p" type="submit">Ajouter à l’inventaire</button><button class="btn" type="button" id="tv-x">Annuler</button></div></form>';
+    document.body.appendChild(bg);
+    const $t = q => bg.querySelector(q), fermer = () => bg.remove();
+    let nouveauNom = null;
+    const selIt = $t('#tv-it');
+    const majIt = () => {
+      const x = items.find(y => String(y.id) === String(selIt.value));
+      bg.querySelectorAll('.tv-new').forEach(e => e.style.display = nouveauNom ? '' : 'none');
+      $t('#tv-u').textContent = pf ? '(pièces)' : nouveauNom ? '' : x ? '(' + x.unite + (StockAPI.aCond(x) ? ' — 1 ' + x.cond_nom + ' = ' + StockAPI.condQte(x) + ' ' + x.unite : '') + ')' : '';
+      if (x && !$t('#tv-pu').value) { const p0 = pf ? PFAPI.coutProduit(x) : StockAPI.unitPrice(x); if (p0) $t('#tv-pu').value = Math.round(p0 * 100) / 100; }
+    };
+    selIt._chCreer = (s, nom) => {
+      nom = String(nom || '').trim() || prompt('Nom du nouveau ' + (pf ? 'produit fini' : 'élément') + ' :') || '';
+      if (!nom.trim()) return null;
+      nouveauNom = nom.trim(); return { value: '__nv__', label: '➕ ' + nouveauNom + ' (nouveau)' };
+    };
+    selIt.addEventListener('change', () => { if (selIt.value !== '__nv__') nouveauNom = null; majIt(); });
+    if (!pf) $t('#tv-cat').addEventListener('change', () => { const c = cats.find(x => x.k === $t('#tv-cat').value); if (c && c.unite) $t('#tv-uni').value = c.unite; });
+    $t('#tv-x').onclick = fermer;
+    bg.addEventListener('mousedown', e => { if (e.target === bg) fermer(); });
+    bg.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); fermer(); } });
+    setTimeout(() => { const c = bg.querySelector('.ch-inp'); if (c) c.focus(); }, 60);
+    $t('form').onsubmit = async ev => {
+      ev.preventDefault();
+      const q = r4(Math.max(0, Number($t('#tv-q').value) || 0)), pu = Math.max(0, Number($t('#tv-pu').value) || 0), auStock = $t('#tv-stock').checked;
+      if (!selIt.value) { $t('#tv-msg').textContent = 'Choisissez ou créez le ' + (pf ? 'produit' : 'élément') + '.'; return; }
+      if (!(q > 0)) { $t('#tv-msg').textContent = 'Indiquez la quantité trouvée.'; return; }
+      const btn = $t('button[type=submit]'); btn.disabled = true;
+      try {
+        let id = selIt.value;
+        if (id === '__nv__') {
+          const ex = items.find(x => norm(x.nom) === norm(nouveauNom));
+          if (ex) id = ex.id;
+          else {
+            const r = pf ? await sb.from('produits').insert([{ nom: nouveauNom, prix_achat: pu }]).select()
+              : await sb.from('stock_articles').insert([{ nom: nouveauNom, categorie: $t('#tv-cat').value, unite: $t('#tv-uni').value, prix_achat: pu }]).select();
+            if (r.error) throw r.error; id = r.data[0].id;
+          }
+        }
+        if (auStock) {
+          const note = 'Trouvé au dépôt — ' + i.nom;
+          const r = pf ? await sb.from('pf_mouvements').insert([{ produit_id: id, type: 'entree', quantite: q, prix_achat: pu || null, date_mvt: i.date_inventaire, reference: 'INVENTAIRE', note }])
+            : await sb.from('stock_mouvements').insert([{ article_id: id, type: 'entree', quantite: q, prix_achat: pu || null, date_mvt: i.date_inventaire, reference: 'INVENTAIRE', note }]);
+          if (r.error) throw r.error;
+        }
+        if (pf) { await PFAPI.load(); document.dispatchEvent(new Event('mariabag:pf')); } else { await StockAPI.load(); document.dispatchEvent(new Event('mariabag:stock')); }
+        // ligne de l'inventaire : on ajoute la quantité (ou on crée la ligne)
+        const l = linesOf(sel).find(x => x.section === sec && String(x.ref_id) === String(id));
+        const noteL = '+' + nf(q, 2) + ' trouvé(s) au dépôt';
+        if (l) {
+          const base = l.quantite != null ? Number(l.quantite) : Number(l.quantite_theorique) || 0;
+          const patch = { quantite: r4(base + q), note: [l.note, noteL].filter(Boolean).join(' · ') };
+          if (auStock) patch.quantite_theorique = r4((Number(l.quantite_theorique) || 0) + q);
+          if (pu && !(Number(l.prix_unitaire) > 0)) patch.prix_unitaire = pu;
+          patch.montant = r4(patch.quantite * Number(patch.prix_unitaire != null ? patch.prix_unitaire : l.prix_unitaire || 0));
+          const r = await sb.from('inventaire_lignes').update(patch).eq('id', l.id); if (r.error) throw r.error;
+          Object.assign(l, patch);
+        } else {
+          const x = pf ? PFAPI.produits().find(y => String(y.id) === String(id)) : StockAPI.byId(id);
+          const cond = !pf && x && StockAPI.aCond(x);
+          const nl = await addLigne({ section: sec, ref_id: id, libelle: x ? x.nom : nouveauNom, detail: pf ? (x && x.marque) || 'MARIA BAG' : (x && x.categorie) || '', unite: pf ? 'pcs' : (x && x.unite) || 'pcs',
+            cond_nom: cond ? x.cond_nom : '', cond_qte: cond ? StockAPI.condQte(x) : 0, quantite_theorique: auStock ? q : 0, quantite: q, prix_unitaire: pu,
+            prix_vente: pf && x ? Number(x.prix_vente) || 0 : 0, montant: r4(q * pu), note: noteL });
+          if (!nl) throw new Error('ligne non ajoutée');
+        }
+        fermer(); render();
+        say(nf(q, 2) + ' ajouté(s) au stock initial' + (auStock ? ' et au Stock actuel' : '') + '.');
+      } catch (err) { btn.disabled = false; $t('#tv-msg').textContent = 'Erreur : ' + (err && err.message || err); }
+    };
+    majIt();
+  }
+
   async function addLigne(x) {
     const i = inv(sel); if (ro(i)) return null;
     const max = Math.max(-1, ...linesOf(sel).map(l => Number(l.ordre) || 0));
@@ -492,6 +583,7 @@
   function paneStock(i, lines, sec, clos) {
     const pf = sec === 'produit_fini', d = clos ? ' disabled' : '', nc = lines.filter(l => l.quantite == null).length;
     let h = '<div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">' + (pf ? 'Produits finis en stock' : 'Éléments de production en stock') + '</h2>' +
+      (!clos ? '<button class="btn s p" type="button" data-trouve="' + sec + '">+ ' + (pf ? 'Produit' : 'Élément') + ' trouvé au dépôt</button>' : '') +
       (!clos ? '<button class="btn s p" type="button" id="inv-sync" title="Reprend la quantité et le prix actuels du Stock pour tous les éléments et produits finis">↻ Synchroniser avec le Stock actuel</button>' : '') +
       (!clos && nc ? '<button class="btn s" type="button" id="inv-same">Compter comme le système (' + nc + ' ligne' + (nc > 1 ? 's' : '') + ' vide' + (nc > 1 ? 's' : '') + ')</button>' : '') + '</div>' +
       '<p class="iv-help">' + (pf ? 'Comptez les pièces finies réellement présentes. Valorisation au <b>coût de revient</b> (modifiable).' : 'Comptez ce qui est réellement dans l’atelier. Pour un rouleau : nombre de rouleaux entiers + mètres restants. Valorisation au <b>prix d’achat</b> (modifiable).') + ' Une ligne <b>vide</b> = pas encore comptée ; tapez 0 s’il n’y en a plus.</p>';
@@ -722,6 +814,7 @@
     const same = t.closest('[data-same]');
     if (same) { const l = ligne(same.dataset.same); if (l && l.quantite_theorique != null) { l.quantite = Math.max(0, l.quantite_theorique); recalc(l); dirty.add(String(l.id)); schedule(); render(); } return; }
     if (t.closest('#inv-fin')) { const b = t.closest('#inv-fin'); b.disabled = true; try { await majFinancier(sel); } finally { b.disabled = false; } return; }
+    const tv = t.closest('[data-trouve]'); if (tv) { trouve(tv.dataset.trouve); return; }
     if (t.closest('#inv-sync')) { const b = t.closest('#inv-sync'); b.disabled = true; b.textContent = 'Synchronisation…'; try { await synchroniserStock(); } finally { b.disabled = false; } return; }
     if (t.closest('#inv-same')) {
       const ls = linesOf(sel).filter(l => l.section === onglet && l.quantite == null && l.quantite_theorique != null);
