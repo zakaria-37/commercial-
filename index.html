@@ -189,12 +189,12 @@
       <form id="prod-form" class="at-form" onsubmit="event.preventDefault();saveProduction()">
         <div class="at-fields">
           <label>Atelier *<select id="prod-atelier" required></select></label><label>Modèle / produit *<input id="prod-modele" required></label>
-          <label>Quantité lancée<input id="prod-quantite" type="number" min="0" value="0" required></label>
+          <label id="prod-qte-lbl">Quantité lancée<input id="prod-quantite" type="number" min="0" value="0"></label>
           <label>Prix de façon d’une pièce (DA)<input id="prod-facon" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Payé à l’atelier"></label>
           <label>Client de la commande<select id="prod-contact"><option value="">Aucun contact</option></select></label>
           <label>Date de lancement *<input id="prod-date-lancement" type="date" required></label><label>Réception prévue *<input id="prod-date-reception" type="date" required></label>
           <label>Réception réelle<input id="prod-date-reelle" type="date"></label>
-          <label>Statut<select id="prod-statut"><option>En attente</option><option selected>En cours</option><option>Terminée</option><option>Retardée</option></select></label>
+          <label>Statut<select id="prod-statut" onchange="majFormEchantillon()"><option>Échantillon</option><option selected>En cours</option><option>Terminée</option><option>Retardée</option></select></label>
           <label style="grid-column:1/-1">Notes<textarea id="prod-notes"></textarea></label>
           <div id="prod-cmd-note" class="iv-help" style="grid-column:1/-1;margin:0"></div>
         </div><div class="at-actions"><button class="btn p" type="submit">Enregistrer</button><button class="btn" type="button" onclick="cancelFormProduction()">Annuler</button></div>

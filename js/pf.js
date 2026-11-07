@@ -51,7 +51,7 @@
 
   /* ---------- Données et liens ---------- */
   const prodFinie = p => p.statut === 'Terminée' || !!p.date_reception_reelle;
-  const prodActive = p => !prodFinie(p) && p.statut !== 'Annulée';
+  const prodActive = p => !prodFinie(p) && p.statut !== 'Annulée' && p.statut !== 'Échantillon' && p.statut !== 'En attente';
   const cmdOuverte = c => c.statut !== 'Reçue' && c.statut !== 'Annulée' && (Number(c.quantite_commandee) || 0) - (Number(c.quantite_recue) || 0) > 0;
   const produitById = id => PR.find(p => String(p.id) === String(id)) || null;
   const qtyOf = id => Math.round(QTY[String(id)] || 0);

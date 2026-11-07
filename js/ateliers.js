@@ -178,30 +178,62 @@ function refreshAtelier() {
   }).join('');
 }
 
+/* Échantillon : modèle d'essai confié à l'atelier ; la quantité n'est lancée qu'après validation (statut « En cours ») */
+const ECHANTILLON = 'Échantillon';
+const estEchantillon = p => p.statut === ECHANTILLON || p.statut === 'En attente';
+function majFormEchantillon() {
+  const ech = $a('#prod-statut').value === ECHANTILLON, l = $a('#prod-qte-lbl');
+  if (l) l.style.display = ech ? 'none' : '';
+  if (!ech && curProduction && estEchantillon(curProduction) && !(Number($a('#prod-quantite').value) > 0)) $a('#prod-quantite').focus();
+}
+
 function refreshProduction() {
   const tbody = $a('#production-tbody');
   if (!tbody) return;
   
-  tbody.innerHTML = PRODUCTIONS.map(p => {
+  const ligne = p => {
     const cmdCount = COMMANDES.filter(c => c.production_id === p.id).length;
     const jours = p.delai_jours || (p.date_reception_prevue && p.date_lancement ? calcDelai(p.date_lancement, p.date_reception_prevue) : null);
-    const couleur = (p.statut === 'Terminée' || p.date_reception_reelle) ? 'g' : p.statut === 'Retardée' ? 'r' : 'o';
+    const ech = estEchantillon(p) && !p.date_reception_reelle;
+    const couleur = (p.statut === 'Terminée' || p.date_reception_reelle) ? 'g' : p.statut === 'Retardée' ? 'r' : ech ? 'n' : 'o';
     return `<tr class="production-row" data-id="${p.id}">
-      <td><b>${p.modele_nom}</b></td>
-      <td>${p.atelier_nom}</td>
-      <td>${p.quantite_lancee}</td>
+      <td><b>${escA(p.modele_nom)}</b></td>
+      <td>${escA(p.atelier_nom || '')}</td>
+      <td>${ech ? '<small>après validation</small>' : (p.quantite_lancee || 0)}</td>
       <td>${fdA(p.date_lancement)}</td>
       <td>${fdA(p.date_reception_prevue)}</td>
       <td>${jours ? jours + ' j' : '-'}</td>
       <td>${p.date_reception_reelle ? fdA(p.date_reception_reelle) : '-'}</td>
-      <td><span class="bd ${couleur}">${p.date_reception_reelle ? 'Terminée' : p.statut}</span></td>
+      <td><span class="bd ${couleur}">${p.date_reception_reelle ? 'Terminée' : ech ? ECHANTILLON : escA(p.statut)}</span></td>
       <td>${cmdCount} cmd.</td>
       <td>
-        <button class="btn xs" onclick="editProduction('${p.id}')">Modifier</button>
+        ${ech ? `<button class="btn xs p" onclick="validerEchantillon('${p.id}')">Valider → production</button> ` : ''}<button class="btn xs" onclick="editProduction('${p.id}')">Modifier</button>
         <button class="btn xs r" onclick="removeProduction('${p.id}')">Supprimer</button>
       </td>
     </tr>`;
-  }).join('');
+  };
+  // Classement atelier par atelier : échantillons, puis productions en cours, puis terminées
+  const rang = p => (p.date_reception_reelle || p.statut === 'Terminée') ? 2 : estEchantillon(p) ? 0 : 1;
+  const groupes = {};
+  PRODUCTIONS.forEach(p => { const k = p.atelier_nom || 'Sans atelier'; (groupes[k] = groupes[k] || []).push(p); });
+  const noms = Object.keys(groupes).sort((a, b) => a.localeCompare(b, 'fr'));
+  tbody.innerHTML = noms.length ? noms.map(nom => {
+    const L = groupes[nom].sort((a, b) => rang(a) - rang(b) || String(a.date_reception_prevue || '').localeCompare(String(b.date_reception_prevue || '')));
+    const nE = L.filter(p => rang(p) === 0).length, nC = L.filter(p => rang(p) === 1).length, nT = L.filter(p => rang(p) === 2).length;
+    const q = L.filter(p => rang(p) === 1).reduce((n, p) => n + (Number(p.quantite_lancee) || 0), 0);
+    return `<tr class="prod-grp"><td colspan="10" style="background:var(--nb,#f4f1f2);font-weight:700">🏭 ${escA(nom)}
+      <small style="font-weight:500;margin-left:10px">${nE} échantillon${nE > 1 ? 's' : ''} · ${nC} production${nC > 1 ? 's' : ''} en cours${q ? ' (' + q + ' pcs)' : ''} · ${nT} terminée${nT > 1 ? 's' : ''}</small></td></tr>` + L.map(ligne).join('');
+  }).join('') : '<tr><td colspan="10" class="at-empty">Aucune production.</td></tr>';
+}
+
+/* Échantillon validé : on passe en production et on saisit la quantité lancée */
+function validerEchantillon(id) {
+  editProduction(id);
+  $a('#prod-statut').value = 'En cours'; majFormEchantillon();
+  if (!(Number(curProduction && curProduction.quantite_lancee) > 0)) $a('#prod-quantite').value = '';
+  $a('#prod-date-lancement').value = todayA();
+  $a('#prod-form').scrollIntoView({ block: 'center' }); $a('#prod-quantite').focus();
+  toastA('Indiquez la quantité lancée, la réception prévue, puis Enregistrer.');
 }
 
 async function editAtelier(id) {
@@ -241,7 +273,8 @@ async function editProduction(id) {
   $a('#prod-date-lancement').value = curProduction.date_lancement;
   $a('#prod-date-reception').value = curProduction.date_reception_prevue;
   $a('#prod-date-reelle').value = curProduction.date_reception_reelle || '';
-  $a('#prod-statut').value = curProduction.statut;
+  $a('#prod-statut').value = estEchantillon(curProduction) ? ECHANTILLON : curProduction.statut;
+  majFormEchantillon();
   $a('#prod-notes').value = curProduction.notes || '';
 }
 
@@ -296,7 +329,10 @@ async function saveAtelier() {
 async function saveProduction() {
   const atelier_id = $a('#prod-atelier').value;
   const modele_nom = $a('#prod-modele').value.trim();
-  const quantite_lancee = parseInt($a('#prod-quantite').value) || 0;
+  const ech = $a('#prod-statut').value === ECHANTILLON;
+  const quantite_lancee = ech ? (curProduction ? Number(curProduction.quantite_lancee) || 0 : 0) : parseInt($a('#prod-quantite').value) || 0;
+  if (!ech && !(quantite_lancee > 0)) { toastA('Indiquez la quantité lancée.'); $a('#prod-quantite').focus(); return; }
+  const etaitEch = !!(curProduction && estEchantillon(curProduction));
   const date_lancement = $a('#prod-date-lancement').value;
   const date_reception_prevue = $a('#prod-date-reception').value;
   let date_reception_reelle = $a('#prod-date-reelle').value || null;
@@ -326,9 +362,11 @@ async function saveProduction() {
   } else {
     result = await createProduction(obj);
     if (result) PRODUCTIONS.push(result);
-    if (result) await commandeAuto(result, $a('#prod-contact') ? $a('#prod-contact').value || null : null);
+    if (result && !ech) await commandeAuto(result, $a('#prod-contact') ? $a('#prod-contact').value || null : null);
   }
-  if (result && curProduction) await syncCommandeProduction(result);
+  // échantillon validé → production : la commande est créée maintenant
+  if (result && curProduction && etaitEch && !ech && !COMMANDES.some(c => c.production_id === result.id)) await commandeAuto(result, null);
+  else if (result && curProduction) await syncCommandeProduction(result);
   
   if (result) {
     curProduction = null;
@@ -406,7 +444,7 @@ function showFormProduction() {
   $a('#prod-date-lancement').value = todayA();
   $a('#prod-date-reception').value = '';
   $a('#prod-date-reelle').value = '';
-  $a('#prod-statut').value = 'En cours';
+  $a('#prod-statut').value = 'En cours'; majFormEchantillon();
   $a('#prod-notes').value = '';
   if ($a('#prod-contact')) { $a('#prod-contact').value = ''; $a('#prod-contact').parentElement.style.display = ''; }
   if ($a('#prod-cmd-note')) $a('#prod-cmd-note').textContent = 'En enregistrant, une commande est créée automatiquement pour cette production (suivi, prix, livraison au client). Choisissez le client si vous le connaissez.';
@@ -451,13 +489,14 @@ function renderAtelierStats() {
   if (!el) return;
   const today = todayA();
   const fini = p => p.statut === 'Terminée' || !!p.date_reception_reelle;
-  const actif = p => !fini(p) && p.statut !== 'Annulée';
+  const actif = p => !fini(p) && p.statut !== 'Annulée' && !estEchantillon(p);
   const active = PRODUCTIONS.filter(actif).length;
+  const echs = PRODUCTIONS.filter(p => !fini(p) && estEchantillon(p)).length;
   const done = PRODUCTIONS.filter(p => fini(p) && (p.date_reception_reelle || p.updated_at || p.date_lancement || '').slice(0,7) === today.slice(0,7)).length;
   const late = PRODUCTIONS.filter(p => actif(p) && p.date_reception_prevue && p.date_reception_prevue < today).length;
-  const total = PRODUCTIONS.reduce((n,p) => n + (Number(p.quantite_lancee)||0),0);
+  const total = PRODUCTIONS.filter(p => !estEchantillon(p) || fini(p)).reduce((n,p) => n + (Number(p.quantite_lancee)||0),0);
   el.innerHTML = [
-    ['Productions en cours',active],['Terminées ce mois',done],['Productions en retard',late],['Quantité totale lancée',total]
+    ['Échantillons',echs],['Productions en cours',active],['Terminées ce mois',done],['Productions en retard',late],['Quantité totale lancée',total]
   ].map(([label,value]) => `<div class="at-stat"><span>${label}</span><b>${value}</b></div>`).join('');
 }
 function renderCommandes() {
@@ -478,7 +517,7 @@ function renderCommandes() {
 }
 /* ---------- Tableau de bord : ateliers, productions, commandes ---------- */
 const prodFini = p => p.statut === 'Terminée' || !!p.date_reception_reelle;
-const prodActive = p => !prodFini(p) && p.statut !== 'Annulée';
+const prodActive = p => !prodFini(p) && p.statut !== 'Annulée' && !estEchantillon(p);
 const cmdOuverte = c => c.statut !== 'Reçue' && c.statut !== 'Annulée';
 const CMD_CLASS = {'Reçue':'g','Partiellement reçue':'o','En production':'o','En attente':'n','Annulée':'r'};
 function joursAvant(d) { return Math.round((new Date(d + 'T00:00') - new Date(todayA() + 'T00:00')) / 864e5); }
