@@ -71,8 +71,31 @@
       '<td class="emp-act"><button class="btn s p" type="button" onclick="spQ(\'' + i.kind + '\',\'' + esc(i.id) + '\',\'entree\')">+ Entrer</button> ' +
       '<button class="btn s" type="button" onclick="spQ(\'' + i.kind + '\',\'' + esc(i.id) + '\',\'sortie\')">− Sortir</button> ' +
       (i.kind === 'pf' ? '<button class="btn s" type="button" onclick="spCompo(\'' + esc(i.id) + '\')">Composition</button> ' : '') +
-      '<button class="btn s" type="button" onclick="spDetail(\'' + i.kind + '\',\'' + esc(i.id) + '\')">Détails</button></td></tr>'
+      '<button class="btn s" type="button" onclick="spDetail(\'' + i.kind + '\',\'' + esc(i.id) + '\')">Détails</button> ' +
+      '<button class="btn s d" type="button" onclick="spSuppr(\'' + i.kind + '\',\'' + esc(i.id) + '\')">Supprimer</button></td></tr>'
     ).join('') : '<tr><td colspan="4" class="at-empty">Aucun résultat.</td></tr>';
+  }
+  /* Supprimer un modèle fini ou un élément du stock (avec son historique de mouvements) */
+  async function supprimer(kind, id) {
+    const pf = kind === 'pf';
+    const it = pf ? PFAPI.produits().find(x => String(x.id) === String(id)) : StockAPI.byId(id);
+    if (!it) return;
+    const qte = pf ? PFAPI.qty(it.id) : StockAPI.qty(it.id);
+    const enStock = pf ? qte + ' pièce(s)' : (f => f.main + (f.sub ? ' (' + f.sub + ')' : ''))(StockAPI.fmtQty(it, qte));
+    const packs = pf && typeof LIGNES !== 'undefined' && typeof PRODUITS !== 'undefined' ? [...new Set(LIGNES.filter(l => String(l.sous_produit_id) === String(it.id)).map(l => (PRODUITS.find(x => String(x.id) === String(l.produit_id)) || {}).nom).filter(Boolean))] : [];
+    let msg = 'Supprimer définitivement ' + (pf ? 'le modèle fini' : 'l’élément') + ' « ' + it.nom + ' » ?\n\n' +
+      '• En stock actuellement : ' + enStock + '\n' +
+      '• Tout son historique d’entrées / sorties sera supprimé' + (pf ? ', ainsi que sa fiche de coût de revient (composition).' : '.') + '\n' +
+      '• Les bons de livraison / réception déjà faits gardent la ligne (texte), sans lien vers le stock.';
+    if (packs.length) msg += '\n\n⚠ Il fait partie du/des pack(s) : ' + packs.join(', ') + ' — il sera retiré de leur composition.';
+    if (Number(qte) > 0) msg += '\n\n⚠ Il reste du stock : sa valeur disparaîtra du stock et de l’inventaire.';
+    if (!confirm(msg)) return;
+    const r = await sb.from(pf ? 'produits' : 'stock_articles').delete().eq('id', it.id);
+    if (r.error) { say('Erreur : ' + (r.error.message || r.error)); return; }
+    if (pf) { await PFAPI.load(); document.dispatchEvent(new Event('mariabag:produits')); } else await StockAPI.load();
+    document.dispatchEvent(new Event(pf ? 'mariabag:pf' : 'mariabag:stock'));
+    render();
+    say((pf ? 'Modèle fini' : 'Élément') + ' « ' + it.nom + ' » supprimé.');
   }
   function detail(kind, id) {
     if (kind === 'pf') { PFAPI.openPane('pf'); if (typeof pfShowProduit === 'function') pfShowProduit(id); }
@@ -415,7 +438,7 @@
   $('#sp-nunite').innerHTML = UNITES.map(u => '<option>' + u + '</option>').join('');
 
   /* ---------- Événements ---------- */
-  Object.assign(window, { spNouveau: nouveau, spFermer: fermer, spQ: ouvrirQ, spCompo: ouvrirCompo, spDetail: detail });
+  Object.assign(window, { spNouveau: nouveau, spFermer: fermer, spQ: ouvrirQ, spCompo: ouvrirCompo, spDetail: detail, spSuppr: supprimer });
   $('#sp-nform').addEventListener('submit', creerNom);
   $('#sp-qform').addEventListener('submit', enregistrerQ);
   $('#sp-cform').addEventListener('submit', enregistrerCompo);
