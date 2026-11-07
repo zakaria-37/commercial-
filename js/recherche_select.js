@@ -3,12 +3,18 @@
    Au lieu de faire défiler toute la liste, on tape quelques lettres du nom :
    seules les personnes correspondantes s'affichent. Flèches ↑ ↓ + Entrée, ou clic.
    La vraie <select> reste en place (cachée) : le reste de l'application ne change pas.
-   S'applique tout seul aux listes : bons de livraison / réception (#cm-contact),
-   versements (#cf-vc), crédits (#cf-cc) et à toute <select data-cherche>.
+   S'applique tout seul, dans toute la plateforme, à chaque liste de 8 choix ou plus
+   (clients, fournisseurs, produits, éléments, modèles, ateliers, employés…), à toute <select data-cherche>,
+   et toujours aux listes clients / fournisseurs des bons, versements et crédits.
+   Pour l'exclure : <select data-nocherche>.
    ============================================================ */
 (function () {
   'use strict';
-  const CIBLES = 'select#cm-contact, select#cf-vc, select#cf-cc, select[data-cherche]';
+  const TOUJOURS = 'select#cm-contact, select#cf-vc, select#cf-cc, select[data-cherche]';
+  const MIN = 8;      // à partir de 8 choix, la liste devient une case de recherche
+  const eligible = s => s.tagName === 'SELECT' && !s.multiple && !(s.size > 1) && !s.dataset.nocherche && !s.closest('header, #zs-panel, .lbrand') &&
+    (s.matches(TOUJOURS) || s.options.length >= MIN);
+  const ACTIFS = new Set();
   const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -39,8 +45,17 @@
         ? vus.map((o, i) => '<div class="ch-it' + (o.value ? '' : ' ch-vide') + (i === idx ? ' on' : '') + (o.value && o.value === sel.value ? ' sel' : '') + '" data-i="' + i + '" role="option">' + esc(o.textContent) + '</div>').join('') +
           (total > vus.length ? '<div class="ch-plus">… ' + (total - vus.length) + ' autre(s) : tapez plus de lettres</div>' : '')
         : '<div class="ch-plus">Aucun nom ne correspond à « ' + esc(inp.value) + ' »</div>';
-      ul.hidden = false; montrer();
+      ul.hidden = false; placer(); montrer();
     }
+    // liste « flottante » : jamais coupée par un tableau qui défile
+    function placer() {
+      if (ul.hidden) return;
+      const r = inp.getBoundingClientRect(), h = Math.min(300, ul.scrollHeight || 300), bas = window.innerHeight - r.bottom;
+      ul.style.left = Math.max(6, Math.min(r.left, window.innerWidth - Math.max(r.width, 260) - 6)) + 'px';
+      ul.style.width = Math.max(r.width, 260) + 'px';
+      ul.style.top = (bas < h + 12 && r.top > bas ? r.top - h - 4 : r.bottom + 4) + 'px';
+    }
+    sel._chScroll = () => { if (!ul.hidden) { if (document.activeElement === inp) placer(); else ul.hidden = true; } };
     function montrer() { const e = ul.querySelector('.ch-it.on'); ul.querySelectorAll('.ch-it').forEach((x, i) => x.classList.toggle('on', i === idx)); if (e && e.scrollIntoView) e.scrollIntoView({ block: 'nearest' }); }
     function choisir(o) {
       ul.hidden = true;
@@ -69,13 +84,24 @@
     }, 120));
     sel.addEventListener('change', maj);
     new MutationObserver(maj).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
-    // valeur changée par le code (sel.value = …) : on resynchronise régulièrement tant que la liste existe
-    const t = setInterval(() => { if (!document.contains(sel)) return clearInterval(t); maj(); }, 700);
+    sel._chMaj = maj; ACTIFS.add(sel);
     maj();
   }
 
-  const scanner = racine => { (racine.querySelectorAll ? racine : document).querySelectorAll(CIBLES).forEach(ameliorer); if (racine.matches && racine.matches(CIBLES)) ameliorer(racine); };
-  new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) scanner(n); }))).observe(document.documentElement, { childList: true, subtree: true });
+  // valeur changée par le code (sel.value = …) : on resynchronise régulièrement les listes affichées
+  setInterval(() => ACTIFS.forEach(s => { if (!document.contains(s)) ACTIFS.delete(s); else s._chMaj(); }), 700);
+  const auScroll = () => ACTIFS.forEach(s => s._chScroll && s._chScroll());
+  window.addEventListener('scroll', auScroll, true); window.addEventListener('resize', auScroll);
+  const essayer = s => { if (!s.dataset.chOk && eligible(s)) ameliorer(s); };
+  const scanner = racine => {
+    if (racine.tagName === 'SELECT') return essayer(racine);
+    if (racine.tagName === 'OPTION' || racine.tagName === 'OPTGROUP') { const s = racine.closest('select'); if (s) essayer(s); return; }
+    if (racine.querySelectorAll) racine.querySelectorAll('select').forEach(essayer);
+  };
+  new MutationObserver(ms => ms.forEach(m => {
+    m.addedNodes.forEach(n => { if (n.nodeType === 1) scanner(n); });
+    if (m.target && m.target.tagName === 'SELECT' && m.addedNodes.length) essayer(m.target);      // options ajoutées par innerHTML
+  })).observe(document.documentElement, { childList: true, subtree: true });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => scanner(document)); else scanner(document);
   window.selectCherche = ameliorer;
 })();
