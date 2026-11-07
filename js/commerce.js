@@ -789,7 +789,7 @@
     const cats = typeof STK_CATS !== 'undefined' ? STK_CATS : [{ k: 'Autre', unite: 'pcs' }];
     const bg = document.createElement('div'); bg.className = 'cm-nv-bg';
     bg.innerHTML = '<form class="cm-nv" autocomplete="off"><h3 style="margin:0 0 4px">Nouveau dans le stock</h3><p class="cm-nv-p">Il sera ajouté au stock avec ce bon de réception.</p>' +
-      '<div class="cm-nv-type"><label><input type="radio" name="nvt" value="a" checked> Élément (matière, fourniture)</label><label><input type="radio" name="nvt" value="p"> Produit fini</label></div>' +
+      '<p class="cm-nv-p" style="color:var(--ink,#222);font-weight:600;margin-bottom:4px">C’est quoi ? *</p><div class="cm-nv-type"><label><input type="radio" name="nvt" value="p"> 👜 Produit fini<small>sac, cabas… que vous vendez (bon de livraison)</small></label><label><input type="radio" name="nvt" value="a"> 🧵 Élément<small>matière, fourniture pour fabriquer</small></label></div>' +
       '<div class="at-fields"><label style="grid-column:1/-1">Nom *<input id="nv-nom" required maxlength="120"></label>' +
       '<label>Réf.<input id="nv-ref" maxlength="40" placeholder="Facultatif"></label>' +
       '<label>Quantité reçue *<input id="nv-qte" type="number" min="0" step="any" inputmode="decimal" required value="1"></label>' +
@@ -801,7 +801,7 @@
     document.body.appendChild(bg);
     const $n = q => bg.querySelector(q), fermer = v => { bg.remove(); resolve(v); };
     $n('#nv-nom').value = nomTape || '';
-    const majType = () => { const a = $n('input[name=nvt]:checked').value === 'a'; bg.querySelectorAll('.nv-a').forEach(x => x.style.display = a ? '' : 'none'); };
+    const majType = () => { const c = $n('input[name=nvt]:checked'), a = !!c && c.value === 'a'; bg.querySelectorAll('.nv-a').forEach(x => x.style.display = a ? '' : 'none'); };
     const majUni = () => { const c = cats.find(x => x.k === $n('#nv-cat').value); if (c && c.unite) $n('#nv-uni').value = c.unite; };
     bg.querySelectorAll('input[name=nvt]').forEach(r => r.addEventListener('change', majType)); $n('#nv-cat').addEventListener('change', majUni);
     $n('#nv-cat').value = cats.some(c => c.k === 'Autre') ? 'Autre' : cats[0].k; majUni(); majType();
@@ -811,7 +811,9 @@
     setTimeout(() => { const n = $n('#nv-nom'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 30);
     $n('form').onsubmit = async e => {
       e.preventDefault();
-      const nom = $n('#nv-nom').value.trim().replace(/\s+/g, ' '), estA = $n('input[name=nvt]:checked').value === 'a';
+      const typ = $n('input[name=nvt]:checked');
+      if (!typ) { $n('#nv-msg').textContent = 'Choisissez : Produit fini (à vendre) ou Élément (matière).'; return; }
+      const nom = $n('#nv-nom').value.trim().replace(/\s+/g, ' '), estA = typ.value === 'a';
       const qte = Math.max(0, num($n('#nv-qte').value)), pu = Math.max(0, num($n('#nv-pu').value)), ref = $n('#nv-ref').value.trim();
       if (!nom) { $n('#nv-msg').textContent = 'Indiquez le nom.'; return; }
       const btn = $n('button[type=submit]'); btn.disabled = true; $n('#nv-msg').textContent = '';
