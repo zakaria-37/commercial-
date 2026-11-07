@@ -29,6 +29,7 @@
     sel.parentNode.insertBefore(box, sel); box.append(inp, ul, sel);
     sel.classList.add('ch-cache'); sel.tabIndex = -1; sel.setAttribute('aria-hidden', 'true');
     let vus = [], idx = -1;
+    const creerFn = () => sel._chCreer || (sel.dataset.creer && window.chCreer && window.chCreer[sel.dataset.creer]) || null;
 
     const texte = () => { const o = sel.selectedOptions[0]; return o && o.value ? o.textContent : ''; };
     const maj = () => { if (document.activeElement !== inp) { inp.value = texte(); inp.placeholder = '🔍 Tapez le nom pour rechercher…'; } inp.disabled = sel.disabled; };
@@ -39,10 +40,14 @@
       vus = opts.filter(o => !q.length || (o.value && q.every(m => norm(o.textContent).includes(m))));
       if (!q.length) { const vide = opts.find(o => !o.value); if (vide && vus[0] !== vide) vus.unshift(vide); }
       const total = vus.length; vus = vus.slice(0, 60);
+      // création d'un nouvel élément directement depuis la recherche (ex. bon de réception)
+      const creer = creerFn();
+      const exact = q.length && opts.some(o => o.value && norm(o.textContent) === norm(inp.value));
+      if (creer && !exact) vus.push({ creer: true, value: '__creer__', textContent: inp.value.trim() });
       idx = vus.length ? Math.max(0, vus.findIndex(o => o.value === sel.value && o.value)) : -1;
       if (q.length) idx = vus.length ? 0 : -1;
       ul.innerHTML = vus.length
-        ? vus.map((o, i) => '<div class="ch-it' + (o.value ? '' : ' ch-vide') + (i === idx ? ' on' : '') + (o.value && o.value === sel.value ? ' sel' : '') + '" data-i="' + i + '" role="option">' + esc(o.textContent) + '</div>').join('') +
+        ? vus.map((o, i) => o.creer ? '<div class="ch-it ch-new' + (i === idx ? ' on' : '') + '" data-i="' + i + '" role="option">➕ ' + (o.textContent ? 'Créer « ' + esc(o.textContent) + ' »' : (sel.dataset.creerTxt || 'Ajouter un nouveau…')) + '</div>' : '<div class="ch-it' + (o.value ? '' : ' ch-vide') + (i === idx ? ' on' : '') + (o.value && o.value === sel.value ? ' sel' : '') + '" data-i="' + i + '" role="option">' + esc(o.textContent) + '</div>').join('') +
           (total > vus.length ? '<div class="ch-plus">… ' + (total - vus.length) + ' autre(s) : tapez plus de lettres</div>' : '')
         : '<div class="ch-plus">Aucun nom ne correspond à « ' + esc(inp.value) + ' »</div>';
       ul.hidden = false; placer(); montrer();
@@ -60,6 +65,17 @@
     function choisir(o) {
       ul.hidden = true;
       if (!o) { inp.value = texte(); return; }
+      if (o.creer) {
+        const nom = o.textContent; inp.value = texte();
+        Promise.resolve(creerFn()(sel, nom)).then(v => {
+          if (!v) return;
+          if (![...sel.options].some(x => x.value === v.value)) { const op = new Option(v.label, v.value); (sel.querySelector(v.groupe || 'nothing') || sel).appendChild(op); }
+          sel.value = v.value; inp.value = texte();
+          sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true }));
+          if (v.apres) v.apres();
+        }).catch(err => alert('Création impossible : ' + (err && err.message || err)));
+        return;
+      }
       const change = sel.value !== o.value;
       sel.value = o.value; inp.value = o.value ? o.textContent : '';
       if (change) { sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); }

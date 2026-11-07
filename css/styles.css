@@ -311,3 +311,4 @@ form, .card, .at-form, section > div[id] { scroll-margin-top: calc(var(--hdr-h, 
 .ch-it.ch-vide{color:var(--mut,#777);font-style:italic}
 .ch-plus{padding:8px 12px;color:var(--mut,#777);font-size:12.5px}
 .ch-box .ch-inp:focus::placeholder{color:var(--ink,#222);opacity:.55}
+.ch-it.ch-new{color:var(--g,#1a7f37);font-weight:600;border-top:1px dashed var(--line,#ddd);margin-top:2px}

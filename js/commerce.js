@@ -250,7 +250,7 @@
       (doc.type === 'devis' ? '<label>Statut<select id="cm-statut">' + Object.keys(STATUTS_DEVIS).map(k => '<option value="' + k + '"' + (doc.statut === k ? ' selected' : '') + '>' + STATUTS_DEVIS[k] + '</option>').join('') + '</select></label>' : '') +
       '<label style="grid-column:1/-1">Note<input id="cm-notes" maxlength="300" value="' + esc(doc.notes || '') + '" placeholder="Facultatif : conditions, délai…"></label></div></div>';
     if (bon) h += '<div class="card" style="margin-top:12px"><h3 style="margin-top:0">' + (br ? 'Produits finis et éléments reçus' : 'Produits livrés') + '</h3><div class="tw"><table class="iv-tbl iv-in"><thead><tr><th>' + (br ? 'Produit fini ou élément' : 'Produit (stock)') + '</th><th>Réf.</th><th>Désignation</th>' + (br ? '<th>Unité</th>' : '') + '<th>Qté</th>' + (br ? '' : '<th class="n">Coût / pièce</th>') + '<th>Prix ' + (br ? 'unitaire' : 'de vente') + ' (DA)</th>' + (br ? '' : '<th class="n">Marge</th>') + '<th class="n">En stock</th><th class="n">Montant</th><th></th></tr></thead><tbody id="cm-lignes">' +
-      ed.lignes.map((l, i) => '<tr data-i="' + i + '"><td><select data-f="ref">' + optsRef(doc.type, l) + '</select></td><td><input class="iv-t" data-f="code" maxlength="40" style="width:90px" value="' + esc(l.ref || '') + '" placeholder="Réf."></td><td><input class="iv-t" data-f="des" maxlength="200" value="' + esc(l.designation) + '" placeholder="Désignation"></td>' +
+      ed.lignes.map((l, i) => '<tr data-i="' + i + '"><td><select data-f="ref"' + (br ? ' data-cherche="1" data-creer="br" data-creer-txt="Nouveau produit fini ou élément…"' : '') + '>' + optsRef(doc.type, l) + '</select></td><td><input class="iv-t" data-f="code" maxlength="40" style="width:90px" value="' + esc(l.ref || '') + '" placeholder="Réf."></td><td><input class="iv-t" data-f="des" maxlength="200" value="' + esc(l.designation) + '" placeholder="Désignation"></td>' +
         (br ? '<td><input class="iv-t" data-f="uni" maxlength="20" style="width:80px" value="' + esc(l.unite) + '"></td>' : '') + '<td><input class="iv-q" data-f="qte" type="number" min="0" step="any" inputmode="decimal" value="' + (l.quantite || '') + '"></td>' + (br ? '' : '<td class="n cm-ct">' + (coutLigne(l) != null ? money(coutLigne(l)) : '<small>—</small>') + '</td>') + '<td><input class="iv-p" data-f="pu" type="number" min="0" step="any" inputmode="decimal" value="' + (l.prix_unitaire || '') + '"></td>' +
         (br ? '' : '<td class="n cm-mg">' + margeTxt(l) + '</td>') + '<td class="n cm-st">' + stockTxt(doc.type, l) + '</td><td class="n cm-mt">' + money(r2(num(l.quantite) * num(l.prix_unitaire))) + '</td><td class="n"><button class="btn s d" type="button" data-rm="' + i + '">×</button></td></tr>').join('') + '</tbody></table></div>' +
       '<div class="at-actions"><button class="btn s" type="button" id="cm-addl">+ Ajouter une ligne</button></div>' +
@@ -779,6 +779,79 @@
   });
   ['mariabag:paiements', 'mariabag:stock', 'mariabag:pf'].forEach(ev => document.addEventListener(ev, () => { if (!ed && $('#v-commerce') && $('#v-commerce').classList.contains('on')) render(); }));
   document.addEventListener('mariabag:authenticated', () => load(true));
+
+  /* Bon de réception : créer un produit fini ou un élément qui n'existe pas encore dans le stock,
+     directement depuis la ligne (nom, type, réf, quantité, prix). Il est ajouté au Stock / aux Produits finis
+     et la ligne est remplie ; la quantité entre en stock à l'enregistrement du bon, comme les autres lignes. */
+  window.chCreer = window.chCreer || {};
+  window.chCreer.br = (sel, nomTape) => new Promise(resolve => {
+    const tr = sel.closest('tr[data-i]'), doc = ed && ed.doc;
+    const cats = typeof STK_CATS !== 'undefined' ? STK_CATS : [{ k: 'Autre', unite: 'pcs' }];
+    const bg = document.createElement('div'); bg.className = 'cm-nv-bg';
+    bg.innerHTML = '<form class="cm-nv" autocomplete="off"><h3 style="margin:0 0 4px">Nouveau dans le stock</h3><p class="cm-nv-p">Il sera ajouté au stock avec ce bon de réception.</p>' +
+      '<div class="cm-nv-type"><label><input type="radio" name="nvt" value="a" checked> Élément (matière, fourniture)</label><label><input type="radio" name="nvt" value="p"> Produit fini</label></div>' +
+      '<div class="at-fields"><label style="grid-column:1/-1">Nom *<input id="nv-nom" required maxlength="120"></label>' +
+      '<label>Réf.<input id="nv-ref" maxlength="40" placeholder="Facultatif"></label>' +
+      '<label>Quantité reçue *<input id="nv-qte" type="number" min="0" step="any" inputmode="decimal" required value="1"></label>' +
+      '<label class="nv-a">Catégorie<select id="nv-cat" data-nocherche="1">' + cats.map(c => '<option>' + esc(c.k) + '</option>').join('') + '</select></label>' +
+      '<label class="nv-a">Unité<select id="nv-uni" data-nocherche="1">' + ['m', 'pcs', 'kg', 'bobine', 'rouleau', 'paquet', 'sachet', 'l'].map(u => '<option>' + u + '</option>').join('') + '</select></label>' +
+      '<label>Prix unitaire d’achat (DA)<input id="nv-pu" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label></div>' +
+      '<div id="nv-msg" class="cm-nv-p" style="color:#b00020"></div>' +
+      '<div class="at-actions"><button class="btn p" type="submit">Ajouter au stock</button><button class="btn" type="button" id="nv-x">Annuler</button></div></form>';
+    document.body.appendChild(bg);
+    const $n = q => bg.querySelector(q), fermer = v => { bg.remove(); resolve(v); };
+    $n('#nv-nom').value = nomTape || '';
+    const majType = () => { const a = $n('input[name=nvt]:checked').value === 'a'; bg.querySelectorAll('.nv-a').forEach(x => x.style.display = a ? '' : 'none'); };
+    const majUni = () => { const c = cats.find(x => x.k === $n('#nv-cat').value); if (c && c.unite) $n('#nv-uni').value = c.unite; };
+    bg.querySelectorAll('input[name=nvt]').forEach(r => r.addEventListener('change', majType)); $n('#nv-cat').addEventListener('change', majUni);
+    $n('#nv-cat').value = cats.some(c => c.k === 'Autre') ? 'Autre' : cats[0].k; majUni(); majType();
+    $n('#nv-x').onclick = () => fermer(null);
+    bg.addEventListener('mousedown', e => { if (e.target === bg) fermer(null); });
+    bg.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); fermer(null); } });
+    setTimeout(() => { const n = $n('#nv-nom'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 30);
+    $n('form').onsubmit = async e => {
+      e.preventDefault();
+      const nom = $n('#nv-nom').value.trim().replace(/\s+/g, ' '), estA = $n('input[name=nvt]:checked').value === 'a';
+      const qte = Math.max(0, num($n('#nv-qte').value)), pu = Math.max(0, num($n('#nv-pu').value)), ref = $n('#nv-ref').value.trim();
+      if (!nom) { $n('#nv-msg').textContent = 'Indiquez le nom.'; return; }
+      const btn = $n('button[type=submit]'); btn.disabled = true; $n('#nv-msg').textContent = '';
+      try {
+        let v;
+        if (estA) {
+          const ex = (window.StockAPI ? StockAPI.list() : []).find(x => norm(x.nom) === norm(nom));
+          let id = ex && ex.id;
+          if (!id) {
+            const c = doc && doc.contact_id ? cById(doc.contact_id) : null;
+            const r = await sb.from('stock_articles').insert([{ nom, categorie: $n('#nv-cat').value, unite: $n('#nv-uni').value, prix_achat: pu, contact_id: c ? c.id : null, fournisseur: c ? lbl(c) : '' }]).select();
+            if (r.error) throw r.error; id = r.data[0].id;
+            if (window.StockAPI) await StockAPI.load();
+            document.dispatchEvent(new Event('mariabag:stock'));
+          }
+          v = { value: 'a:' + id, label: nom, groupe: 'optgroup[label^="Éléments"]' };
+        } else {
+          const ex = (window.PFAPI ? PFAPI.produits() : []).find(x => norm(x.nom) === norm(nom));
+          let id = ex && ex.id;
+          if (!id) {
+            const r = await sb.from('produits').insert([{ nom, prix_achat: pu }]).select();
+            if (r.error) throw r.error; id = r.data[0].id;
+            if (window.PFAPI) await PFAPI.load();
+            document.dispatchEvent(new Event('mariabag:pf')); document.dispatchEvent(new Event('mariabag:produits'));
+          }
+          v = { value: 'p:' + id, label: nom, groupe: 'optgroup[label="Produits finis"]' };
+        }
+        // après le choix (désignation, unité, prix remplis) : on complète réf, quantité et prix saisis ici
+        v.apres = () => {
+          if (!tr) return;
+          const put = (f, val) => { const x = tr.querySelector('[data-f=' + f + ']'); if (x) { x.value = val; x.dispatchEvent(new Event('input', { bubbles: true })); } };
+          if (ref) put('code', ref);
+          put('qte', String(qte));
+          if (pu) put('pu', String(pu));
+          const q = tr.querySelector('[data-f=qte]'); if (q) q.focus();
+        };
+        fermer(v);
+      } catch (err) { btn.disabled = false; $n('#nv-msg').textContent = 'Erreur : ' + (err && err.message || err); }
+    };
+  });
 
   window.loadCommerce = load;
   window.cmRender = () => { if (!ed) render(); };
