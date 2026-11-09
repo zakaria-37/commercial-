@@ -252,12 +252,14 @@ function renderLignes() {
   const sorted = [...list].sort((a, b) => ordre(a.categorie) - ordre(b.categorie) || (Number(a.ordre) || 0) - (Number(b.ordre) || 0));
   $d('#pd-lignes-body').innerHTML = sorted.length ? sorted.map(l =>
     '<tr><td><span class="pd-cat pd-cat-' + ordre(l.categorie) + '">' + escD(catLbl(l.categorie)) + '</span></td>' +
-    '<td><b>' + escD(nomLigne(l)) + '</b>' + (l.note ? '<small class="pd-note">' + escD(l.note) + '</small>' : '') + '</td>' +
+    '<td><b>' + escD(nomLigne(l)) + '</b>' + (l.note ? '<small class="pd-note">' + escD(l.note) + '</small>' : '') +
+      (l.gabarits && l.gabarits.resultat ? '<small class="pd-note">📐 calepinage : ' + (l.gabarits.items || []).length + ' gabarit(s), laize ' + escD(l.gabarits.laize) + ' cm</small>' : '') + '</td>' +
     '<td>' + numD(l.quantite, 4) + ' ' + escD(l.unite) + '</td>' +
     '<td>' + numD(prixLigne(l), 2) + ' DA / ' + escD(l.unite) + (articleLigne(l) ? '<small class="pd-note">✔ Synchronisé avec le Stock</small>' : l.sous_produit_id ? '<small class="pd-note">coût de revient du produit</small>' : '') + '</td>' +
     '<td>' + (Number(l.perte_pct) ? numD(l.perte_pct, 2) + ' %' : '—') + '</td>' +
     '<td><b>' + moneyD(coutLigne(l)) + '</b></td>' +
-    '<td class="emp-act"><button class="btn s" type="button" onclick="' + (l.sous_produit_id ? 'showFormPack' : 'showFormLigne') + '(\'' + escD(l.id) + '\')">Modifier</button> ' +
+    '<td class="emp-act">' + (!l.sous_produit_id && (l.unite === 'm' || /tissu|doublure|pvc|matiere|matière/i.test(l.categorie + ' ' + nomLigne(l))) ? '<button class="btn s p" type="button" onclick="ouvrirCalepinage(\'' + escD(l.id) + '\')" title="Calculer les mètres par pièce à partir des gabarits">📐 Gabarits</button> ' : '') +
+      '<button class="btn s" type="button" onclick="' + (l.sous_produit_id ? 'showFormPack' : 'showFormLigne') + '(\'' + escD(l.id) + '\')">Modifier</button> ' +
     '<button class="btn s d" type="button" onclick="removeLigne(\'' + escD(l.id) + '\')">Supprimer</button></td></tr>'
   ).join('') +
     '<tr class="pr-total"><td colspan="5">Total matières et fournitures (1 pièce)</td><td>' + moneyD(coutMatieres(list)) + '</td><td></td></tr>'

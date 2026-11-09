@@ -42,3 +42,22 @@
   #pd-lform .at-fields{grid-template-columns:1fr 1fr!important;align-items:end}
   #pd-lform .at-fields label:nth-child(1),#pd-lform .at-fields label:nth-child(2),#pd-lform .at-fields label:nth-child(3),#pd-lform .at-fields label:nth-child(8){grid-column:1/-1}
 }
+
+/* Calepinage (gabarits → mètres par pièce) */
+.cp-bg{position:fixed;inset:0;background:rgba(20,10,15,.45);z-index:4000;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto}
+.cp-box{background:#fff;border-radius:14px;padding:20px;width:min(900px,100%);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.cp-help{color:var(--mut);font-size:13px;margin:6px 0 10px}
+.cp-err{color:#b00020;font-weight:600}
+.cp-cfg{margin-bottom:10px}
+.cp-tbl input{width:100%;min-width:70px;padding:7px 8px;border:1px solid var(--line,#ddd);border-radius:7px;font:inherit}
+.cp-tbl td:first-child{display:flex;gap:6px;align-items:center;min-width:170px}
+.cp-tbl input[type=checkbox]{width:auto;min-width:0}
+.cp-tbl .cp-pm small{display:block;color:var(--mut);font-size:11.5px}
+.cp-c{display:inline-block;width:12px;height:12px;border-radius:3px;flex:none;border:1px solid #888}
+.cp-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}
+.cp-k{border:1px solid var(--line,#e3dde0);border-radius:10px;padding:10px 12px}
+.cp-k span{display:block;font-size:12.5px;color:var(--mut)}
+.cp-k b{display:block;font-size:20px;margin:2px 0}
+.cp-k small{color:var(--mut);font-size:12px}
+.cp-k.on{background:#111;color:#fff;border-color:#111}.cp-k.on span,.cp-k.on small{color:#ddd}
+.cp-plan{max-height:440px;overflow:auto;border-radius:6px}
