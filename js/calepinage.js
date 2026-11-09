@@ -6,7 +6,8 @@
    2. Pour chaque élément (face, dos, soufflet, poche…) : combien de pièces de ce gabarit
       on coupe dans cette surface. La plateforme cherche le MEILLEUR rangement :
       rangées dans un sens, puis le reste rempli avec le gabarit tourné (si autorisé).
-   3. Mètres pour l'élément = nombre de cet élément dans 1 produit ÷ pièces dans 1 m.
+   3. Mètres pour l'élément = nombre de cet élément dans 1 produit ÷ pièces dans la surface × longueur de référence
+      (la longueur de référence est réglable : 1 m par défaut).
    4. Assemblage : métrage du produit = somme des mètres de tous ses éléments.
    ============================================================ */
 (function () {
@@ -44,27 +45,27 @@
   }
 
   function calculer(cfg) {
-    const W = num(cfg.laize) || 140, marge = Math.max(0, num(cfg.marge));
+    const W = num(cfg.laize) || 140, marge = Math.max(0, num(cfg.marge)), H = num(cfg.longueur) || LONG;     // H = longueur de référence (variable, 1 m par défaut)
     const items = (cfg.items || []).map((g, t) => ({ ...g, t, l: num(g.l), h: num(g.h), n: Math.max(0, num(g.n)) })).filter(g => g.l > 0 && g.h > 0 && g.n > 0);
     if (!items.length) return null;
     const lignes = items.map(g => {
       // sens imposé : le côté le plus long toujours dans la longueur du rouleau (le côté 1 m), le plus court dans la largeur (1,40 m)
       const court = Math.min(g.l, g.h) + marge, long = Math.max(g.l, g.h) + marge;
-      if (long <= LONG) { const r = maxPieces(W, LONG, court, long, false); return { g, pieces: r.n, blocs: r.blocs, metres: r.n ? g.n / r.n : null }; }
+      if (long <= H) { const r = maxPieces(W, H, court, long, false); return { g, pieces: r.n, blocs: r.blocs, metres: r.n ? g.n / r.n * H / 100 : null }; }
       // pièce plus longue que 1 m : rangées enchaînées sur le rouleau
       const parRang = Math.floor(W / court);
-      return { g, pieces: parRang ? parRang * LONG / long : 0, plusLong: true, parRang, blocs: parRang ? [{ x: 0, y: 0, w: court, h: LONG, nx: parRang, ny: 1 }] : [], metres: parRang ? g.n * long / LONG / parRang : null };
+      return { g, pieces: parRang ? parRang * H / long : 0, plusLong: true, parRang, blocs: parRang ? [{ x: 0, y: 0, w: court, h: H, nx: parRang, ny: 1 }] : [], metres: parRang ? g.n * long / 100 / parRang : null };
     });
     const ko = lignes.filter(x => !x.pieces);
-    if (ko.length) return { lignes, W, marge, erreur: 'Gabarit plus large que le rouleau (' + nf(W, 0) + ' cm), même avec son petit côté en travers : ' + ko.map(x => x.g.nom || 'sans nom').join(', ') + '.' };
+    if (ko.length) return { lignes, W, marge, H, erreur: 'Gabarit plus large que le rouleau (' + nf(W, 0) + ' cm), même avec son petit côté en travers : ' + ko.map(x => x.g.nom || 'sans nom').join(', ') + '.' };
     const total = lignes.reduce((s, x) => s + x.metres, 0);
-    return { lignes, W, marge, total };
+    return { lignes, W, H, marge, total };
   }
 
   /* petit dessin de la surface 1,40 m × 1 m remplie par un gabarit */
-  function dessin(x, W, coul) {
-    const sc = 0.62, m = x.g ? 0 : 0;
-    let s = '<svg viewBox="0 0 ' + (W * sc) + ' ' + (LONG * sc) + '" width="' + Math.round(W * sc) + '" height="' + Math.round(LONG * sc) + '" class="cp-svg"><rect x="0" y="0" width="' + (W * sc) + '" height="' + (LONG * sc) + '" fill="#f6f2f3" stroke="#999" stroke-width="0.6"/>';
+  function dessin(x, W, H, coul) {
+    const sc = 0.62 * Math.min(1, 140 / Math.max(W, H));
+    let s = '<svg viewBox="0 0 ' + (W * sc) + ' ' + (H * sc) + '" width="' + Math.round(W * sc) + '" height="' + Math.round(H * sc) + '" class="cp-svg"><rect x="0" y="0" width="' + (W * sc) + '" height="' + (H * sc) + '" fill="#f6f2f3" stroke="#999" stroke-width="0.6"/>';
     (x.blocs || []).forEach(b => { for (let i = 0; i < b.nx; i++) for (let j = 0; j < b.ny; j++)
       s += '<rect x="' + ((b.x + i * b.w) * sc + 0.4) + '" y="' + ((b.y + j * b.h) * sc + 0.4) + '" width="' + Math.max(0.5, b.w * sc - 0.8) + '" height="' + Math.max(0.5, b.h * sc - 0.8) + '" fill="' + coul + '" stroke="#555" stroke-width="0.4"/>'; });
     return s + '</svg>';
@@ -78,7 +79,7 @@
     const l = opts.ligne || (typeof LIGNES !== 'undefined' ? LIGNES : []).find(x => String(x.id) === String(ligneId)); if (!l) return;
     const art = window.StockAPI && l.article_id ? StockAPI.byId(l.article_id) : null;
     const g0 = l.gabarits && typeof l.gabarits === 'object' ? l.gabarits : {};
-    const cfg = { laize: g0.laize || 140, marge: g0.marge ?? 0, items: (g0.items && g0.items.length ? g0.items : [{ nom: 'Face', l: '', h: '', n: 1 }]).map(x => ({ ...x })) };
+    const cfg = { laize: g0.laize || 140, longueur: g0.longueur || 100, marge: g0.marge ?? 0, items: (g0.items && g0.items.length ? g0.items : [{ nom: 'Face', l: '', h: '', n: 1 }]).map(x => ({ ...x })) };
     const prixM = () => typeof prixLigne === 'function' ? prixLigne(l) : Number(l.prix_unitaire) || 0;
     const bg = document.createElement('div'); bg.className = 'cp-bg'; document.body.appendChild(bg);
 
@@ -86,31 +87,36 @@
       '<td data-cap="Largeur (cm)"><input data-k="l" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(g.l) + '" placeholder="cm"></td>' +
       '<td data-cap="Hauteur (cm)"><input data-k="h" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(g.h) + '" placeholder="cm"></td>' +
       '<td data-cap="Nb / produit"><input data-k="n" type="number" min="1" step="1" inputmode="numeric" value="' + esc(g.n) + '"></td>' +
-      '<td class="cp-pc n" data-cap="Pièces dans 1 m"></td><td class="cp-m n" data-cap="Mètres / produit"></td><td class="cp-del"><button type="button" class="btn s d" data-del="' + i + '" title="Supprimer">×</button></td></tr>';
+      '<td class="cp-pc n" data-cap="Pièces"></td><td class="cp-m n" data-cap="Mètres / produit"></td><td class="cp-del"><button type="button" class="btn s d" data-del="' + i + '" title="Supprimer">×</button></td></tr>';
     bg.innerHTML = '<div class="cp-box"><div class="at-actions" style="margin-top:0"><h3 style="margin:0 auto 0 0">📐 Métrage par gabarits — ' + esc(typeof nomLigne === 'function' ? nomLigne(l) : l.designation) + '</h3><button type="button" class="btn s" id="cp-x">Fermer</button></div>' +
       '<ol class="cp-steps"><li>Pour chaque élément du produit, mesurez le <b>gabarit</b> (largeur × hauteur en cm) et combien il en faut pour <b>1 produit</b>.</li>' +
-      '<li>La plateforme compte combien de pièces de cet élément tiennent dans <b>' + '<span id="cp-surf">1,40 m × 1 m</span></b> de tissu. Le <b>côté le plus long</b> du gabarit est toujours placé dans le sens du <b>1 m</b> (longueur du rouleau), le plus court dans la largeur.</li>' +
-      '<li>Elle assemble tous les éléments : <b>métrage du produit = Σ (nombre par produit ÷ pièces dans 1 m)</b>.</li></ol>' +
+      '<li>La plateforme compte combien de pièces de cet élément tiennent dans <b>' + '<span id="cp-surf">1,40 m × 1 m</span></b> de tissu. Le <b>côté le plus long</b> du gabarit est toujours placé dans le sens de la <b>longueur</b> du rouleau (<span class="cp-lg">1 m</span>), le plus court dans la largeur.</li>' +
+      '<li>Elle assemble tous les éléments : <b>métrage du produit = Σ (nombre par produit ÷ pièces dans <span class="cp-lg">1 m</span>) × <span class="cp-lg">1 m</span></b>.</li></ol>' +
       '<div class="cp-cfg"><label>Largeur du rouleau (cm)<input id="cp-laize" type="number" min="10" step="1" value="' + esc(cfg.laize) + '"></label>' +
+      '<label>Longueur de référence (cm)<input id="cp-long" type="number" min="10" step="1" value="' + esc(cfg.longueur) + '"></label>' +
       '<label>Espace entre pièces (cm)<input id="cp-marge" type="number" min="0" step="0.1" value="' + esc(cfg.marge) + '"></label></div>' +
-      '<div class="tw"><table class="iv-tbl cp-tbl no-cards"><thead><tr><th>Élément</th><th>Largeur (cm)</th><th>Hauteur (cm)</th><th>Nb / produit</th><th class="n">Pièces dans 1 m</th><th class="n">Mètres / produit</th><th></th></tr></thead>' +
-      '<tbody id="cp-g">' + cfg.items.map(ligneG).join('') + '</tbody><tfoot><tr class="cp-tot"><td colspan="6">Total pour 1 produit (assemblage de tous les éléments)</td><td class="n" id="cp-total">—</td><td></td></tr></tfoot></table></div>' +
+      '<div class="tw"><table class="iv-tbl cp-tbl no-cards"><thead><tr><th>Élément</th><th>Largeur (cm)</th><th>Hauteur (cm)</th><th>Nb / produit</th><th class="n" id="cp-thpc">Pièces dans 1 m</th><th class="n">Mètres / produit</th><th></th></tr></thead>' +
+      '<tbody id="cp-g">' + cfg.items.map(ligneG).join('') + '</tbody><tfoot><tr class="cp-tot"><td colspan="6">Total pour 1 produit (assemblage de tous les éléments)</td><td class="n" id="cp-total" colspan="2">—</td></tr></tfoot></table></div>' +
       '<div class="at-actions"><button type="button" class="btn s" id="cp-add">+ Ajouter un élément</button></div>' +
       '<div id="cp-res"></div><div id="cp-plans" class="cp-plans"></div></div>';
 
     function lire() {
-      cfg.laize = num(bg.querySelector('#cp-laize').value) || 140; cfg.marge = Math.max(0, num(bg.querySelector('#cp-marge').value));
+      cfg.laize = num(bg.querySelector('#cp-laize').value) || 140; cfg.longueur = num(bg.querySelector('#cp-long').value) || 100; cfg.marge = Math.max(0, num(bg.querySelector('#cp-marge').value));
       bg.querySelectorAll('#cp-g tr[data-i]').forEach(tr => { const g = cfg.items[+tr.dataset.i]; if (!g) return;
         tr.querySelectorAll('[data-k]').forEach(inp => { g[inp.dataset.k] = inp.type === 'checkbox' ? inp.checked : inp.value; }); });
     }
     let res = null;
     function calc() {
       lire(); res = calculer(cfg);
-      bg.querySelector('#cp-surf').textContent = nf(cfg.laize / 100, 2) + ' m × 1 m';
+      const LG = nf(cfg.longueur / 100, 2) + ' m';
+      bg.querySelector('#cp-surf').textContent = nf(cfg.laize / 100, 2) + ' m × ' + LG;
+      bg.querySelectorAll('.cp-lg').forEach(e => e.textContent = LG);
+      bg.querySelector('#cp-thpc').textContent = 'Pièces dans ' + LG;
       const pm = prixM();
       bg.querySelectorAll('#cp-g tr[data-i]').forEach(tr => {
         const x = res && res.lignes.find(y => y.g.t === +tr.dataset.i);
-        tr.querySelector('.cp-pc').innerHTML = x ? (x.pieces ? '<b>' + nf(x.pieces, 2) + '</b>' + (x.plusLong ? '<small>plus long que 1 m : ' + x.parRang + ' par rangée</small>' : '') : '<span class="cp-err">trop grand</span>') : '—';
+        tr.querySelector('.cp-pc').dataset.cap = 'Pièces dans ' + LG;
+        tr.querySelector('.cp-pc').innerHTML = x ? (x.pieces ? '<b>' + nf(x.pieces, 2) + '</b>' + (x.plusLong ? '<small>plus long que ' + LG + ' : ' + x.parRang + ' par rangée</small>' : '') : '<span class="cp-err">trop grand</span>') : '—';
         tr.querySelector('.cp-m').innerHTML = x && x.metres ? '<b>' + nf(x.metres, 4) + ' m</b><small>' + nf(x.g.n, 2) + ' ÷ ' + nf(x.pieces, 2) + '</small>' : '—';
       });
       const tot = bg.querySelector('#cp-total'), out = bg.querySelector('#cp-res'), plans = bg.querySelector('#cp-plans');
@@ -124,13 +130,13 @@
           (rl ? '<div><span>1 ' + esc(art.cond_nom) + ' du stock (' + nf(rl, 2) + ' m)</span><b>' + nf(Math.floor(rl / res.total), 0) + ' produits</b><small>avec ce tissu</small></div>' : '') +
           '<div><span>1 mètre de tissu</span><b>' + nf(1 / res.total, 2) + ' produits</b><small>' + nf(cfg.laize / 100, 2) + ' m × 1 m</small></div></div>' +
           '<div class="at-actions"><button type="button" class="btn p" id="cp-apply">Appliquer au coût : ' + nf(res.total, 4) + ' m par produit</button><button type="button" class="btn" id="cp-save">Enregistrer sans appliquer</button></div>' +
-          '<p class="cp-help">La chute est déjà comptée (pièces entières dans 1 m) : la colonne « Chute » de la ligne sera mise à 0 %.</p>';
+          '<p class="cp-help">La chute est déjà comptée (pièces entières dans ' + LG + ') : la colonne « Chute » de la ligne sera mise à 0 %.</p>';
       }
-      plans.innerHTML = res ? res.lignes.filter(x => x.pieces).map(x => '<figure>' + dessin(x, res.W, COUL[x.g.t % COUL.length]) + '<figcaption><b>' + esc(x.g.nom || 'Élément') + '</b> : ' + nf(x.pieces, 2) + ' pièces dans 1 m</figcaption></figure>').join('') : '';
+      plans.innerHTML = res ? res.lignes.filter(x => x.pieces).map(x => '<figure>' + dessin(x, res.W, res.H, COUL[x.g.t % COUL.length]) + '<figcaption><b>' + esc(x.g.nom || 'Élément') + '</b> : ' + nf(x.pieces, 2) + ' pièces dans ' + LG + '</figcaption></figure>').join('') : '';
     }
     async function enregistrer(appliquer) {
       lire(); const r = calculer(cfg);
-      const gab = { laize: cfg.laize, marge: cfg.marge, items: cfg.items.filter(g => num(g.l) > 0 || (g.nom || '').trim()).map(g => ({ nom: g.nom || '', l: num(g.l), h: num(g.h), n: Math.max(1, num(g.n) || 1) })) };
+      const gab = { laize: cfg.laize, longueur: cfg.longueur, marge: cfg.marge, items: cfg.items.filter(g => num(g.l) > 0 || (g.nom || '').trim()).map(g => ({ nom: g.nom || '', l: num(g.l), h: num(g.h), n: Math.max(1, num(g.n) || 1) })) };
       if (opts.onApply) {          // depuis le formulaire : on remplit les cases, l'enregistrement se fait avec la ligne
         if (appliquer) {
           if (!r || r.erreur) { alert(r && r.erreur || 'Calcul impossible.'); return; }

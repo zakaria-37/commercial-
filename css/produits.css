@@ -104,7 +104,6 @@
   .cp-tbl td.cp-m small{display:inline;margin-left:6px}
   .cp-tbl tfoot tr{display:flex;justify-content:space-between;align-items:center;border-radius:12px;overflow:hidden}
   .cp-tbl tfoot td{display:block;border:0;padding:12px}
-  .cp-tbl tfoot td:last-child{display:none}
   .cp-res{grid-template-columns:1fr 1fr}
   .cp-res>div:first-child{grid-column:1/-1}
   .cp-box .at-actions{flex-direction:column;align-items:stretch}
