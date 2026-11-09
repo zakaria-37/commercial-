@@ -651,7 +651,7 @@
           <label>Catégorie *<select id="pd-lcat"></select></label>
           <label>Désignation<input id="pd-ldes" maxlength="120" list="pd-noms-stock" autocomplete="off" placeholder="Ex : Kawi bébé"></label>
           <label>Unité<select id="pd-lunite"></select></label>
-          <label>Quantité pour 1 pièce *<input id="pd-lqte" type="number" min="0" step="0.0001" inputmode="decimal" required placeholder="Ex : 0.5"></label>
+          <label>Quantité pour 1 pièce *<span class="pd-qbox"><input id="pd-lqte" type="number" min="0" step="0.0001" inputmode="decimal" required placeholder="Ex : 0.5"><button type="button" class="btn s p" id="pd-lgab" onclick="gabaritsFormLigne()" title="Calculer les mètres à partir des gabarits (face, dos, soufflet…)">📐 Gabarits</button></span><small id="pd-lgab-info" class="pd-note"></small></label>
           <label>Prix unitaire (DA) *<input id="pd-lprix" type="number" min="0" step="0.01" inputmode="decimal" required placeholder="Prix d’une unité, ex : 450"></label>
           <label>Chute (%)<input id="pd-lperte" type="number" min="0" max="100" step="0.1" inputmode="decimal" placeholder="Facultatif, ex : 5"></label>
           <label style="grid-column:1/-1">Note<input id="pd-lnote" maxlength="200" placeholder="Facultatif : fournisseur, couleur, référence…"></label>

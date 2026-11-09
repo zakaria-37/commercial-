@@ -433,10 +433,33 @@ function majExempleCat(changeUnite) {
   if (changeUnite === true && c && !curLigne && !$d('#pd-lart').value) $d('#pd-lunite').value = c.u;
 }
 
+/* Gabarits depuis le formulaire : calcule la « Quantité pour 1 pièce » (mètres) à partir des gabarits */
+let gabForm = null;
+function majGabInfo() {
+  const i = $d('#pd-lgab-info'); if (!i) return;
+  i.textContent = gabForm && gabForm.resultat ? '📐 calculé avec ' + (gabForm.items || []).length + ' gabarit(s) sur ' + gabForm.laize + ' cm (chute incluse)' : '';
+}
+function gabaritsFormLigne() {
+  if (!window.Calepinage) return;
+  const art = window.StockAPI ? StockAPI.byId($d('#pd-lart').value) : null;
+  const ligne = { id: curLigne, designation: $d('#pd-ldes').value.trim() || (art ? art.nom : catLbl($d('#pd-lcat').value)), unite: $d('#pd-lunite').value, article_id: art ? art.id : null,
+    prix_unitaire: parseFloat($d('#pd-lprix').value) || 0, quantite: parseFloat($d('#pd-lqte').value) || 0, gabarits: gabForm };
+  Calepinage.ouvrir(null, { ligne,
+    onApply: (m, gab) => {
+      gabForm = gab;
+      $d('#pd-lqte').value = m; $d('#pd-lperte').value = '';
+      if ($d('#pd-lunite').value !== 'm' && [...$d('#pd-lunite').options].some(o => o.value === 'm')) $d('#pd-lunite').value = 'm';
+      majGabInfo(); majApercuLigne(); $d('#pd-lqte').focus();
+    },
+    onSave: gab => { gabForm = gab; majGabInfo(); } });
+}
+
 function showFormLigne(id) {
   if (!produitCourant()) return;
   curLigne = id || null;
   const l = id ? LIGNES.find(x => String(x.id) === String(id)) : null;
+  gabForm = l && l.gabarits ? JSON.parse(JSON.stringify(l.gabarits)) : null;
+  setTimeout(majGabInfo, 0);
   $d('#pd-lform-title').textContent = l ? 'Modifier la ligne' : 'Nouvelle ligne de coût';
   if (window.StockAPI) StockAPI.fillSelect($d('#pd-lart'), l ? l.article_id : '', '— Aucun (prix saisi à la main) —');
   $d('#pd-lcat').value = l ? (CATS_D.some(c => c.k === l.categorie) ? l.categorie : 'Autre outil') : CATS_D[0].k;
@@ -564,6 +587,7 @@ async function saveLigne() {
     else { art = cr.article; cree = true; }
   }
   const payload = { categorie, designation: art ? art.nom : designation, unite, quantite, prix_unitaire: Math.round(prix * 10000) / 10000, perte_pct: perte, note, article_id: art ? art.id : null };
+  if (gabForm) payload.gabarits = gabForm;
   let res;
   if (curLigne) res = await sb.from('produit_lignes').update(payload).eq('id', curLigne).select();
   else {
@@ -577,6 +601,7 @@ async function saveLigne() {
   if (wasEdit) cancelFormLigne();
   else {
     ['#pd-ldes', '#pd-lqte', '#pd-lprix', '#pd-lperte', '#pd-lnote'].forEach(s => { $d(s).value = ''; });
+    gabForm = null; majGabInfo();
     $d('#pd-lart').value = ''; autoLie = false; majLienStock(false);
     $d('#pd-lhint').textContent = '';
     // passe à la catégorie suivante pour enchaîner la saisie

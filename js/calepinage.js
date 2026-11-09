@@ -71,8 +71,11 @@
   }
 
   /* ---------- Fenêtre ---------- */
-  function ouvrir(ligneId) {
-    const l = (typeof LIGNES !== 'undefined' ? LIGNES : []).find(x => String(x.id) === String(ligneId)); if (!l) return;
+  /* ouvrir(idLigne) : ligne enregistrée (sauvegarde directe)
+     ouvrir(null, { ligne, onApply(m, gabarits), onSave(gabarits) }) : depuis le formulaire de la ligne (remplit la case) */
+  function ouvrir(ligneId, opts) {
+    opts = opts || {};
+    const l = opts.ligne || (typeof LIGNES !== 'undefined' ? LIGNES : []).find(x => String(x.id) === String(ligneId)); if (!l) return;
     const art = window.StockAPI && l.article_id ? StockAPI.byId(l.article_id) : null;
     const g0 = l.gabarits && typeof l.gabarits === 'object' ? l.gabarits : {};
     const cfg = { laize: g0.laize || 140, marge: g0.marge ?? 0, items: (g0.items && g0.items.length ? g0.items : [{ nom: 'Face', l: '', h: '', n: 1 }]).map(x => ({ ...x })) };
@@ -128,6 +131,14 @@
     async function enregistrer(appliquer) {
       lire(); const r = calculer(cfg);
       const gab = { laize: cfg.laize, marge: cfg.marge, items: cfg.items.filter(g => num(g.l) > 0 || (g.nom || '').trim()).map(g => ({ nom: g.nom || '', l: num(g.l), h: num(g.h), n: Math.max(1, num(g.n) || 1) })) };
+      if (opts.onApply) {          // depuis le formulaire : on remplit les cases, l'enregistrement se fait avec la ligne
+        if (appliquer) {
+          if (!r || r.erreur) { alert(r && r.erreur || 'Calcul impossible.'); return; }
+          gab.resultat = { m_piece: Math.round(r.total * 10000) / 10000, le: new Date().toISOString().slice(0, 10) };
+          opts.onApply(gab.resultat.m_piece, gab);
+        } else if (opts.onSave) opts.onSave(gab);
+        bg.remove(); return;
+      }
       const patch = { gabarits: gab };
       if (appliquer) {
         if (!r || r.erreur) { alert(r && r.erreur || 'Calcul impossible.'); return; }
