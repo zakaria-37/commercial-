@@ -76,18 +76,18 @@
     const bg = document.createElement('div'); bg.className = 'cp-bg'; document.body.appendChild(bg);
 
     const ligneG = (g, i) => '<tr data-i="' + i + '"><td><span class="cp-nm"><i class="cp-c" style="background:' + COUL[i % COUL.length] + '"></i><input data-k="nom" value="' + esc(g.nom || '') + '" placeholder="Face, dos, soufflet…" maxlength="40"></span></td>' +
-      '<td><input data-k="l" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(g.l) + '" placeholder="cm"></td>' +
-      '<td><input data-k="h" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(g.h) + '" placeholder="cm"></td>' +
-      '<td><input data-k="n" type="number" min="1" step="1" inputmode="numeric" value="' + esc(g.n) + '"></td>' +
-      '<td style="text-align:center"><input data-k="rot" type="checkbox"' + (g.rot ? ' checked' : '') + ' title="Peut être tourné (sens du tissu)"></td>' +
-      '<td class="cp-pc n"></td><td class="cp-m n"></td><td><button type="button" class="btn s d" data-del="' + i + '" title="Supprimer">×</button></td></tr>';
+      '<td data-cap="Largeur (cm)"><input data-k="l" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(g.l) + '" placeholder="cm"></td>' +
+      '<td data-cap="Hauteur (cm)"><input data-k="h" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(g.h) + '" placeholder="cm"></td>' +
+      '<td data-cap="Nb / produit"><input data-k="n" type="number" min="1" step="1" inputmode="numeric" value="' + esc(g.n) + '"></td>' +
+      '<td class="cp-rot" data-cap="Tourner" style="text-align:center"><input data-k="rot" type="checkbox"' + (g.rot ? ' checked' : '') + ' title="Peut être tourné (sens du tissu)"></td>' +
+      '<td class="cp-pc n" data-cap="Pièces dans 1 m"></td><td class="cp-m n" data-cap="Mètres / produit"></td><td class="cp-del"><button type="button" class="btn s d" data-del="' + i + '" title="Supprimer">×</button></td></tr>';
     bg.innerHTML = '<div class="cp-box"><div class="at-actions" style="margin-top:0"><h3 style="margin:0 auto 0 0">📐 Métrage par gabarits — ' + esc(typeof nomLigne === 'function' ? nomLigne(l) : l.designation) + '</h3><button type="button" class="btn s" id="cp-x">Fermer</button></div>' +
       '<ol class="cp-steps"><li>Pour chaque élément du produit, mesurez le <b>gabarit</b> (largeur × hauteur en cm) et combien il en faut pour <b>1 produit</b>.</li>' +
       '<li>La plateforme compte combien de pièces de cet élément tiennent dans <b>' + '<span id="cp-surf">1,40 m × 1 m</span></b> de tissu (meilleur rangement).</li>' +
       '<li>Elle assemble tous les éléments : <b>métrage du produit = Σ (nombre par produit ÷ pièces dans 1 m)</b>.</li></ol>' +
       '<div class="cp-cfg"><label>Largeur du rouleau (cm)<input id="cp-laize" type="number" min="10" step="1" value="' + esc(cfg.laize) + '"></label>' +
       '<label>Espace entre pièces (cm)<input id="cp-marge" type="number" min="0" step="0.1" value="' + esc(cfg.marge) + '"></label></div>' +
-      '<div class="tw"><table class="iv-tbl cp-tbl"><thead><tr><th>Élément</th><th>Largeur (cm)</th><th>Hauteur (cm)</th><th>Nb / produit</th><th>Tourner</th><th class="n">Pièces dans 1 m</th><th class="n">Mètres / produit</th><th></th></tr></thead>' +
+      '<div class="tw"><table class="iv-tbl cp-tbl no-cards"><thead><tr><th>Élément</th><th>Largeur (cm)</th><th>Hauteur (cm)</th><th>Nb / produit</th><th>Tourner</th><th class="n">Pièces dans 1 m</th><th class="n">Mètres / produit</th><th></th></tr></thead>' +
       '<tbody id="cp-g">' + cfg.items.map(ligneG).join('') + '</tbody><tfoot><tr class="cp-tot"><td colspan="6">Total pour 1 produit (assemblage de tous les éléments)</td><td class="n" id="cp-total">—</td><td></td></tr></tfoot></table></div>' +
       '<div class="at-actions"><button type="button" class="btn s" id="cp-add">+ Ajouter un élément</button></div>' +
       '<div id="cp-res"></div><div id="cp-plans" class="cp-plans"></div></div>';
