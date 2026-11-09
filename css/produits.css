@@ -128,3 +128,10 @@ body:has(.cp-bg) #zs-btn,body:has(.cp-bg) #zs-panel{display:none!important}
 .pd-qbox .btn{white-space:nowrap;flex:none}
 label:has(.pd-qbox){grid-column:1/-1}
 @media (max-width:700px){ .pd-qbox input{font-size:16px} .pd-qbox .btn{min-height:44px} }
+@media (min-width:701px){
+  .cp-tbl{width:100%;table-layout:auto;min-width:0!important}
+  .cp-tbl th,.cp-tbl td{padding:8px 6px}
+  .cp-tbl input{min-width:48px}
+  .cp-nm{min-width:130px}
+  #cp-total{white-space:nowrap}
+}
