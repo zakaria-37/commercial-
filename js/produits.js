@@ -437,7 +437,7 @@ function majExempleCat(changeUnite) {
 let gabForm = null;
 function majGabInfo() {
   const i = $d('#pd-lgab-info'); if (!i) return;
-  i.textContent = gabForm && gabForm.resultat ? '📐 calculé avec ' + (gabForm.items || []).length + ' gabarit(s) sur ' + gabForm.laize + ' cm (chute incluse)' : '';
+  i.textContent = gabForm && gabForm.resultat ? '📐 calculé avec ' + (gabForm.items || []).length + ' gabarit(s) sur ' + gabForm.laize + ' cm' : '';
 }
 function gabaritsFormLigne() {
   if (!window.Calepinage) return;

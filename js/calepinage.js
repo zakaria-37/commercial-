@@ -6,7 +6,7 @@
    2. Pour chaque élément (face, dos, soufflet, poche…) : combien de pièces de ce gabarit
       on coupe dans cette surface. La plateforme cherche le MEILLEUR rangement :
       rangées dans un sens, puis le reste rempli avec le gabarit tourné (si autorisé).
-   2bis. Pièces dans 1 m = ⌊ largeur ÷ petit côté ⌋ × (100 ÷ grand côté) — avec virgule : le rouleau est continu.
+   2bis. Pièces dans 1 m = (largeur ÷ petit côté) × (100 ÷ grand côté) — avec virgule dans les deux sens.
    3. Mètres pour l'élément = nombre de cet élément dans 1 produit ÷ pièces dans 1 m.
    4. Assemblage : métrage du produit = somme des mètres de tous ses éléments.
    ============================================================ */
@@ -51,9 +51,9 @@
     const lignes = items.map(g => {
       // sens imposé : le côté le plus long toujours dans la longueur du rouleau (le côté 1 m), le plus court dans la largeur (1,40 m)
       const court = Math.min(g.l, g.h) + marge, long = Math.max(g.l, g.h) + marge;
-      // pièces côte à côte dans la largeur : nombre ENTIER ; dans la longueur le rouleau est continu : on garde la VIRGULE
-      const parRang = Math.floor(W / court), pieces = parRang ? parRang * H / long : 0;
-      return { g, pieces, parRang, long, blocs: parRang ? [{ x: 0, y: 0, w: court, h: long, nx: parRang, ny: Math.ceil(H / long) }] : [], metres: parRang ? g.n / pieces * H / 100 : null };
+      // calcul avec VIRGULE dans la largeur et dans la longueur (choix de l'atelier)
+      const parRang = court <= W ? W / court : 0, pieces = parRang ? parRang * H / long : 0;
+      return { g, pieces, parRang, long, court, blocs: parRang ? [{ x: 0, y: 0, w: court, h: long, nx: Math.ceil(parRang), ny: Math.ceil(H / long) }] : [], metres: parRang ? g.n / pieces * H / 100 : null };
     });
     const ko = lignes.filter(x => !x.pieces);
     if (ko.length) return { lignes, W, marge, H, erreur: 'Gabarit plus large que le rouleau (' + nf(W, 0) + ' cm), même avec son petit côté en travers : ' + ko.map(x => x.g.nom || 'sans nom').join(', ') + '.' };
@@ -89,7 +89,7 @@
       '<td class="cp-pc n" data-cap="Pièces"></td><td class="cp-m n" data-cap="Mètres / produit"></td><td class="cp-del"><button type="button" class="btn s d" data-del="' + i + '" title="Supprimer">×</button></td></tr>';
     bg.innerHTML = '<div class="cp-box"><div class="at-actions" style="margin-top:0"><h3 style="margin:0 auto 0 0">📐 Métrage par gabarits — ' + esc(typeof nomLigne === 'function' ? nomLigne(l) : l.designation) + '</h3><button type="button" class="btn s" id="cp-x">Fermer</button></div>' +
       '<ol class="cp-steps"><li>Pour chaque élément du produit, mesurez le <b>gabarit</b> (largeur × hauteur en cm) et combien il en faut pour <b>1 produit</b>.</li>' +
-      '<li>La plateforme compte combien de pièces de cet élément tiennent dans <b>' + '<span id="cp-surf">1,40 m × 1 m</span></b> de tissu : <b>pièces dans 1 m = pièces côte à côte dans la largeur × (100 ÷ grand côté)</b>, avec virgule car le rouleau est continu. Le côté le plus long est toujours dans le sens de la longueur.</li>' +
+      '<li>La plateforme compte combien de pièces de cet élément tiennent dans <b>' + '<span id="cp-surf">1,40 m × 1 m</span></b> de tissu : <b>pièces dans 1 m = (largeur ÷ petit côté) × (100 ÷ grand côté)</b>, avec virgule. Le côté le plus long est toujours dans le sens de la longueur.</li>' +
       '<li>Elle assemble tous les éléments : <b>métrage du produit = Σ (nombre par produit ÷ pièces dans 1 m)</b>.</li></ol>' +
       '<div class="cp-cfg"><label>Largeur du rouleau (cm)<input id="cp-laize" type="number" min="10" step="1" value="' + esc(cfg.laize) + '"></label>' +
       '<label>Espace entre pièces (cm)<input id="cp-marge" type="number" min="0" step="0.1" value="' + esc(cfg.marge) + '"></label></div>' +
@@ -114,7 +114,7 @@
       bg.querySelectorAll('#cp-g tr[data-i]').forEach(tr => {
         const x = res && res.lignes.find(y => y.g.t === +tr.dataset.i);
         tr.querySelector('.cp-pc').dataset.cap = 'Pièces dans ' + LG;
-        tr.querySelector('.cp-pc').innerHTML = x ? (x.pieces ? '<b>' + nf(x.pieces, 2) + '</b>' + '<small>' + x.parRang + ' en largeur × (100 ÷ ' + nf(x.long, 2) + ')</small>' : '<span class="cp-err">trop grand</span>') : '—';
+        tr.querySelector('.cp-pc').innerHTML = x ? (x.pieces ? '<b>' + nf(x.pieces, 2) + '</b>' + '<small>(' + nf(res.W, 2) + ' ÷ ' + nf(x.court, 2) + ') × (100 ÷ ' + nf(x.long, 2) + ')</small>' : '<span class="cp-err">trop grand</span>') : '—';
         tr.querySelector('.cp-m').innerHTML = x && x.metres ? '<b>' + nf(x.metres, 4) + ' m</b><small>' + nf(x.g.n, 2) + ' ÷ ' + nf(x.pieces, 2) + '</small>' : '—';
       });
       const tot = bg.querySelector('#cp-total'), out = bg.querySelector('#cp-res'), plans = bg.querySelector('#cp-plans');
@@ -128,7 +128,7 @@
           (rl ? '<div><span>1 ' + esc(art.cond_nom) + ' du stock (' + nf(rl, 2) + ' m)</span><b>' + nf(rl / res.total, 2) + ' produits</b><small>avec ce tissu</small></div>' : '') +
           '<div><span>1 mètre de tissu</span><b>' + nf(1 / res.total, 2) + ' produits</b><small>' + nf(cfg.laize / 100, 2) + ' m × 1 m</small></div></div>' +
           '<div class="at-actions"><button type="button" class="btn p" id="cp-apply">Appliquer au coût : ' + nf(res.total, 4) + ' m par produit</button><button type="button" class="btn" id="cp-save">Enregistrer sans appliquer</button></div>' +
-          '<p class="cp-help">La chute de la largeur est comptée (pièces entières dans ' + nf(cfg.laize, 0) + ' cm) ; la longueur du rouleau est continue (calcul avec virgule). La colonne « Chute » de la ligne sera mise à 0 %.</p>';
+          '<p class="cp-help">Calcul avec virgule dans la largeur et dans la longueur. Si vous voulez compter une perte de coupe, indiquez un « Espace entre pièces » ou une chute sur la ligne.</p>';
       }
       plans.innerHTML = res ? res.lignes.filter(x => x.pieces).map(x => '<figure>' + dessin(x, res.W, res.H, COUL[x.g.t % COUL.length]) + '<figcaption><b>' + esc(x.g.nom || 'Élément') + '</b> : ' + nf(x.pieces, 2) + ' pièces dans ' + LG + '</figcaption></figure>').join('') : '';
     }
