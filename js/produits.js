@@ -229,6 +229,7 @@ function renderProduits(errText) {
     return;
   }
   if (!p) {
+    if (window.Calepinage) Calepinage.carte(null);
     $d('#pd-empty').innerHTML = '<h2>Aucun produit pour le moment</h2>' +
       '<p>Un produit est un article de bagagerie (sac à dos, sac à main, trousse…). Vous y indiquez le prix de chaque élément ' +
       'pour <b>une</b> pièce (matière, doublure, sangle, curseur, emballage…) et la main d’œuvre : l’application calcule son ' +
@@ -239,6 +240,7 @@ function renderProduits(errText) {
   }
   $d('#pd-desc').textContent = p.description || '';
   $d('#pd-desc').style.display = p.description ? '' : 'none';
+  if (window.Calepinage) Calepinage.carte(p);
   renderLignes();
   renderMoForm(p);
   renderCout();
@@ -253,12 +255,14 @@ function renderLignes() {
   $d('#pd-lignes-body').innerHTML = sorted.length ? sorted.map(l =>
     '<tr><td><span class="pd-cat pd-cat-' + ordre(l.categorie) + '">' + escD(catLbl(l.categorie)) + '</span></td>' +
     '<td><b>' + escD(nomLigne(l)) + '</b>' + (l.note ? '<small class="pd-note">' + escD(l.note) + '</small>' : '') +
-      (l.gabarits && l.gabarits.resultat ? '<small class="pd-note">📐 calepinage : ' + (l.gabarits.items || []).length + ' gabarit(s), laize ' + escD(l.gabarits.laize) + ' cm</small>' : '') + '</td>' +
+      (l.gabarits && l.gabarits.resultat ? '<small class="pd-note">' + (l.gabarits.type === 'longueur' ? '📏 longueur calculée avec ' + (l.gabarits.termes || []).length + ' mesure(s) de gabarits' : '📐 métrage : ' + (l.gabarits.items || []).length + ' gabarit(s), laize ' + escD(l.gabarits.laize) + ' cm') + '</small>' : '') + '</td>' +
     '<td>' + numD(l.quantite, 4) + ' ' + escD(l.unite) + '</td>' +
     '<td>' + numD(prixLigne(l), 2) + ' DA / ' + escD(l.unite) + (articleLigne(l) ? '<small class="pd-note">✔ Synchronisé avec le Stock</small>' : l.sous_produit_id ? '<small class="pd-note">coût de revient du produit</small>' : '') + '</td>' +
     '<td>' + (Number(l.perte_pct) ? numD(l.perte_pct, 2) + ' %' : '—') + '</td>' +
     '<td><b>' + moneyD(coutLigne(l)) + '</b></td>' +
-    '<td class="emp-act">' + (!l.sous_produit_id && (l.unite === 'm' || /tissu|doublure|pvc|matiere|matière/i.test(l.categorie + ' ' + nomLigne(l))) ? '<button class="btn s p" type="button" onclick="ouvrirCalepinage(\'' + escD(l.id) + '\')" title="Calculer les mètres par pièce à partir des gabarits">📐 Gabarits</button> ' : '') +
+    '<td class="emp-act">' + (l.sous_produit_id ? '' : window.Calepinage && Calepinage.estSurface(l)
+      ? '<button class="btn s p" type="button" onclick="ouvrirCalepinage(\'' + escD(l.id) + '\')" title="Mètres de tissu par pièce à partir des gabarits">📐 Gabarits</button> '
+      : l.unite === 'm' || /fermeture|curseur|tafta|lis[eé]r|sangle|biais|passepoil|ruban|cordon/i.test(l.categorie + ' ' + nomLigne(l)) ? '<button class="btn s p" type="button" onclick="ouvrirLongueurGab(\'' + escD(l.id) + '\')" title="Longueur à partir des gabarits (périmètre, côté…)">📏 Longueur</button> ' : '') +
       '<button class="btn s" type="button" onclick="' + (l.sous_produit_id ? 'showFormPack' : 'showFormLigne') + '(\'' + escD(l.id) + '\')">Modifier</button> ' +
     '<button class="btn s d" type="button" onclick="removeLigne(\'' + escD(l.id) + '\')">Supprimer</button></td></tr>'
   ).join('') +
@@ -378,12 +382,12 @@ async function duplicateProduit() {
   if (!nom) return;
   const r = await sb.from('produits').insert([{
     nom, description: p.description || '', modele_id: p.modele_id || null,
-    mo_date: p.mo_date, mo_salaires: p.mo_salaires, mo_charges: p.mo_charges, mo_pieces: p.mo_pieces
+    mo_date: p.mo_date, mo_salaires: p.mo_salaires, mo_charges: p.mo_charges, mo_pieces: p.mo_pieces, gabarits: p.gabarits || null
   }]).select();
   if (r.error || !r.data || !r.data[0]) { toastD('Erreur : ' + errMsgD(r.error || { message: 'création impossible' })); return; }
   const rows = lignesDe(p.id).map((l, i) => ({
     produit_id: r.data[0].id, categorie: l.categorie, designation: l.designation, unite: l.unite, quantite: l.quantite,
-    prix_unitaire: l.prix_unitaire, perte_pct: l.perte_pct, note: l.note || '', ordre: i + 1, article_id: l.article_id || null
+    prix_unitaire: l.prix_unitaire, perte_pct: l.perte_pct, note: l.note || '', ordre: i + 1, article_id: l.article_id || null, gabarits: l.gabarits || null
   }));
   if (rows.length) {
     const r2 = await sb.from('produit_lignes').insert(rows);
@@ -437,21 +441,29 @@ function majExempleCat(changeUnite) {
 let gabForm = null;
 function majGabInfo() {
   const i = $d('#pd-lgab-info'); if (!i) return;
-  i.textContent = gabForm && gabForm.resultat ? '📐 calculé avec ' + (gabForm.items || []).length + ' gabarit(s) sur ' + gabForm.laize + ' cm' : '';
+  i.textContent = !gabForm || !gabForm.resultat ? '' : gabForm.type === 'longueur' ? '📏 longueur calculée avec ' + (gabForm.termes || []).length + ' mesure(s) de gabarits' : '📐 calculé avec ' + (gabForm.items || []).length + ' gabarit(s) sur ' + gabForm.laize + ' cm';
+}
+function majBtnGab() {
+  const b = $d('#pd-lgab'); if (!b || !window.Calepinage) return;
+  const surf = gabForm ? gabForm.type !== 'longueur' : Calepinage.estSurface({ categorie: $d('#pd-lcat').value, designation: $d('#pd-ldes').value });
+  b.textContent = surf ? '📐 Gabarits' : '📏 Longueur';
 }
 function gabaritsFormLigne() {
   if (!window.Calepinage) return;
   const art = window.StockAPI ? StockAPI.byId($d('#pd-lart').value) : null;
   const ligne = { id: curLigne, designation: $d('#pd-ldes').value.trim() || (art ? art.nom : catLbl($d('#pd-lcat').value)), unite: $d('#pd-lunite').value, article_id: art ? art.id : null,
     prix_unitaire: parseFloat($d('#pd-lprix').value) || 0, quantite: parseFloat($d('#pd-lqte').value) || 0, gabarits: gabForm };
-  Calepinage.ouvrir(null, { ligne,
+  ligne.produit_id = produitCourant() ? produitCourant().id : null;
+  ligne.categorie = $d('#pd-lcat').value;
+  const surf = Calepinage.estSurface(ligne) || (gabForm && gabForm.items && gabForm.type !== 'longueur');
+  (surf && !(gabForm && gabForm.type === 'longueur') ? Calepinage.ouvrir : Calepinage.ouvrirLongueur)(null, { ligne,
     onApply: (m, gab) => {
       gabForm = gab;
       $d('#pd-lqte').value = m; $d('#pd-lperte').value = '';
       if ($d('#pd-lunite').value !== 'm' && [...$d('#pd-lunite').options].some(o => o.value === 'm')) $d('#pd-lunite').value = 'm';
-      majGabInfo(); majApercuLigne(); $d('#pd-lqte').focus();
+      majGabInfo(); majBtnGab(); majApercuLigne(); $d('#pd-lqte').focus();
     },
-    onSave: gab => { gabForm = gab; majGabInfo(); } });
+    onSave: gab => { gabForm = gab; majGabInfo(); majBtnGab(); } });
 }
 
 function showFormLigne(id) {
@@ -459,7 +471,7 @@ function showFormLigne(id) {
   curLigne = id || null;
   const l = id ? LIGNES.find(x => String(x.id) === String(id)) : null;
   gabForm = l && l.gabarits ? JSON.parse(JSON.stringify(l.gabarits)) : null;
-  setTimeout(majGabInfo, 0);
+  setTimeout(() => { majGabInfo(); majBtnGab(); }, 0);
   $d('#pd-lform-title').textContent = l ? 'Modifier la ligne' : 'Nouvelle ligne de coût';
   if (window.StockAPI) StockAPI.fillSelect($d('#pd-lart'), l ? l.article_id : '', '— Aucun (prix saisi à la main) —');
   $d('#pd-lcat').value = l ? (CATS_D.some(c => c.k === l.categorie) ? l.categorie : 'Autre outil') : CATS_D[0].k;
@@ -1067,3 +1079,4 @@ $d('#pd-lunite').addEventListener('change', () => { if ($d('#pd-lart').value) ma
 document.addEventListener('mariabag:stock', () => { if (produitCourant()) renderProduits(); });
 document.addEventListener('mariabag:authenticated', loadProduits);
 if (!document.getElementById('app').classList.contains('hide')) loadProduits();
+['#pd-lcat', '#pd-ldes'].forEach(x => { const e = $d(x); if (e) e.addEventListener(x === '#pd-lcat' ? 'change' : 'input', () => { if (!gabForm) majBtnGab(); }); });

@@ -135,3 +135,34 @@ label:has(.pd-qbox){grid-column:1/-1}
   .cp-nm{min-width:130px}
   #cp-total{white-space:nowrap}
 }
+
+/* Gabarits du produit + longueurs */
+.cp-tbl select{width:100%;min-width:120px;padding:7px 8px;border:1px solid var(--line,#ddd);border-radius:7px;font:inherit;background:#fff}
+.cp-nm select{flex:1}
+.cp-tbl input[readonly]{background:var(--nb,#f6f2f3);color:var(--mut)}
+.cp-use{font-size:12.5px;color:var(--mut);max-width:220px}
+.cp-lt td.n small,.cp-tbl .cp-v small{display:block;color:var(--mut);font-size:11.5px}
+.cp-lt tfoot td{background:var(--nb,#f6f2f3);font-weight:600}
+@media (max-width:700px){
+  .cp-gc tr[data-gi]{display:grid;grid-template-columns:1fr 1fr 1fr 52px;gap:8px;padding:10px;border:1px solid var(--line,#e3dde0);border-radius:12px;margin-bottom:10px;background:#fff}
+  .cp-gc,.cp-gc tbody{display:block;min-width:0!important}
+  .cp-gc thead{display:none}
+  .cp-gc tr[data-gi] td{display:block;padding:0;border:0;background:none!important;min-width:0}
+  .cp-gc td[data-cap]::before{content:attr(data-cap);display:block;font-size:11.5px;color:var(--mut);margin-bottom:3px}
+  .cp-gc tr[data-gi] td:first-child{grid-column:1/4}
+  .cp-gc td.cp-del{grid-column:4;grid-row:1;text-align:right}
+  .cp-gc td.cp-use{grid-column:1/-1}
+  .cp-gc input{font-size:16px;width:100%;min-width:0;padding:9px 8px;box-sizing:border-box}
+  .cp-lt tr[data-i]{display:grid;grid-template-columns:1fr 1fr 52px;gap:8px;padding:10px;border:1px solid var(--line,#e3dde0);border-radius:12px;margin-bottom:10px;background:#fff}
+  .cp-lt,.cp-lt tbody,.cp-lt tfoot{display:block;min-width:0!important}
+  .cp-lt thead{display:none}
+  .cp-lt tr[data-i] td{display:block;padding:0;border:0;background:none!important;min-width:0}
+  .cp-lt td[data-cap]::before{content:attr(data-cap);display:block;font-size:11.5px;color:var(--mut);margin-bottom:3px;text-align:left}
+  .cp-lt tr[data-i] td:first-child{grid-column:1/3}
+  .cp-lt td.cp-del{grid-column:3;grid-row:1;text-align:right}
+  .cp-lt td.cp-v{grid-column:1/-1;text-align:left;background:var(--nb,#f6f2f3)!important;border-radius:8px;padding:6px 8px}
+  .cp-lt tfoot tr{display:flex;justify-content:space-between;align-items:center;gap:8px;border-radius:12px;margin-bottom:6px}
+  .cp-lt tfoot td{display:block;border:0;padding:10px}
+  .cp-lt select,.cp-lt input{font-size:16px}
+}
+@media (min-width:701px){ .cp-lt,.cp-gc{width:100%;min-width:0!important} }
