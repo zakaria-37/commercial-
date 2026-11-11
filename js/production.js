@@ -249,7 +249,7 @@ function renderAll(errText) {
     if (!info) { info = document.createElement('span'); info.id = 'pr-sync-info'; info.className = 'pr-sync'; rp.parentNode.insertBefore(info, rp); }
     const lie = has ? produitLie(selModele) : null;
     info.style.display = lie ? '' : 'none';
-    if (lie) info.innerHTML = '🔗 Synchronisé avec le produit « ' + escP(lie.nom) + ' »' + (estPackP(lie) ? ' (pack)' : '') + ' <a href="#" onclick="event.preventDefault();window.selProduitDepuis && selProduitDepuis(\'' + escP(lie.id) + '\')">ouvrir le coût de revient →</a>';
+    if (lie) info.innerHTML = '🔗 <span class="ps-l">Synchronisé avec le produit « ' + escP(lie.nom) + ' »' + (estPackP(lie) ? ' (pack)' : '') + '</span><span class="ps-c">Synchronisé avec Produits' + (estPackP(lie) ? ' (pack)' : '') + '</span> <a href="#" onclick="event.preventDefault();window.selProduitDepuis && selProduitDepuis(\'' + escP(lie.id) + '\')"><span class="ps-l">ouvrir le coût de revient →</span><span class="ps-c">ouvrir →</span></a>';
   }
   if (errText) {
     $p('#pr-empty').innerHTML = '<p style="color:#b00020">⚠ ' + escP(errText) + '</p>';
@@ -280,13 +280,13 @@ function renderComposants() {
   $p('#pr-comp-desc').textContent = m.description || '';
   $p('#pr-comp-desc').style.display = m.description ? '' : 'none';
   $p('#pr-comp-body').innerHTML = list.length ? list.map(c =>
-    '<tr><td><b>' + escP(c.nom) + '</b>' + (isFin(c) ? '<small><span class="pr-fin-tag">Finition extérieure</span></small>' : '') + '</td>' +
-    '<td><span class="pr-unit-tag">' + escP(c.unite) + '</span></td>' +
-    '<td>' + fmtN(c.quantite, 4) + '</td>' +
-    '<td>' + (!isFin(c) && Number(c.perte_pct) ? fmtN(c.perte_pct, 2) + ' %' : '—') + '</td>' +
-    '<td>' + (isFin(c) ? '<b>' + fmtN(Number(c.prix_unitaire) * Number(c.quantite), 2) + ' DA</b><small>payé par pièce</small>' : stockCell(c)) + '</td>' +
-    '<td>' + escP(c.note || '') + '</td>' +
-    '<td class="emp-act"><button class="btn s" type="button" onclick="showFormComposant(\'' + escP(c.id) + '\')">Modifier</button> ' +
+    '<tr class="pc-row" data-cid="' + escP(c.id) + '"><td class="pc-n"><b>' + escP(c.nom) + '</b>' + (isFin(c) ? '<small><span class="pr-fin-tag">Finition extérieure</span></small>' : '') + '</td>' +
+    '<td class="pc-u"><span class="pr-unit-tag">' + escP(c.unite) + '</span></td>' +
+    '<td class="pc-q">' + fmtN(c.quantite, 4) + '</td>' +
+    '<td class="pc-p' + (!isFin(c) && Number(c.perte_pct) ? '' : ' pc-nil') + '">' + (!isFin(c) && Number(c.perte_pct) ? fmtN(c.perte_pct, 2) + ' %' : '—') + '</td>' +
+    '<td class="pc-s">' + (isFin(c) ? '<b>' + fmtN(Number(c.prix_unitaire) * Number(c.quantite), 2) + ' DA</b><small>payé par pièce</small>' : stockCell(c)) + '</td>' +
+    '<td class="pc-o' + (c.note ? '' : ' pc-nil') + '">' + escP(c.note || '') + '</td>' +
+    '<td class="emp-act pc-a"><button class="btn s" type="button" onclick="showFormComposant(\'' + escP(c.id) + '\')">Modifier</button> ' +
     '<button class="btn s d" type="button" onclick="removeComposant(\'' + escP(c.id) + '\')">Supprimer</button></td></tr>'
   ).join('') : '<tr><td colspan="7" class="at-empty">Aucun composant. Cliquez sur « + Ajouter un composant ».</td></tr>';
 }
@@ -334,22 +334,22 @@ function renderBesoins() {
   }).join('') + (fins.length > 1 ? '<tr class="pr-total"><td colspan="3">Total finition extérieure</td><td>' + fmtN(finParPiece, 2) + ' DA</td><td>' + money(finTot) + '</td></tr>' : '');
   $p('#pr-need-body').innerHTML = list.length ? list.map((c, i) => {
     const s = infos[i];
-    let stockTd = '<td><small style="color:var(--mut)">—</small></td><td><small style="color:var(--mut)">—</small></td><td><small style="color:var(--mut)">—</small></td>';
+    let stockTd = '<td class="pn-s pc-nil"><small style="color:var(--mut)">—</small></td><td class="pn-r pc-nil"><small style="color:var(--mut)">—</small></td><td class="pn-c pc-nil"><small style="color:var(--mut)">—</small></td>';
     let sub = '';
     if (s && s.bad) stockTd = '<td colspan="3"><small style="color:var(--r)">Unité « ' + escP(c.unite) + ' » incompatible avec l’article « ' + escP(s.a.nom) + ' » (' + escP(s.a.unite) + ')</small></td>';
     else if (s) {
       const f = StockAPI.fmtQty(s.a, s.stock), r = StockAPI.fmtQty(s.a, Math.abs(s.reste)), n = StockAPI.fmtQty(s.a, s.need);
       if (n.sub && c.unite === s.a.unite) sub = '<small>= ' + n.sub + '</small>';
-      stockTd = '<td><b>' + escP(s.a.nom) + '</b><small>' + f.main + (f.sub ? ' · ' + f.sub : '') + '</small></td>' +
-        '<td>' + (s.manque > 0
+      stockTd = '<td class="pn-s"><b>' + escP(s.a.nom) + '</b><small>' + f.main + (f.sub ? ' · ' + f.sub : '') + '</small></td>' +
+        '<td class="pn-r' + (s.manque > 0 ? ' pn-ko' : ' pn-ok') + '">' + (s.manque > 0
           ? '<b class="st-neg">Manque ' + r.main + '</b><small>' + (s.nb ? 'à acheter : ' + s.nb + ' ' + StockAPI.plur(s.a.cond_nom, s.nb) : 'à acheter') + ' ≈ ' + money(s.achat) + '</small>'
           : '<b class="st-pos">' + r.main + '</b>' + (r.sub ? '<small>' + r.sub + '</small>' : '')) + '</td>' +
-        '<td><b>' + money(s.cout) + '</b><small>' + (s.cout && N ? (s.cout / N).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' DA / pièce' : '') + '</small></td>';
+        '<td class="pn-c"><b>' + money(s.cout) + '</b><small>' + (s.cout && N ? (s.cout / N).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' DA / pièce' : '') + '</small></td>';
     }
-    return '<tr class="pr-need"><td><b>' + escP(c.nom) + '</b>' + (c.note ? '<small>' + escP(c.note) + '</small>' : '') + '</td>' +
-      '<td>' + fmtN(c.quantite, 4) + ' ' + escP(c.unite) + '</td>' +
-      '<td>' + (Number(c.perte_pct) ? fmtN(c.perte_pct, 2) + ' %' : '—') + '</td>' +
-      '<td><b>' + fmtBesoin(c, N) + ' ' + escP(c.unite) + '</b>' + sub + '</td>' + stockTd + '</tr>';
+    return '<tr class="pr-need pn-row' + (s && !s.bad && s.manque > 0 ? ' pn-manque' : '') + '"><td class="pn-n"><b>' + escP(c.nom) + '</b>' + (c.note ? '<small>' + escP(c.note) + '</small>' : '') + '</td>' +
+      '<td class="pn-q">' + fmtN(c.quantite, 4) + ' ' + escP(c.unite) + '</td>' +
+      '<td class="pn-p">' + (Number(c.perte_pct) ? fmtN(c.perte_pct, 2) + ' %' : '—') + '</td>' +
+      '<td class="pn-b"><b>' + fmtBesoin(c, N) + ' ' + escP(c.unite) + '</b>' + sub + '</td>' + stockTd + '</tr>';
   }).join('') : '<tr><td colspan="7" class="at-empty">' + (fins.length ? 'Aucune matière à sortir du dépôt pour ce modèle.' : 'Ajoutez d’abord les composants du modèle.') + '</td></tr>';
   $p('#pr-stock-help').innerHTML = !lies.length && list.length
     ? 'Astuce : reliez chaque composant à un article de l’onglet <b>Stock</b> (bouton « Modifier ») pour voir la disponibilité, le coût estimé et sortir le stock automatiquement.'
