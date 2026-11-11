@@ -32,6 +32,12 @@
     if (wr) { if (!wr.dataset.orig) wr.dataset.orig = wr.textContent;
       wr.textContent = !profil ? wr.dataset.orig : admin ? 'Administrateur' : permises ? (permises.length === 1 && permises[0] === 'sorties' ? 'Magasinier' : permises.map(v => (window.SECTIONS_APP.find(x => x[0] === v) || [, v])[1]).slice(0, 2).join(' · ')) : 'Équipe'; }
     const av = document.querySelector('.who .av'); if (av && profil && profil.nom) av.textContent = profil.nom.trim().charAt(0).toUpperCase();
+    // nom écrit proprement (« OUSSAMA » → « Oussama ») dans l'en-tête et le pied de page
+    const joli = n => String(n || '').trim().toLowerCase().replace(/(^|[\s'-])\S/g, c => c.toUpperCase());
+    const wb = document.querySelector('.who b'); if (wb && profil && profil.nom) wb.textContent = joli(profil.nom);
+    const fn = document.getElementById('footNom'), fr = document.getElementById('footRole');
+    if (fn) fn.textContent = profil && profil.nom ? joli(profil.nom) : (fn.dataset.orig || (fn.dataset.orig = fn.textContent));
+    if (fr && wr) fr.textContent = wr.textContent || 'Commerciale';
     const bm = document.getElementById('bMode'); if (bm) bm.style.display = permises ? 'none' : '';
     // section affichée interdite : on ouvre la première permise
     const cur = document.querySelector('section.on'), v = cur ? cur.id.replace(/^v-/, '') : 'dash';
@@ -64,7 +70,7 @@
     let sal = document.getElementById('mcaSalut');
     if (choix === 'mca') {
       if (!sal) { sal = document.createElement('div'); sal.id = 'mcaSalut'; sal.className = 'mca-salut'; const m = document.querySelector('main'); if (m) m.prepend(sal); }
-      const h = new Date().getHours(), nom = (profil.nom || '').split(' ')[0] || '';
+      const h = new Date().getHours(), nom = ((profil.nom || '').split(' ')[0] || '').toLowerCase().replace(/^\S/, c => c.toUpperCase());
       sal.innerHTML = '<img src="icons/theme/mca.svg" alt=""><div><b>' + (h < 12 ? 'Sbah el khir' : h < 18 ? 'Salam' : 'Masa el khir') + (nom ? ' ' + nom.replace(/[<>&]/g, '') : '') + ' 💚❤️</b><small>DIMA MOULOUDIA · ★ Le Doyen</small></div>';
     } else if (sal) sal.remove();
   }
