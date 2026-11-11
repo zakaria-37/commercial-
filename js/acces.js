@@ -31,6 +31,7 @@
     const wr = document.querySelector('.who small');
     if (wr) { if (!wr.dataset.orig) wr.dataset.orig = wr.textContent;
       wr.textContent = !profil ? wr.dataset.orig : admin ? 'Administrateur' : permises ? (permises.length === 1 && permises[0] === 'sorties' ? 'Magasinier' : permises.map(v => (window.SECTIONS_APP.find(x => x[0] === v) || [, v])[1]).slice(0, 2).join(' · ')) : 'Équipe'; }
+    const av = document.querySelector('.who .av'); if (av && profil && profil.nom) av.textContent = profil.nom.trim().charAt(0).toUpperCase();
     const bm = document.getElementById('bMode'); if (bm) bm.style.display = permises ? 'none' : '';
     // section affichée interdite : on ouvre la première permise
     const cur = document.querySelector('section.on'), v = cur ? cur.id.replace(/^v-/, '') : 'dash';
