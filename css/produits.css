@@ -271,3 +271,54 @@ label:has(.pd-qbox){grid-column:1/-1}
 .cp-chk.av{background:#fff7e6;color:#7a4b00;border:1px solid #f1d9a6}
 .pd-gab-dec,.pd-gab-err{display:block;font-size:11.5px;font-weight:600;margin-top:2px}
 .pd-gab-dec{color:#a15c00}.pd-gab-err{color:#b00020}
+
+/* ============================================================ Section GABARITS */
+.gb-top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:0 0 14px}
+.gb-top label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--mut);min-width:0}
+.gb-top select{min-width:260px;max-width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;font-size:15px;font-weight:600;color:var(--tx)}
+.gb-n{display:flex;gap:6px}
+.gb-n button{width:44px;height:42px;border:1px solid var(--line);background:#fff;border-radius:10px;font-size:22px;cursor:pointer}
+.gb-n input{width:110px;height:42px;text-align:center;font-size:18px;font-weight:700;border:1.5px solid var(--ink,#111);border-radius:10px}
+.gb-card{margin:0 0 14px;padding:16px}
+.gb-ttl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:space-between;margin-bottom:10px}
+.gb-ttl h3{margin:0;font-size:16px}
+.gb-tag{font-size:12px;background:var(--nb);border-radius:999px;padding:4px 10px;color:var(--mut)}
+.gb-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:0 0 14px}
+.gb-kpis>div{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff}
+.gb-kpis>div:first-child{background:#111;color:#fff;border-color:#111}
+.gb-kpis span{display:block;font-size:11.5px;opacity:.75}.gb-kpis b{display:block;font-size:19px;margin:2px 0}.gb-kpis small{font-size:11.5px;opacity:.75}
+.gb-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.gb-item{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff}
+.gb-ih{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.gb-ih b{font-size:14.5px}.gb-ih span{font-size:12px;color:var(--mut)}
+.gb-row{width:100%;height:auto;display:block;margin:4px 0 10px}
+.gb-c{font:11px "Segoe UI",system-ui,sans-serif;fill:#555}.gb-k{fill:#c0392b}
+.gb-pl{font:600 12px "Segoe UI",system-ui,sans-serif;fill:#222}
+.gb-det{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.gb-det>div{background:var(--nb);border-radius:10px;padding:7px 9px}
+.gb-det span{display:block;font-size:11px;color:var(--mut)}.gb-det b{display:block;font-size:15px}.gb-det small{display:block;font-size:11px;color:var(--mut)}
+.gb-h4{margin:16px 0 6px;font-size:14px}
+.gb-plan{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px;padding:22px 8px 6px;background:#fff}
+.gb-plan svg{display:block}
+.gb-help{font-size:12.5px;color:var(--mut);margin:8px 0 0}
+.gb-lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.gb-lb{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:#fff}
+.gb-lb b{display:block;font-size:14px}.gb-lb small{font-size:11.5px;color:var(--mut)}
+.gb-lt{display:flex;flex-direction:column;gap:6px}
+.gb-lr{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px}
+.gb-lr i{display:block;height:12px;border-radius:6px}
+.gb-lr b{white-space:nowrap}
+.gb-lt-tot{border-top:1px dashed var(--line);padding-top:6px;font-weight:700}
+@media (max-width:700px){
+  #v-gabarits .hello p{display:none}
+  .gb-top{display:grid;grid-template-columns:1fr;gap:10px}
+  .gb-top select{min-width:0;width:100%;font-size:16px}
+  .gb-n input{flex:1}
+  .gb-top #gb-edit{min-height:44px}
+  .gb-list{grid-template-columns:1fr}
+  .gb-card{padding:12px}
+  .gb-lr{grid-template-columns:1fr auto;}
+  .gb-lr i{grid-column:1/-1;grid-row:2}
+}
+body.theme-sombre .gb-item,body.theme-sombre .gb-plan,body.theme-sombre .gb-lb,body.theme-sombre .gb-kpis>div:not(:first-child),body.theme-sombre .gb-n button{background:var(--card)!important;color:var(--tx)}
+body.theme-sombre .gb-c{fill:#aab}

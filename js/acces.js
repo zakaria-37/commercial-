@@ -7,7 +7,7 @@
 (function () {
   'use strict';
   window.SECTIONS_APP = [
-    ['dash', 'Tableau de bord'], ['commerce', 'Commerce'], ['stock', 'Stock'], ['production', 'Production'], ['produits', 'Produits'],
+    ['dash', 'Tableau de bord'], ['commerce', 'Commerce'], ['stock', 'Stock'], ['production', 'Production'], ['produits', 'Produits'], ['gabarits', 'Gabarits'],
     ['sorties', 'Bons de sortie'], ['ateliers', 'Ateliers'], ['employes', 'Employés'], ['list', 'Contacts'], ['charges', 'Charges'],
     ['inventaire', 'Inventaire'], ['notes', 'Notes']
   ];
