@@ -11,7 +11,7 @@
   'use strict';
   const KEY = 'mariabag_onglets';
   const $ = s => document.querySelector(s);
-  const navBtn = v => document.querySelector('nav button[data-v="' + v + '"]');
+  const navBtn = v => document.querySelector('nav button[data-v="' + v + '"]:not(.nav-off)');      // section permise à ce compte
   const nom = v => { const b = navBtn(v); return b ? b.textContent.trim() : v; };
   let T = { ouverts: ['dash'], actif: 'dash' }, maj = new Set(), interne = false;
   const defil = {};      // position de défilement de chaque onglet
@@ -38,7 +38,7 @@
       bar.addEventListener('auxclick', e => { const t = e.target.closest('[data-tab]'); if (e.button === 1 && t && t.dataset.tab !== 'dash') { e.preventDefault(); fermer(t.dataset.tab); } });
     }
     T.ouverts = T.ouverts.filter(v => navBtn(v));
-    if (!T.ouverts.includes('dash')) T.ouverts.unshift('dash');
+    if (!T.ouverts.includes('dash') && navBtn('dash')) T.ouverts.unshift('dash');
     const html = T.ouverts.map(v => '<button type="button" role="tab" class="tb' + (v === T.actif ? ' on' : '') + '" data-tab="' + v + '" title="' + nom(v) + '">' +
       '<span class="tb-n">' + nom(v) + '</span>' + (maj.has(v) && v !== T.actif ? '<i class="tb-maj" title="Données mises à jour">●</i>' : '') +
       (v === 'dash' ? '' : '<span class="tb-x" data-tclose="' + v + '" title="Fermer l’onglet">×</span>') + '</button>').join('');
@@ -97,6 +97,7 @@
   // au démarrage (après connexion) : onglets gardés, on réaffiche le dernier actif
   function demarrer() { rendre(); if (T.actif && T.actif !== 'dash' && navBtn(T.actif)) setTimeout(() => activer(T.actif), 300); }
   document.addEventListener('mariabag:authenticated', demarrer);
+  document.addEventListener('mariabag:profil', () => setTimeout(() => { if (!navBtn(T.actif)) { T.actif = T.ouverts.find(v => navBtn(v)) || 'dash'; garder(); } rendre(); }, 50));
   if (document.getElementById('app') && !document.getElementById('app').classList.contains('hide')) demarrer(); else rendre();
 
   window.Onglets = { ouvrir: activer, fermer };

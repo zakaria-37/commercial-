@@ -425,6 +425,7 @@
   let mode = 'simple';
   try { mode = localStorage.getItem('mariabag_mode') || 'simple'; } catch (e) {}
   function appliquerMode() {
+    if (window.ACCES_LIMITE) return;          // compte limité à certaines sections : géré par acces.js
     const simple = mode === 'simple';
     document.body.classList.toggle('mode-simple', simple);
     // sur smartphone, Production et Produits sont toujours deux sections séparées dans le menu du bas
@@ -435,6 +436,7 @@
     const lk = $('#sp-modelink'); if (lk) lk.textContent = simple ? 'afficher tous les onglets (mode complet)' : 'revenir au mode simple';
   }
   try { window.matchMedia('(max-width:700px)').addEventListener('change', () => appliquerMode()); } catch (e) {}
+  window.appliquerModeSimple = () => appliquerMode();
   function basculerMode() { mode = mode === 'simple' ? 'complet' : 'simple'; try { localStorage.setItem('mariabag_mode', mode); } catch (e) {} appliquerMode(); }
 
   /* ---------- Listes de départ ---------- */

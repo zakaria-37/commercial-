@@ -54,10 +54,24 @@
     let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Équipe et sécurité</h2><p>Qui peut entrer dans la plateforme, avec quel rôle, et l’historique de toutes les modifications.</p></div></div>';
     if (att.length) h += '<div class="card" style="border-color:#d9892b"><h2 style="margin-top:0">Comptes à approuver (' + att.length + ')</h2><div class="tw"><table class="iv-tbl"><tbody>' +
       att.map(p => '<tr><td><b>' + esc(p.nom || p.email) + '</b><small>' + esc(p.email) + ' · créé le ' + dt(p.created_at) + '</small></td><td class="n"><button class="btn s p" type="button" data-eqrole="equipe" data-id="' + esc(p.id) + '">Approuver (équipe)</button> <button class="btn s d" type="button" data-eqrole="desactive" data-id="' + esc(p.id) + '">Refuser</button></td></tr>').join('') + '</tbody></table></div></div>';
-    h += '<div class="card"' + (att.length ? ' style="margin-top:12px"' : '') + '><h2 style="margin-top:0">Utilisateurs</h2><div class="tw"><table class="iv-tbl"><thead><tr><th>Utilisateur</th><th>Rôle</th><th class="iv-opt">Dernière connexion</th></tr></thead><tbody>' +
+    // ---- Créer un compte (identifiant + mot de passe) avec ses sections ----
+    const SEC = window.SECTIONS_APP || [];
+    const PRESETS = [['Production + Produits', ['production', 'produits']], ['Magasinier (bons de sortie)', ['sorties']], ['Commerce + Stock', ['commerce', 'stock', 'list']], ['Tout', SEC.map(x => x[0])]];
+    h += '<div class="card"' + (att.length ? ' style="margin-top:12px"' : '') + '><h2 style="margin-top:0">Créer un compte</h2>' +
+      '<form id="eq-new" class="eq-new"><div class="at-fields"><label>Nom affiché *<input id="eq-nnom" required maxlength="60" placeholder="Ex : Oussama"></label>' +
+      '<label>Identifiant de connexion *<input id="eq-nid" required maxlength="40" autocapitalize="none" spellcheck="false" placeholder="Ex : oussama"></label>' +
+      '<label>Mot de passe * (6 caractères min.)<input id="eq-nmdp" required minlength="6" maxlength="60" autocomplete="new-password" placeholder="Ex : Mb-oussama-26"></label>' +
+      '<label>Rôle<select id="eq-nrole"><option value="equipe">Équipe (sections choisies)</option><option value="admin">Administrateur (tout)</option></select></label></div>' +
+      '<div class="eq-sec"><span>Sections accessibles :</span>' + PRESETS.map((x, i) => '<button type="button" class="btn s" data-preset="' + i + '">' + x[0] + '</button>').join('') + '</div>' +
+      '<div class="eq-chk" id="eq-nsec">' + SEC.map(x => '<label><input type="checkbox" value="' + x[0] + '"> ' + x[1] + '</label>').join('') + '</div>' +
+      '<div class="at-actions"><button class="btn p" type="submit">Créer le compte</button><span id="eq-nmsg" class="eq-msg"></span></div></form>' +
+      '<p class="iv-help">La personne se connecte avec son <b>identifiant</b> (ex. <b>oussama</b>) et ce mot de passe, sans adresse e-mail. Elle ne voit que les sections cochées ; toutes les données restent synchronisées avec le reste de la plateforme.</p></div>';
+    h += '<div class="card" style="margin-top:12px"><h2 style="margin-top:0">Utilisateurs</h2><div class="tw"><table class="iv-tbl"><thead><tr><th>Utilisateur</th><th>Rôle</th><th class="iv-opt">Dernière connexion</th></tr></thead><tbody>' +
       PROF.filter(p => p.role !== 'en_attente').map(p => '<tr><td><b>' + esc(p.nom || p.email) + '</b>' + (p.id === me ? ' <span class="iv-bdg ok">vous</span>' : '') + '<small>' + esc(p.email) + '</small></td><td><select data-eqsel="' + esc(p.id) + '"' + (p.id === me ? ' disabled title="Vous ne pouvez pas modifier votre propre rôle"' : '') + '>' +
-        ['admin', 'equipe', 'desactive'].map(r => '<option value="' + r + '"' + (p.role === r ? ' selected' : '') + '>' + ROLES[r] + '</option>').join('') + '</select></td><td class="iv-opt">' + dt(p.derniere_connexion) + '</td></tr>').join('') + '</tbody></table></div>' +
-      '<p class="iv-help"><b>Administrateur</b> : tout, plus la gestion de l’équipe et le journal. <b>Équipe</b> : travail quotidien (contacts, stock, production, paiements, inventaire…). <b>Désactivé</b> : plus aucun accès.</p></div>';
+        ['admin', 'equipe', 'desactive'].map(r => '<option value="' + r + '"' + (p.role === r ? ' selected' : '') + '>' + ROLES[r] + '</option>').join('') + '</select>' +
+        (p.role === 'equipe' ? '<div class="eq-chk eq-chk-s" data-eqsec="' + esc(p.id) + '">' + SEC.map(x => '<label><input type="checkbox" value="' + x[0] + '"' + (!p.sections || !p.sections.length || p.sections.includes(x[0]) ? ' checked' : '') + '> ' + x[1] + '</label>').join('') + '</div>' : '') +
+        (p.id !== me ? '<button type="button" class="btn s" data-eqmdp="' + esc(p.id) + '">Changer le mot de passe</button>' : '') + '</td><td class="iv-opt">' + dt(p.derniere_connexion) + '</td></tr>').join('') + '</tbody></table></div>' +
+      '<p class="iv-help"><b>Administrateur</b> : tout, plus la gestion de l’équipe et le journal. <b>Équipe</b> : seulement les sections cochées (modifiable à tout moment, effet à la prochaine ouverture de la plateforme). <b>Désactivé</b> : plus aucun accès.</p></div>';
     h += '<div class="card" style="margin-top:12px"><h2 style="margin-top:0">Inviter une personne</h2><form id="eq-inv" class="iv-bar"><label>Adresse e-mail<input id="eq-iem" type="email" required placeholder="prenom@exemple.com"></label><label>Rôle<select id="eq-irole"><option value="equipe">Équipe</option><option value="admin">Administrateur</option></select></label><button class="btn p" type="submit">Inviter</button></form>' +
       '<p class="iv-help">La personne crée son compte sur l’écran de connexion (« Créer un compte ») avec <b>cette adresse e-mail</b> : son accès est alors accordé directement. Sans invitation, un nouveau compte reste « en attente » jusqu’à votre approbation.</p>' +
       (INVS.length ? '<div class="tw"><table class="iv-tbl"><tbody>' + INVS.map(i => '<tr><td>' + esc(i.email) + '<small>invitation en attente</small></td><td>' + ROLES[i.role] + '</td><td class="n"><button class="btn s d" type="button" data-eqdel="' + esc(i.email) + '">Retirer</button></td></tr>').join('') + '</tbody></table></div>' : '') + '</div>';
@@ -73,6 +87,16 @@
   document.addEventListener('click', async e => {
     const root = $('#eq-root'); if (!root || !root.contains(e.target)) return;
     const r = remote(); if (!r) return;
+    const pr = e.target.closest('[data-preset]');
+    if (pr) { const PRE = [['production', 'produits'], ['sorties'], ['commerce', 'stock', 'list'], (window.SECTIONS_APP || []).map(x => x[0])][+pr.dataset.preset] || [];
+      root.querySelectorAll('#eq-nsec input').forEach(i => { i.checked = PRE.includes(i.value); }); return; }
+    const md = e.target.closest('[data-eqmdp]');
+    if (md) {
+      const p = PROF.find(x => x.id === md.dataset.eqmdp), mdp = prompt('Nouveau mot de passe pour ' + (p ? p.nom || p.email : 'ce compte') + ' (6 caractères minimum) :');
+      if (!mdp) return; if (mdp.length < 6) { say('Mot de passe trop court.'); return; }
+      const x = await fonctionComptes({ action: 'mot_de_passe', id: md.dataset.eqmdp, mot_de_passe: mdp });
+      say(x.error ? 'Erreur : ' + x.error : 'Mot de passe changé.'); return;
+    }
     const b = e.target.closest('[data-eqrole]');
     if (b) { const x = await r.from('profils').update({ role: b.dataset.eqrole }).eq('id', b.dataset.id); if (x.error) say('Erreur : ' + x.error.message); else say(b.dataset.eqrole === 'equipe' ? 'Compte approuvé.' : 'Compte refusé.'); await load(); return; }
     const d = e.target.closest('[data-eqdel]');
@@ -103,6 +127,36 @@
   });
 
   /* Le bouton « Équipe » du menu n'apparaît que pour l'administrateur */
+  /* appel de la fonction serveur « comptes » (création de compte, mot de passe) avec la session de l'administrateur */
+  async function fonctionComptes(corps) {
+    const r = remote(); if (!r) return { error: 'Hors ligne.' };
+    const { data } = await r.auth.getSession(); const jwt = data && data.session && data.session.access_token;
+    if (!jwt) return { error: 'Connectez-vous avec votre compte administrateur (pas le mot de passe provisoire).' };
+    try {
+      const res = await fetch(SUPABASE_URL + '/functions/v1/comptes', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + jwt, apikey: SUPABASE_ANON_KEY }, body: JSON.stringify(corps) });
+      const j = await res.json().catch(() => ({})); return res.ok ? j : { error: j.error || ('Erreur ' + res.status) };
+    } catch (x) { return { error: 'Connexion impossible : ' + (x.message || x) }; }
+  }
+  document.addEventListener('submit', async e => {
+    if (e.target.id !== 'eq-new') return; e.preventDefault();
+    const $f = q => e.target.querySelector(q), msg = $f('#eq-nmsg'), btn = $f('button[type=submit]');
+    const role = $f('#eq-nrole').value, sections = [...e.target.querySelectorAll('#eq-nsec input:checked')].map(i => i.value);
+    if (role !== 'admin' && !sections.length) { msg.textContent = 'Cochez au moins une section.'; return; }
+    btn.disabled = true; msg.textContent = 'Création…';
+    const x = await fonctionComptes({ action: 'creer', nom: $f('#eq-nnom').value.trim(), identifiant: $f('#eq-nid').value.trim(), mot_de_passe: $f('#eq-nmdp').value, role, sections });
+    btn.disabled = false;
+    if (x.error) { msg.textContent = '⚠ ' + x.error; return; }
+    say('Compte créé : identifiant « ' + $f('#eq-nid').value.trim() + ' ».'); await load();
+  });
+  document.addEventListener('change', async e => {
+    const box = e.target.closest && e.target.closest('[data-eqsec]'); if (!box) return;
+    const r = remote(); if (!r) return;
+    const sections = [...box.querySelectorAll('input:checked')].map(i => i.value);
+    if (!sections.length) { say('Gardez au moins une section.'); e.target.checked = true; return; }
+    const x = await r.from('profils').update({ sections }).eq('id', box.dataset.eqsec);
+    say(x.error ? 'Erreur : ' + x.error.message : 'Sections mises à jour (effet à la prochaine ouverture de la plateforme par cette personne).');
+    const p = PROF.find(y => y.id === box.dataset.eqsec); if (p) p.sections = sections;
+  });
   document.addEventListener('mariabag:profil', ev => { const b = $('#navEquipe'); if (b) b.hidden = !(ev.detail && ev.detail.role === 'admin'); });
   window.loadEquipe = load;
 })();

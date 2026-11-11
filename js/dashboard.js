@@ -119,7 +119,11 @@
     const rup = stockOk() ? StockAPI.list().filter(a => StockAPI.enAlerte(a) && StockAPI.etat(a).rank <= 1).length : 0;
     const rdvAuj = RDV.filter(r => r.date_rdv === today).length;
     const imp = ventes ? ventes.impayeN : 0;
+    const BS = window.BonsSortie ? BonsSortie.liste() : [];
+    const bsAf = BS.filter(b => b.statut === 'a_preparer').length, bsVal = BS.filter(b => b.statut === 'valide' && String(b.valide_le || '').slice(0, 10) === today).length;
     const items = [
+      [bsAf, bsAf + ' bon' + (bsAf > 1 ? 's' : '') + ' de sortie à préparer au dépôt', 'sorties'],
+      [bsVal, bsVal + ' bon' + (bsVal > 1 ? 's' : '') + ' de sortie validé' + (bsVal > 1 ? 's' : '') + ' aujourd’hui', 'sorties', 'i'],
       [late, late + ' relance' + (late > 1 ? 's' : '') + ' en retard', 'rel'],
       [rdvAuj, rdvAuj + ' rendez-vous aujourd’hui', 'notes', 'i'],
       [prodLate, prodLate + ' production' + (prodLate > 1 ? 's' : '') + ' en retard', 'prod'],
@@ -520,6 +524,7 @@
         if (k === 'prod') return goAtelier('productions-pane');
         if (k === 'cmd') return goAtelier('suivi-pane');
         if (k === 'charges') return go('charges');
+        if (k === 'sorties') return go('sorties');
         if (k === 'pointage') return go('employes');
         if (k === 'produits') return go('produits');
         if (k === 'stock') return go('stock');
@@ -537,6 +542,7 @@
     if (window.LocalDB) LocalDB.onChange(render);
     document.addEventListener('mariabag:authenticated', render);
     document.addEventListener('mariabag:charges', render);
+    document.addEventListener('mariabag:sorties', () => { if ($q('#v-dash').classList.contains('on')) renderPulse(); });
     document.addEventListener('mariabag:pf', () => { if ($q('#v-dash').classList.contains('on')) { renderApercu(); renderPF(); } });
     // Le stock a changé : rendu léger (sans recharger le stock, pour ne pas boucler)
     document.addEventListener('mariabag:stock', () => { if ($q('#v-dash').classList.contains('on')) { renderApercu(); renderProduits(); renderStock(); } });

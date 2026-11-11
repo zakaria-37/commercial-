@@ -317,3 +317,48 @@ form, .card, .at-form, section > div[id] { scroll-margin-top: calc(var(--hdr-h, 
 main section.on{animation:secIn .24s cubic-bezier(.2,.7,.3,1) backwards}
 @keyframes secIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){main section.on{animation:none}}
+nav button.nav-off{display:none!important}
+
+/* ---------- Bons de sortie (magasinier) ---------- */
+nav button[data-v="sorties"]{position:relative}
+nav button.bs-has::after{content:attr(data-badge);position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#c0392b;color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center;box-sizing:border-box}
+.bs-tabs{margin:0 0 12px}
+.bs-card{background:#fff;border:1px solid var(--line,#e6e0e3);border-radius:16px;padding:14px;margin:0 0 12px;box-shadow:0 1px 2px rgba(20,10,15,.04),0 6px 18px rgba(20,10,15,.05)}
+.bs-card.bs-done{opacity:.92}
+.bs-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.bs-head b{display:block;font-size:17px}
+.bs-head span{display:block;font-size:14px;color:var(--ink,#222);margin-top:2px}
+.bs-prog{font-style:normal;font-weight:700;font-size:15px;background:#fff4e0;color:#8a5a00;border-radius:999px;padding:4px 12px;white-space:nowrap}
+.bs-ok{font-style:normal;font-weight:700;font-size:13px;background:#e6f6ea;color:#17632a;border-radius:999px;padding:4px 12px;white-space:nowrap}
+.bs-meta{font-size:12.5px;color:var(--mut);margin:6px 0 8px}
+.bs-bar{height:6px;border-radius:3px;background:#f1ecee;overflow:hidden;margin-bottom:10px}
+.bs-bar i{display:block;height:100%;background:linear-gradient(90deg,#3aa35c,#55c27a);transition:width .3s ease}
+.bs-lignes{display:flex;flex-direction:column;gap:6px}
+.bs-l{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;text-align:left;border:1.5px solid var(--line,#e6e0e3);background:#fff;border-radius:12px;padding:10px 12px;font:inherit;cursor:pointer;min-height:56px;transition:background .15s,border-color .15s,transform .1s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.bs-l:active:not([disabled]){transform:scale(.985)}
+.bs-l .bs-cb{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;border:2px solid #c9bfc3;font-style:normal;font-weight:800;color:#fff;font-size:17px;transition:background .15s,border-color .15s}
+.bs-l.on{background:#effaf2;border-color:#9fd9b0}
+.bs-l.on .bs-cb{background:#2f9e55;border-color:#2f9e55}
+.bs-l.on .bs-n{text-decoration:line-through;text-decoration-color:rgba(0,0,0,.25)}
+.bs-n{font-weight:600;font-size:14.5px;min-width:0}
+.bs-n small{display:block;font-weight:400;font-size:12px;color:#a15c00;text-decoration:none}
+.bs-q{font-size:14px;white-space:nowrap;text-align:right}
+.bs-l[disabled]{cursor:default}
+.bs-act{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.bs-act .bs-valider{width:100%;min-height:52px;font-size:15.5px;border-radius:12px}
+.bs-act .btn.d{align-self:flex-end}
+.bs-valide{margin-top:12px;padding:10px 12px;border-radius:12px;background:#f3faf5;color:#17632a;font-size:13.5px}
+.bs-valide p{margin:6px 0 0;color:var(--ink,#222);font-style:italic}
+.bs-valide small{display:block;color:var(--mut);margin-top:4px}
+.bs-vide{text-align:center;padding:26px;color:var(--mut)}
+.pr-bs{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;font-size:13px;padding:8px 10px;border-radius:10px;margin-bottom:6px;background:#faf7f8;border-left:4px solid #e0a63b}
+.pr-bs.ok{border-left-color:#3aa35c}
+.pr-bs span{color:var(--mut);font-size:12.5px}
+body[data-role="equipe"] #pr-btn-direct{display:none}
+@media (max-width:700px){ #v-sorties .bs-hello p{display:none} .bs-card{padding:12px} }
+/* ---------- Équipe : création de comptes ---------- */
+.eq-sec{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0 6px;font-size:13px;color:var(--mut)}
+.eq-chk{display:flex;flex-wrap:wrap;gap:6px 14px;margin:4px 0 8px}
+.eq-chk label{display:flex;gap:5px;align-items:center;font-size:13.5px;cursor:pointer}
+.eq-chk-s{margin-top:8px}.eq-chk-s label{font-size:12.5px}
+.eq-msg{font-size:13px;color:#b00020;align-self:center}

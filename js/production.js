@@ -364,8 +364,8 @@ function renderBesoins() {
   }).join('') : '<tr><td colspan="7" class="at-empty">' + (fins.length ? 'Aucune matière à sortir du dépôt pour ce modèle.' : 'Ajoutez d’abord les composants du modèle.') + '</td></tr>';
   $p('#pr-stock-help').innerHTML = !lies.length && list.length
     ? 'Astuce : reliez chaque composant à un article de l’onglet <b>Stock</b> (bouton « Modifier ») pour voir la disponibilité, le coût estimé et sortir le stock automatiquement.'
-    : (lies.length ? '« Valider la sortie de stock » retire du stock les ' + lies.length + ' composant(s) liés, sous le n° de bon ci-dessus.' : '');
-  $p('#pr-btn-sortie').disabled = !lies.length;
+    : (list.length ? '« Envoyer au magasinier » crée le bon de sortie : le magasinier coche chaque élément pris au dépôt puis valide ; le stock des ' + lies.length + ' élément(s) liés est sorti à ce moment-là.' : '');
+  $p('#pr-btn-sortie').disabled = !list.length; renderSuiviBons();
 }
 
 /* ---------- Modèles ---------- */
@@ -574,6 +574,45 @@ async function validerSortieStock() {
   // numéro de bon suivant, pour ne pas valider deux fois le même
   $p('#pr-bon').value = ref.replace(/(\d+)$/, n => String(parseInt(n, 10) + 1).padStart(n.length, '0'));
 }
+
+/* ---------- Bon de sortie envoyé au MAGASINIER (section « Bons de sortie ») ----------
+   Le stock n'est sorti qu'au moment où le magasinier valide le bon (tous les éléments cochés). */
+async function envoyerAuMagasinier() {
+  const b = verifierBon(); if (!b) return;
+  if (!window.BonsSortie) { toastP('Module « Bons de sortie » non chargé.'); return; }
+  if (window.StockAPI) { try { await StockAPI.load(); } catch (e) {} }
+  const lignes = [], exclus = [];
+  b.list.forEach(c => {
+    const s = stockInfo(c, b.N);
+    if (s && s.bad) { exclus.push(c.nom + ' (unité incompatible)'); return; }
+    if (s) {
+      const f = StockAPI.fmtQty(s.a, s.need);
+      lignes.push({ nom: s.a.nom, article_id: s.a.id, qte: Math.round(s.need * 10000) / 10000, unite: s.a.unite, txt: f.main + (f.sub ? ' (' + f.sub + ')' : ''), note: s.manque > 0 ? '⚠ stock insuffisant : manque ' + StockAPI.fmtQty(s.a, s.manque).main : '', coche: false });
+    } else {
+      const q = besoin(c, b.N);
+      lignes.push({ nom: c.nom, article_id: null, qte: Math.round(q * 10000) / 10000, unite: c.unite, txt: fmtBesoin(c, b.N) + ' ' + c.unite, note: 'non lié au stock', coche: false });
+    }
+  });
+  if (!lignes.length) { toastP('Aucun élément à sortir du dépôt pour ce modèle.'); return; }
+  const ref = b.num || ('BM-' + b.date.replace(/-/g, ''));
+  const deja = (window.BonsSortie.liste() || []).find(x => x.numero === ref && x.statut !== 'annule');
+  if (deja && !confirm('Un bon « ' + ref + ' » existe déjà (' + (deja.statut === 'valide' ? 'validé' : 'à préparer') + '). En créer un autre avec le même numéro ?')) return;
+  if (!confirm('Envoyer le bon ' + ref + ' au magasinier ?\n\n' + fmtN(b.N, 0) + ' × ' + b.m.nom + (b.atelier ? ' → ' + b.atelier : '') + '\n' + lignes.map(l => '• ' + l.nom + ' : ' + l.txt).join('\n') +
+    (exclus.length ? '\n\nNon inclus : ' + exclus.join(', ') : '') + '\n\nLe stock sera sorti quand le magasinier validera le bon.')) return;
+  const r = await BonsSortie.creer({ numero: ref, date_bon: b.date || new Date().toISOString().slice(0, 10), modele_id: b.m.id, modele_nom: b.m.nom, quantite: b.N, atelier: b.atelier || '', chef: b.chef || '', lignes });
+  if (r.error) { toastP('Erreur : ' + (r.error.message || r.error)); return; }
+  toastP('📦 Bon ' + ref + ' envoyé au magasinier (section « Bons de sortie »).');
+  $p('#pr-bon').value = ref.replace(/(\d+)$/, n => String(parseInt(n, 10) + 1).padStart(n.length, '0'));
+  if (typeof renderSuiviBons === 'function') renderSuiviBons();
+}
+/* Suivi des bons envoyés, sous le bouton */
+function renderSuiviBons() {
+  const box = $p('#pr-bons-suivi'); if (!box || !window.BonsSortie) return;
+  const L = BonsSortie.liste().filter(x => x.statut !== 'annule').slice(0, 6);
+  box.innerHTML = L.length ? '<h3 style="margin:14px 0 6px;font-size:14px">Derniers bons de sortie</h3>' + L.map(x => '<div class="pr-bs ' + (x.statut === 'valide' ? 'ok' : 'wait') + '"><b>' + escP(x.numero) + '</b> · ' + escP(x.modele_nom) + ' × ' + fmtN(x.quantite, 0) +
+    '<span>' + (x.statut === 'valide' ? '✔ validé par ' + escP(x.valide_par || '?') + (x.message ? ' : « ' + escP(x.message) + ' »' : '') : '⏳ en préparation au dépôt (' + (x.lignes || []).filter(l => l.coche).length + ' / ' + (x.lignes || []).length + ')') + '</span></div>').join('') : '';
+}
+document.addEventListener('mariabag:sorties', renderSuiviBons);
 
 /* ---------- Bon de sortie : impression ---------- */
 function bonInfos() {

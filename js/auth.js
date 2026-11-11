@@ -61,6 +61,13 @@
     return { ok: false, inconnu: true };
   }
 
+  /* « oussama » → compte créé par l'administrateur (oussama@mariabag.app) ; une adresse e-mail reste telle quelle */
+  function identifiant(v) {
+    v = String(v || '').trim().toLowerCase();
+    if (!v || v.includes('@')) return v;
+    return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9._-]/g, '') + '@mariabag.app';
+  }
+  const versProfil = p => ({ id: p.id, email: p.email, nom: p.nom || '', role: p.role, sections: Array.isArray(p.sections) && p.sections.length ? p.sections : null });
   /* Lit le profil (rôle) du compte connecté ; null si introuvable */
   async function lireProfil(user){
     const r = remote(); if (!r) return null;
@@ -75,7 +82,7 @@
     if (!p) { await remote().auth.signOut(); showLogin('Ce compte n’est pas enregistré. Contactez l’administrateur.'); return false; }
     if (p.role === 'en_attente') { await remote().auth.signOut(); uncache(); showLogin('Votre compte est créé. Il doit être approuvé par l’administrateur avant l’accès.'); return false; }
     if (p.role === 'desactive') { await remote().auth.signOut(); uncache(); showLogin('Ce compte est désactivé.'); return false; }
-    const pr = { id: p.id, email: p.email, nom: p.nom || '', role: p.role }; cache(pr);
+    const pr = versProfil(p); cache(pr);
     try { remote().rpc('touch_login'); } catch (e) {}
     showApp(pr); return true;
   }
@@ -222,7 +229,7 @@
         const { data } = await r.auth.getSession(); if (data.session) await entrer(data.session.user); else setMode('login');
         return;
       }
-      const em = $l('lem').value.trim();
+      const em = identifiant($l('lem').value);
       if (mode === 'signup') {
         if (val.length < 8) { err.textContent = 'Mot de passe trop court (8 caractères minimum).'; return; }
         const s = await r.auth.signUp({ email: em, password: val, options: { data: { nom: $l('lnom').value.trim() } } });
@@ -247,8 +254,8 @@
       const p = await lireProfil(x.data.user);
       if (p === 'reseau') { await entrer(x.data.user); return; }
       if (!p || p.role === 'en_attente' || p.role === 'desactive') { await entrer(x.data.user); return; }
-      reussi({ id: p.id, email: p.email, nom: p.nom || '', role: p.role }); cache({ id: p.id, email: p.email, nom: p.nom || '', role: p.role });
-      memoriser(em, val, { id: p.id, email: p.email, nom: p.nom || '', role: p.role });
+      reussi(versProfil(p)); cache(versProfil(p));
+      memoriser(em, val, versProfil(p));
       try { r.rpc('touch_login'); } catch (e2) {}
     } finally { btn.disabled = false; }
   });
