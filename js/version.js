@@ -13,6 +13,13 @@
     let s = document.getElementById('appver');
     if (!s) { s = document.createElement('small'); s.id = 'appver'; s.style.cssText = 'display:block;color:#9a9a9a;font-size:11px;margin-top:6px;cursor:pointer'; s.title = 'Cliquez pour vérifier et charger la dernière version'; f.appendChild(s); s.addEventListener('click', () => majMaintenant()); }
     s.textContent = 'Version ' + court(chargee) + (location.protocol === 'app:' ? ' · logiciel PC' : ' · actualiser');
+    // tout le monde peut reprendre exactement les données de la base (comme l'administrateur)
+    let rs = document.getElementById('appresync');
+    if (!rs) { rs = document.createElement('small'); rs.id = 'appresync'; rs.style.cssText = 'display:block;color:#9a9a9a;font-size:11px;margin-top:4px;cursor:pointer;text-decoration:underline'; rs.textContent = '🔄 Resynchroniser toutes mes données';
+      rs.title = 'Reprend exactement les données de la base commune (celles de l’administrateur) sur cet appareil';
+      rs.addEventListener('click', async () => { if (!window.LocalDB || !LocalDB.resync) return; rs.textContent = 'Resynchronisation…'; const r = await LocalDB.resync();
+        rs.textContent = '🔄 Resynchroniser toutes mes données'; if (typeof toast === 'function') toast(r.ok ? 'Toutes les données sont à jour avec la base commune.' + (r.attente ? ' (' + r.attente + ' changement(s) de cet appareil encore à envoyer)' : '') : 'Pas d’internet : réessayez quand la connexion revient.'); });
+      f.appendChild(rs); }
   }
   async function majMaintenant() {
     try { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); } catch (e) {}

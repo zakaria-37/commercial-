@@ -432,7 +432,9 @@
   }
 
   // Récupère toutes les données de Supabase (les autres appareils)
-  async function pull(first) {
+  /* force = resynchronisation complète : la copie de l'appareil devient exactement celle de la base
+     (seuls les changements de cet appareil pas encore envoyés sont gardés) */
+  async function pull(first, force) {
     if (!remote || pulling || !navigator.onLine) return false;
     if (!(await allowed())) return false;
     pulling = true; status();
@@ -468,7 +470,7 @@
         // PROTECTION : si la base en ligne renvoie beaucoup moins de lignes que ce PC (incident, projet restauré vide,
         // accès refusé…), on n'efface RIEN ici. Seules quelques suppressions faites sur un autre appareil sont reprises.
         var absents = []; M.forEach(function (row, id) { if (!seen[id] && !pending[id]) absents.push(id); });
-        if (absents.length && ((!all.length) || (absents.length > 5 && absents.length > M.size * 0.3))) {
+        if (!force && absents.length && ((!all.length) || (absents.length > 5 && absents.length > M.size * 0.3))) {
           protege.push(t + ' (' + absents.length + ')');
         } else absents.forEach(function (id) { M.delete(id); dels.push([t, id]); changedAny = true; });
         if (puts.length || dels.length) await persist(puts, dels);
@@ -481,6 +483,28 @@
     } finally { pulling = false; status(); }
   }
 
+  /* L'administrateur peut demander à TOUS les appareils de se resynchroniser complètement
+     (paramètre « resync » : date de la demande). Chaque appareil le fait une fois par demande. */
+  var RESYNC_KEY = 'mariabag_resync_fait';
+  async function resyncDemandee() {
+    var p = null; mem('parametres').forEach(function (r) { if (r.cle === 'resync') p = r; });
+    var dem = p && p.valeur && p.valeur.le ? String(p.valeur.le) : '';
+    var fait = ''; try { fait = localStorage.getItem(RESYNC_KEY) || ''; } catch (e) {}
+    if (!dem || dem <= fait) return false;
+    await flush();
+    await pull(false, true);
+    try { localStorage.setItem(RESYNC_KEY, dem); } catch (e) {}
+    say('Données resynchronisées avec la base de l’administrateur.');
+    refreshScreens();
+    return true;
+  }
+  async function resyncComplete() {
+    if (!remote || !navigator.onLine) return { ok: false, raison: 'hors ligne' };
+    await ready; await flush();
+    await pull(false, true);
+    refreshScreens(); status();
+    return { ok: true, attente: OUTBOX.length };
+  }
   var syncing = null;
   var SYNC_OFF_KEY = 'mariabag_sync_suspendue';
   function syncOff() { try { return localStorage.getItem(SYNC_OFF_KEY) === '1'; } catch (e) { return false; } }
@@ -492,6 +516,7 @@
         await ready;
         await flush();
         if (withPull && !OUTBOX.length) await pull(false);
+        await resyncDemandee();
       } catch (e) { console.error(e); }
       finally { syncing = null; status(); }
     })();
@@ -589,6 +614,9 @@
     ready: ready,
     tables: TABLES,
     sync: function () { return sync(true); },
+    resync: function () { return resyncComplete(); },
+    // nombre de lignes par table sur cet appareil (pour comparer avec la base)
+    compter: function () { return ready.then(function () { var c = {}; TABLES.forEach(function (t) { c[t] = mem(t).size; }); return c; }); },
     syncSuspendue: syncOff,
     suspendreSync: function (oui) { try { localStorage.setItem(SYNC_OFF_KEY, oui ? '1' : '0'); } catch (e) {} status(); if (!oui) return sync(true); },
     status: status,

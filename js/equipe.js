@@ -77,6 +77,9 @@
     h += '<div class="card" style="margin-top:12px"><h2 style="margin-top:0">Inviter une personne</h2><form id="eq-inv" class="iv-bar"><label>Adresse e-mail<input id="eq-iem" type="email" required placeholder="prenom@exemple.com"></label><label>Rôle<select id="eq-irole"><option value="equipe">Équipe</option><option value="admin">Administrateur</option></select></label><button class="btn p" type="submit">Inviter</button></form>' +
       '<p class="iv-help">La personne crée son compte sur l’écran de connexion (« Créer un compte ») avec <b>cette adresse e-mail</b> : son accès est alors accordé directement. Sans invitation, un nouveau compte reste « en attente » jusqu’à votre approbation.</p>' +
       (INVS.length ? '<div class="tw"><table class="iv-tbl"><tbody>' + INVS.map(i => '<tr><td>' + esc(i.email) + '<small>invitation en attente</small></td><td>' + ROLES[i.role] + '</td><td class="n"><button class="btn s d" type="button" data-eqdel="' + esc(i.email) + '">Retirer</button></td></tr>').join('') + '</tbody></table></div>' : '') + '</div>';
+    h += '<div class="card" style="margin-top:12px"><h2 style="margin-top:0">Synchronisation des appareils</h2>' +
+      '<p class="iv-help">Tous les comptes travaillent sur <b>la même base</b>. Si un appareil (Oussama, Hamza, Azedine…) affiche des données différentes des vôtres, demandez une <b>resynchronisation complète</b> : chaque appareil reprend exactement les données de la base à sa prochaine ouverture (ses changements pas encore envoyés sont gardés).</p>' +
+      '<div class="at-actions"><button type="button" class="btn p" id="eq-resync">🔄 Resynchroniser tous les appareils</button><button type="button" class="btn" id="eq-verif">Comparer cet appareil avec la base</button></div><div id="eq-verif-res"></div></div>';
     const users = [...new Set(JOUR.map(j => j.email).filter(Boolean))];
     const lst = JOUR.filter(j => (!filtreT || j.table_name === filtreT) && (!filtreU || j.email === filtreU));
     h += '<div class="card" style="margin-top:12px"><h2 style="margin-top:0">Journal des modifications</h2><div class="iv-bar"><label>Section <select id="eq-ft"><option value="">Toutes</option>' + Object.keys(TABLES).map(t => '<option value="' + t + '"' + (filtreT === t ? ' selected' : '') + '>' + TABLES[t] + '</option>').join('') + '</select></label>' +
@@ -89,6 +92,22 @@
   document.addEventListener('click', async e => {
     const root = $('#eq-root'); if (!root || !root.contains(e.target)) return;
     const r = remote(); if (!r) return;
+    if (e.target.id === 'eq-resync') {
+      if (!confirm('Demander à tous les appareils de reprendre exactement les données de la base ?')) return;
+      const le = new Date().toISOString();
+      const x = await sb.from('parametres').upsert([{ cle: 'resync', valeur: { le, par: (window.APP_USER && window.APP_USER.nom) || 'Administrateur' } }], { onConflict: 'cle' });
+      if (x.error) { say('Erreur : ' + x.error.message); return; }
+      await LocalDB.resync(); try { localStorage.setItem('mariabag_resync_fait', le); } catch (z) {}
+      say('Demande envoyée : chaque appareil se resynchronise à sa prochaine ouverture (ou dans la minute s’il est ouvert).'); return;
+    }
+    if (e.target.id === 'eq-verif') {
+      const box = root.querySelector('#eq-verif-res'); box.innerHTML = '<p class="iv-help">Comparaison…</p>';
+      const loc = await LocalDB.compter(), lignes = [];
+      for (const t of LocalDB.tables) { const q = await r.from(t).select('id', { count: 'exact', head: true }); if (q.error) continue; if ((q.count || 0) !== loc[t]) lignes.push([t, loc[t], q.count || 0]); }
+      box.innerHTML = lignes.length ? '<div class="tw"><table class="iv-tbl"><thead><tr><th>Données</th><th>Cet appareil</th><th>Base</th></tr></thead><tbody>' + lignes.map(l => '<tr><td>' + esc(TABLES[l[0]] || l[0]) + '</td><td>' + l[1] + '</td><td>' + l[2] + '</td></tr>').join('') + '</tbody></table></div><p class="iv-help">Différences trouvées : cliquez sur « Resynchroniser tous les appareils ».</p>'
+        : '<p class="iv-help" style="color:#17632a">✔ Cet appareil est identique à la base (' + LocalDB.tables.length + ' tables).</p>';
+      return;
+    }
     const pr = e.target.closest('[data-preset]');
     if (pr) { const PRE = [['production', 'produits', 'gabarits'], ['sorties'], ['commerce', 'stock', 'list'], (window.SECTIONS_APP || []).map(x => x[0])][+pr.dataset.preset] || [];
       root.querySelectorAll('#eq-nsec input').forEach(i => { i.checked = PRE.includes(i.value); }); return; }
