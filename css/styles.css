@@ -363,3 +363,18 @@ body[data-role="equipe"] #pr-btn-direct{display:none}
 .eq-chk-s{margin-top:8px}.eq-chk-s label{font-size:12.5px}
 .eq-msg{font-size:13px;color:#b00020;align-self:center}
 .eq-th{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;margin-top:6px}.eq-th select{padding:3px 6px}
+/* Équipe sur téléphone : rôle, sections, thème et mot de passe lisibles (plus de texte lettre par lettre) */
+@media (max-width:700px){
+  #eq-root table.m-cards td:has(select[data-eqsel]){display:block!important;text-align:left!important}
+  #eq-root table.m-cards td:has(select[data-eqsel])::before{display:block;max-width:none;margin-bottom:6px}
+  #eq-root td select[data-eqsel],#eq-root .eq-th select{width:100%;min-height:42px;font-size:16px}
+  #eq-root .eq-chk{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin:10px 0}
+  #eq-root .eq-chk label{display:flex;align-items:center;gap:8px;font-size:14px;white-space:normal;word-break:normal;min-height:36px;padding:6px 8px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  #eq-root .eq-chk input{width:20px;height:20px;flex:none;margin:0}
+  #eq-root .eq-th{display:flex;flex-direction:column;align-items:stretch;gap:4px;width:100%;margin:6px 0 8px;font-size:13px}
+  #eq-root td [data-eqmdp]{width:100%;min-height:42px}
+  #eq-root .eq-sec{gap:6px}
+  #eq-root .eq-sec .btn{flex:1 1 45%;min-height:40px}
+  #eq-root .eq-new .at-fields{grid-template-columns:1fr!important}
+  #eq-root .iv-bar{flex-direction:column;align-items:stretch}
+}
