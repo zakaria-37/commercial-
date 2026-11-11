@@ -45,13 +45,18 @@
   }
 
   /* ---------- Calculs ---------- */
+  /* largeur du rouleau en cm (1,40 saisi en mètres → 140 cm) */
+  const laizeCm = v => { const x = num(v); return x > 0 && x <= 5 ? x * 100 : x; };
   function calculer(cfg, p) {
-    const W = num(cfg.laize) || 140, marge = Math.max(0, num(cfg.marge)), H = LONG;
+    const W = laizeCm(cfg.laize) || 140, marge = Math.max(0, num(cfg.marge)), H = LONG;
     const L = lib(p);
-    const items = (cfg.items || []).map((g, t) => {
+    const tous = (cfg.items || []).map((g, t) => {
       const ref = g.ref ? L.find(x => x.id === g.ref) : null;
-      return { ...g, t, nom: ref ? ref.nom : g.nom, l: num(ref ? ref.l : g.l), h: num(ref ? ref.h : g.h), n: Math.max(0, num(g.n)) };
-    }).filter(g => g.l > 0 && g.h > 0 && g.n > 0);
+      return { ...g, t, perdu: !!g.ref && !ref, nom: ref ? ref.nom : g.nom, l: num(ref ? ref.l : g.l), h: num(ref ? ref.h : g.h), n: Math.max(0, num(g.n)) };
+    });
+    const perdus = tous.filter(g => g.perdu);
+    const items = tous.filter(g => !g.perdu && g.l > 0 && g.h > 0 && g.n > 0);
+    if (perdus.length) return { lignes: [], W, marge, H, erreur: 'Gabarit supprimé des gabarits du produit : choisissez-en un autre ou retirez la ligne (' + perdus.length + ').' };
     if (!items.length) return null;
     const lignes = items.map(g => {
       const court = Math.min(g.l, g.h) + marge, long = Math.max(g.l, g.h) + marge;      // grand côté dans le sens du 1 m
@@ -66,13 +71,58 @@
     const L = lib(p);
     const termes = (cfg.termes || []).map((x, t) => { const g = L.find(y => y.id === x.ref); return { ...x, t, g, cm: g ? mesure(g, x.mesure) * num(x.n) : 0 }; });
     const somme = termes.reduce((s, x) => s + x.cm, 0), cm = somme + num(cfg.ajout);
-    return { termes, somme, cm, m: cm / 100, manque: termes.filter(x => x.ref && !x.g).length };
+    return { termes, somme, cm, m: cm / 100, manque: termes.filter(x => !x.g).length };
   }
   const resultatDe = (gab, p) => {
     if (!gab) return null;
-    if (gab.type === 'longueur') { const r = calculerLongueur(gab, p); return r.cm > 0 ? r.m : null; }
-    const r = calculer(gab, p); return r && !r.erreur ? r.total : null;
+    if (gab.type === 'longueur') { const r = calculerLongueur(gab, p); return r.cm > 0 && !r.manque ? r.m : null; }
+    const r = calculer(gab, p); return r && !r.erreur && r.total > 0 ? r.total : null;
   };
+
+  /* Contrôles avant d'appliquer : erreurs (bloquent) et avertissements (à vérifier) */
+  function controler(cfg, p, type) {
+    const err = [], av = [], L = lib(p);
+    if (type === 'longueur') {
+      const r = calculerLongueur(cfg, p);
+      if (r.manque) err.push(r.manque + ' mesure(s) sans gabarit (gabarit supprimé) : choisissez un gabarit ou retirez la ligne.');
+      if (!(r.cm > 0)) err.push('La longueur totale doit être supérieure à 0.');
+      if ((cfg.termes || []).some(x => num(x.n) < 0)) av.push('Un nombre négatif retire une longueur : vérifiez que c’est voulu.');
+      if (r.cm > 2000) av.push('Plus de 20 m pour un seul produit : vérifiez les mesures (en cm) et les nombres.');
+      if (Math.abs(num(cfg.ajout)) > Math.max(30, r.somme * 0.5)) av.push('L’ajout / retrait (' + nf(cfg.ajout, 1) + ' cm) est grand par rapport à la somme des mesures (' + nf(r.somme, 1) + ' cm).');
+      return { err, av };
+    }
+    const lz = num(cfg.laize);
+    if (lz > 0 && lz <= 5) av.push('Largeur du rouleau lue en mètres : ' + nf(lz, 2) + ' m = ' + nf(lz * 100, 0) + ' cm.');
+    if (laizeCm(lz) > 330) av.push('Largeur du rouleau de ' + nf(laizeCm(lz), 0) + ' cm : vérifiez (en cm, ex. 140).');
+    if (num(cfg.marge) > 5) av.push('Espace entre pièces de ' + nf(cfg.marge, 1) + ' cm : c’est beaucoup (souvent 0 à 1 cm).');
+    const vus = {};
+    (cfg.items || []).forEach(g => {
+      const ref = g.ref ? L.find(x => x.id === g.ref) : null, nom = ref ? ref.nom : g.nom || 'Gabarit';
+      if (g.ref && !ref) return;
+      const l = num(ref ? ref.l : g.l), h = num(ref ? ref.h : g.h);
+      if ((l > 0) !== (h > 0)) err.push('« ' + nom + ' » : indiquez la largeur ET la hauteur.');
+      if (l > 250 || h > 250) av.push('« ' + nom + ' » mesure plus de 2,5 m : les mesures sont-elles bien en cm ?');
+      if ((l > 0 && l < 1) || (h > 0 && h < 1)) av.push('« ' + nom + ' » mesure moins de 1 cm : les mesures sont-elles bien en cm ?');
+      if (l > 0 && h > 0 && !(num(g.n) > 0)) av.push('« ' + nom + ' » : nombre par produit à 0, il n’est pas compté.');
+      if (num(g.n) % 1) av.push('« ' + nom + ' » : nombre par produit à virgule (' + nf(g.n, 2) + ').');
+      const k = g.ref || (nom + l + 'x' + h); if (vus[k]) av.push('« ' + nom + ' » apparaît deux fois : il est compté deux fois.'); vus[k] = 1;
+    });
+    const r = calculer(cfg, p);
+    if (r && r.erreur) err.push(r.erreur);
+    if (!r) err.push('Indiquez au moins un gabarit (largeur, hauteur, nombre par produit).');
+    return { err, av };
+  }
+  const boiteControle = c => (c.err.length ? '<div class="cp-chk ko">' + c.err.map(x => '<div>⛔ ' + esc(x) + '</div>').join('') + '</div>' : '') +
+    (c.av.length ? '<div class="cp-chk av">' + c.av.map(x => '<div>⚠ ' + esc(x) + '</div>').join('') + '</div>' : '');
+
+  /* État d'une ligne calculée avec les gabarits : à jour, décalée (gabarit modifié) ou en erreur */
+  function etatLigne(l, p) {
+    const g = l && l.gabarits; if (!g || !g.resultat) return null;
+    const m = resultatDe(g, p || produitDe(l.produit_id));
+    if (m == null) return { k: 'err', t: 'calcul impossible (gabarit supprimé ou mesure manquante)' };
+    if (Math.abs(r4(m) - Number(l.quantite || 0)) >= 0.00005) return { k: 'dec', m: r4(m), t: 'gabarits modifiés : ' + nf(m, 4) + ' m au lieu de ' + nf(l.quantite, 4) + ' m' };
+    return { k: 'ok' };
+  }
 
   /* Recalcule les lignes du produit calculées avec ses gabarits (après modification d'un gabarit) */
   async function recalculerProduit(p) {
@@ -134,7 +184,9 @@
     const art = window.StockAPI && l.article_id ? StockAPI.byId(l.article_id) : null;
     const g0 = l.gabarits && typeof l.gabarits === 'object' && l.gabarits.type !== 'longueur' ? l.gabarits : {};
     let L = lib(p).slice();
-    const cfg = { laize: g0.laize || 140, marge: g0.marge ?? 0,
+    // largeur du rouleau : celle déjà utilisée pour ce tissu sur une autre ligne, sinon 140 cm
+    const laizeConnue = !g0.laize && l.article_id ? ((typeof LIGNES !== 'undefined' ? LIGNES : []).find(x => String(x.article_id) === String(l.article_id) && x.gabarits && x.gabarits.laize) || {}).gabarits : null;
+    const cfg = { laize: g0.laize || (laizeConnue && laizeConnue.laize) || 140, marge: g0.marge ?? (laizeConnue ? laizeConnue.marge || 0 : 0),
       items: (g0.items && g0.items.length ? g0.items : (L.length ? L.map(g => ({ ref: g.id, n: 1 })) : [{ nom: 'Face', l: '', h: '', n: 1 }])).map(x => ({ ...x })) };
     const prixM = () => typeof prixLigne === 'function' ? prixLigne(l) : Number(l.prix_unitaire) || 0;
     const bg = document.createElement('div'); bg.className = 'cp-bg'; document.body.appendChild(bg);
@@ -174,18 +226,19 @@
       bg.querySelectorAll('#cp-g tr[data-i]').forEach(tr => {
         const x = res && res.lignes.find(y => y.g.t === +tr.dataset.i);
         tr.querySelector('.cp-pc').innerHTML = x ? (x.pieces ? '<b>' + nf(x.pieces, 2) + '</b><small>(' + nf(res.W, 2) + ' ÷ ' + nf(x.court, 2) + ') × (100 ÷ ' + nf(x.long, 2) + ')</small>' : '<span class="cp-err">trop grand</span>') : '—';
-        tr.querySelector('.cp-m').innerHTML = x && x.metres ? '<b>' + nf(x.metres, 4) + ' m</b><small>' + nf(x.g.n, 2) + ' ÷ ' + nf(x.pieces, 2) + '</small>' : '—';
+        tr.querySelector('.cp-m').innerHTML = x && x.metres ? '<b>' + nf(x.metres, 4) + ' m</b><small>' + nf(x.g.n, 2) + ' ÷ ' + nf(x.pieces, 2) + (pm ? ' · ' + nf(x.metres * pm, 2) + ' DA' : '') + '</small>' : '—';
       });
+      const ctl = controler(cfg, { gabarits: { items: L } }, 'surface');
       const tot = bg.querySelector('#cp-total'), out = bg.querySelector('#cp-res'), plans = bg.querySelector('#cp-plans');
-      if (!res || res.erreur) {
+      if (!res || res.erreur || ctl.err.length) {
         tot.textContent = '—';
-        out.innerHTML = res && res.erreur ? '<p class="cp-err">⚠ ' + esc(res.erreur) + '</p>' : '<p class="cp-help">Indiquez au moins un gabarit (largeur, hauteur, nombre par produit).</p>';
+        out.innerHTML = boiteControle(ctl);
       } else {
         tot.innerHTML = '<b>' + nf(res.total, 4) + ' m</b>';
         const rl = art && window.StockAPI && StockAPI.aCond(art) ? StockAPI.condQte(art) : 0;
-        out.innerHTML = '<div class="cp-res"><div><span>Tissu pour 1 produit</span><b>' + nf(res.total, 4) + ' m</b><small>' + nf(res.total * 100, 1) + ' cm de rouleau' + (pm ? ' · ' + nf(res.total * pm, 2) + ' DA' : '') + '</small></div>' +
+        out.innerHTML = boiteControle(ctl) + '<div class="cp-res"><div><span>Tissu pour 1 produit</span><b>' + nf(res.total, 4) + ' m</b><small>' + nf(res.total * 100, 1) + ' cm de rouleau' + (pm ? ' · ' + nf(res.total * pm, 2) + ' DA' : '') + '</small></div>' +
           (rl ? '<div><span>1 ' + esc(art.cond_nom) + ' du stock (' + nf(rl, 2) + ' m)</span><b>' + nf(rl / res.total, 2) + ' produits</b><small>avec ce tissu</small></div>' : '') +
-          '<div><span>1 mètre de tissu</span><b>' + nf(1 / res.total, 2) + ' produits</b><small>' + nf(cfg.laize / 100, 2) + ' m × 1 m</small></div></div>' +
+          '<div><span>1 mètre de tissu</span><b>' + nf(1 / res.total, 2) + ' produits</b><small>' + nf(res.W / 100, 2) + ' m × 1 m</small></div></div>' +
           '<div class="at-actions"><button type="button" class="btn p" id="cp-apply">Appliquer au coût : ' + nf(res.total, 4) + ' m par produit</button><button type="button" class="btn" id="cp-save">Enregistrer sans appliquer</button></div>' +
           '<p class="cp-help">Les gabarits saisis ici sont gardés dans le produit : les autres lignes (doublure, fermeture, tafta, liseré…) peuvent les réutiliser.</p>';
       }
@@ -205,9 +258,9 @@
         });
         try { L = await sauverLib(p, items); } catch (e) { alert('Gabarits non enregistrés dans le produit : ' + (e.message || e)); }
       }
-      const r = calculer(cfg, { gabarits: { items: L } });
-      if (appliquer && (!r || r.erreur)) { alert(r && r.erreur || 'Calcul impossible.'); return; }
-      const gab = { laize: cfg.laize, marge: cfg.marge, items: cfg.items.filter(g => g.ref || num(g.l) > 0).map(g => g.ref ? { ref: g.ref, n: Math.max(0, num(g.n)) } : { nom: g.nom || '', l: num(g.l), h: num(g.h), n: Math.max(0, num(g.n)) }) };
+      const r = calculer(cfg, { gabarits: { items: L } }), ctl = controler(cfg, { gabarits: { items: L } }, 'surface');
+      if (appliquer && (!r || r.erreur || ctl.err.length)) { alert(ctl.err.join('\n') || (r && r.erreur) || 'Calcul impossible.'); return; }
+      const gab = { laize: laizeCm(cfg.laize) || 140, marge: cfg.marge, items: cfg.items.filter(g => g.ref || num(g.l) > 0).map(g => g.ref ? { ref: g.ref, n: Math.max(0, num(g.n)) } : { nom: g.nom || '', l: num(g.l), h: num(g.h), n: Math.max(0, num(g.n)) }) };
       await terminer(ctx, gab, r ? r.total : 0, appliquer, bg);
     }
 
@@ -264,16 +317,17 @@
     let res = null;
     function calc() {
       lire(); res = calculerLongueur(cfg, p);
-      bg.querySelectorAll('#cp-t tr[data-i]').forEach(tr => { const x = res.termes[+tr.dataset.i]; tr.querySelector('.cp-v').innerHTML = x && x.g ? '<b>' + nf(x.cm, 2) + ' cm</b><small>' + nf(mesure(x.g, x.mesure), 2) + ' × ' + nf(x.n, 2) + '</small>' : '—'; });
+      bg.querySelectorAll('#cp-t tr[data-i]').forEach(tr => { const x = res.termes[+tr.dataset.i]; tr.querySelector('.cp-v').innerHTML = x && x.g ? '<b>' + nf(x.cm, 2) + ' cm</b><small>' + nf(mesure(x.g, x.mesure), 2) + ' × ' + nf(x.n, 2) + (prix ? ' · ' + nf(x.cm / 100 * prix, 2) + ' DA' : '') + '</small>' : '<span class="cp-err">gabarit supprimé</span>'; });
       bg.querySelector('#cp-total').innerHTML = '<b>' + nf(res.cm, 2) + ' cm = ' + nf(res.m, 4) + ' m</b>';
-      bg.querySelector('#cp-res').innerHTML = res.cm > 0
+      const ctl = controler(cfg, p, 'longueur');
+      bg.querySelector('#cp-res').innerHTML = boiteControle(ctl) + (!ctl.err.length
         ? '<div class="cp-res"><div><span>Pour 1 produit</span><b>' + nf(res.m, 4) + ' m</b><small>' + nf(res.cm, 1) + ' cm' + (prix ? ' · ' + nf(res.m * prix, 2) + ' DA' : '') + '</small></div></div>' +
           '<div class="at-actions"><button type="button" class="btn p" id="cp-apply">Appliquer au coût : ' + nf(res.m, 4) + ' m par produit</button><button type="button" class="btn" id="cp-save">Enregistrer sans appliquer</button></div>'
-        : '<p class="cp-err">La longueur doit être supérieure à 0.</p>';
+        : '');
     }
     async function enregistrer(appliquer) {
-      lire(); const r = calculerLongueur(cfg, p);
-      if (appliquer && !(r.cm > 0)) { alert('Longueur nulle.'); return; }
+      lire(); const r = calculerLongueur(cfg, p), ctl = controler(cfg, p, 'longueur');
+      if (appliquer && ctl.err.length) { alert(ctl.err.join('\n')); return; }
       const gab = { type: 'longueur', ajout: num(cfg.ajout), termes: cfg.termes.filter(x => x.ref).map(x => ({ ref: x.ref, mesure: x.mesure || 'p', n: num(x.n) })) };
       await terminer(ctx, gab, r.m, appliquer, bg);
     }
@@ -351,7 +405,20 @@
     });
   }
 
-  window.Calepinage = { calculer, calculerLongueur, maxPieces: null, ouvrir, ouvrirLongueur, carte, recalculerProduit, estSurface };
+  /* Vérification automatique à l'affichage d'un produit : les lignes décalées (gabarit modifié ailleurs,
+     sur un autre appareil…) sont recalculées ; une seule fois par produit et par état des gabarits. */
+  const vus = {};
+  async function verifierProduit(p) {
+    if (!p) return 0;
+    const lignes = (typeof LIGNES !== 'undefined' ? LIGNES : []).filter(l => String(l.produit_id) === String(p.id) && l.gabarits && l.gabarits.resultat);
+    const cle = JSON.stringify([lib(p), lignes.map(l => [l.id, l.quantite])]);
+    if (vus[p.id] === cle) return 0; vus[p.id] = cle;
+    if (!lignes.some(l => { const e = etatLigne(l, p); return e && e.k === 'dec'; })) return 0;
+    const n = await recalculerProduit(p);
+    if (n) { if (typeof renderProduits === 'function') renderProduits(); if (typeof window.syncProduction === 'function') window.syncProduction(); if (typeof toastD === 'function') toastD(n + ' ligne(s) recalculée(s) avec les gabarits à jour.'); }
+    return n;
+  }
+  window.Calepinage = { calculer, calculerLongueur, maxPieces: null, ouvrir, ouvrirLongueur, carte, recalculerProduit, estSurface, etatLigne, verifierProduit, controler };
   window.ouvrirCalepinage = ouvrir;
   window.ouvrirLongueurGab = ouvrirLongueur;
 })();

@@ -241,7 +241,7 @@ function renderProduits(errText) {
   }
   $d('#pd-desc').textContent = p.description || '';
   $d('#pd-desc').style.display = p.description ? '' : 'none';
-  if (window.Calepinage) Calepinage.carte(p);
+  if (window.Calepinage) { Calepinage.carte(p); setTimeout(() => Calepinage.verifierProduit(p), 0); }
   renderLignes();
   renderMoForm(p);
   renderCout();
@@ -256,6 +256,7 @@ function renderLignes() {
   $d('#pd-lignes-body').innerHTML = sorted.length ? sorted.map(l =>
     '<tr class="pl-row" data-lid="' + escD(l.id) + '" data-pack="' + (l.sous_produit_id ? 1 : '') + '"><td class="pl-c"><span class="pd-cat pd-cat-' + ordre(l.categorie) + '">' + escD(catLbl(l.categorie)) + '</span></td>' +
     '<td class="pl-n"><b>' + escD(nomLigne(l)) + '</b>' + (l.note ? '<small class="pd-note">' + escD(l.note) + '</small>' : '') +
+      (window.Calepinage && l.gabarits && l.gabarits.resultat ? (e => e && e.k !== 'ok' ? '<small class="pd-gab-' + e.k + '">' + (e.k === 'err' ? '⛔ ' : '↻ ') + escD(e.t) + '</small>' : '')(Calepinage.etatLigne(l, p)) : '') +
       (l.gabarits && l.gabarits.resultat ? '<small class="pd-note">' + (l.gabarits.type === 'longueur' ? '📏 longueur calculée avec ' + (l.gabarits.termes || []).length + ' mesure(s) de gabarits' : '📐 métrage : ' + (l.gabarits.items || []).length + ' gabarit(s), laize ' + escD(l.gabarits.laize) + ' cm') + '</small>' : '') + '</td>' +
     '<td class="pl-q">' + numD(l.quantite, 4) + ' ' + escD(l.unite) + '</td>' +
     '<td class="pl-p">' + numD(prixLigne(l), 2) + ' DA / ' + escD(l.unite) + (articleLigne(l) ? '<small class="pd-note">✔ Synchronisé avec le Stock</small>' : l.sous_produit_id ? '<small class="pd-note">coût de revient du produit</small>' : '') + '</td>' +
@@ -600,7 +601,11 @@ async function saveLigne() {
     else { art = cr.article; cree = true; }
   }
   const payload = { categorie, designation: art ? art.nom : designation, unite, quantite, prix_unitaire: Math.round(prix * 10000) / 10000, perte_pct: perte, note, article_id: art ? art.id : null };
-  if (gabForm) payload.gabarits = gabForm;
+  if (gabForm) {
+    payload.gabarits = gabForm;
+    // quantité changée à la main après le calcul : elle n'est plus recalculée automatiquement
+    if (gabForm.resultat && Math.abs(Number(gabForm.resultat.m_piece) - quantite) >= 0.00005) { payload.gabarits = Object.assign({}, gabForm); delete payload.gabarits.resultat; toastD('Quantité saisie à la main : elle ne sera plus recalculée avec les gabarits.'); }
+  }
   let res;
   if (curLigne) res = await sb.from('produit_lignes').update(payload).eq('id', curLigne).select();
   else {
