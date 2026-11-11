@@ -54,27 +54,6 @@
     const b = e.target.closest && e.target.closest('nav button[data-v]');
     if (b && permises && !permises.includes(b.dataset.v) && b.dataset.v !== 'equipe') { e.preventDefault(); e.stopImmediatePropagation(); ouvrir(permises[0]); }
   }, true);
-  /* ---------- Thème personnel du compte (ex. « Mouloudia » pour Oussama) ----------
-     Le thème est choisi par l'administrateur (Équipe) ; la personne peut revenir au thème classique
-     avec le bouton 🎨 (choix gardé sur son appareil). */
-  const THEMES = { mca: 'Mouloudia' };
-  function theme(profil) {
-    const id = profil && profil.id, base = profil && THEMES[profil.theme] ? profil.theme : '';
-    let choix = base; try { const x = localStorage.getItem('mariabag_theme_' + id); if (x !== null && base) choix = x; } catch (e) {}
-    Object.keys(THEMES).forEach(k => document.body.classList.toggle('theme-' + k, choix === k));
-    // bouton 🎨 dans l'en-tête (seulement pour un compte qui a un thème)
-    let bt = document.getElementById('bTheme');
-    if (base && !bt) { bt = document.createElement('button'); bt.id = 'bTheme'; bt.type = 'button'; bt.className = 'btn'; const lo = document.getElementById('bLogout'); if (lo) lo.before(bt); }
-    if (bt) { bt.style.display = base ? '' : 'none'; bt.textContent = choix ? '🎨 Thème classique' : '🎨 Thème ' + (THEMES[base] || ''); bt.onclick = () => { try { localStorage.setItem('mariabag_theme_' + id, choix ? '' : base); } catch (e) {} theme(profil); }; }
-    // mot de bienvenue en haut des sections
-    let sal = document.getElementById('mcaSalut');
-    if (choix === 'mca') {
-      if (!sal) { sal = document.createElement('div'); sal.id = 'mcaSalut'; sal.className = 'mca-salut'; const m = document.querySelector('main'); if (m) m.prepend(sal); }
-      const h = new Date().getHours(), nom = ((profil.nom || '').split(' ')[0] || '').toLowerCase().replace(/^\S/, c => c.toUpperCase());
-      sal.innerHTML = '<img src="icons/theme/mca.svg" alt=""><div><b>' + (h < 12 ? 'Sbah el khir' : h < 18 ? 'Salam' : 'Masa el khir') + (nom ? ' ' + nom.replace(/[<>&]/g, '') : '') + ' 💚❤️</b><small>DIMA MOULOUDIA · ★ Le Doyen</small></div>';
-    } else if (sal) sal.remove();
-  }
-  document.addEventListener('mariabag:profil', ev => theme(ev.detail || null));
   document.addEventListener('mariabag:profil', ev => appliquer(ev.detail || null));
   appliquer(window.APP_USER || null);
 })();

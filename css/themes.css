@@ -1,0 +1,146 @@
+/* ============================================================
+   THÈMES PAR UTILISATEUR — commun + Sombre, Homme, Femme, Nature, Islamique
+   (le thème Mouloudia est dans theme_mca.css)
+   ============================================================ */
+/* ----- menu 🎨 ----- */
+#themeMenu{position:fixed;z-index:10050;min-width:230px;background:#fff;color:#1f2430;border:1px solid #e4e2e2;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.22);padding:8px;display:flex;flex-direction:column;gap:2px;animation:thIn .14s ease}
+#themeMenu b{font-size:12px;color:#6b7385;padding:4px 8px 6px;text-transform:uppercase;letter-spacing:.06em}
+#themeMenu button{display:flex;align-items:center;gap:10px;border:0;background:none;padding:10px;border-radius:10px;font:600 14px inherit;font-family:inherit;color:inherit;cursor:pointer;text-align:left;min-height:44px}
+#themeMenu button:hover,#themeMenu button.on{background:#f3f1f2}
+#themeMenu button i{width:22px;height:22px;border-radius:50%;flex:none;border:1px solid rgba(0,0,0,.15)}
+#themeMenu small{font-size:11.5px;color:#6b7385;padding:4px 10px}
+@keyframes thIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+/* ----- bandeau d'accueil ----- */
+.th-salut{display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:10px 14px;border-radius:14px}
+.th-salut b{display:block;font-size:15px}.th-salut small{display:block;font-size:12px;opacity:.85}
+.th-salut .th-ico{font-size:26px;line-height:1;flex:none}
+@media print{.th-salut,#themeMenu{display:none!important}}
+/* ----- en-tête compact sur téléphone (bouton 🎨 pour tous) ----- */
+@media (max-width:700px){
+  header{flex-wrap:wrap;align-items:center}
+  header .logo{flex:0 0 100%}
+  .who{margin-left:0;flex:1 1 auto;min-width:0;max-width:52%}
+  .who b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #bTheme{font-size:0!important;padding:0!important;width:40px;height:38px;flex:none;display:inline-flex;align-items:center;justify-content:center}
+  #bTheme::before{content:"🎨";font-size:18px}
+  header #bLogout{flex:none;margin-left:0!important}
+  .th-salut{padding:8px 12px;margin-bottom:10px}
+}
+
+/* ============================================================ SOMBRE */
+body.theme-sombre{--bg:#0f1115;--card:#181b22;--line:#2a2f3a;--tx:#e6e8ee;--mut:#9aa3b5;--g:#34c27a;--gb:#123224;--o:#f0a640;--ob:#33270f;--r:#ff6b5e;--rb:#3a1c19;--n:#b7b2b4;--nb:#222630;--brass:#3b82f6;color-scheme:dark;background:var(--bg);color:var(--tx)}
+body.theme-sombre header{background:#0a0b0e;border-bottom-color:#3b82f6}
+body.theme-sombre nav button.on{background:#1b2230;box-shadow:inset 0 -2px 0 #3b82f6}
+body.theme-sombre .card,body.theme-sombre .at-stat,body.theme-sombre .at-form,body.theme-sombre .hello,body.theme-sombre .bs-card,body.theme-sombre .bs-l,body.theme-sombre .cp-box,body.theme-sombre .cm-nv,
+body.theme-sombre .kpi,body.theme-sombre .dw.card,body.theme-sombre table.m-cards tr,body.theme-sombre #pr-steps,body.theme-sombre #pd-steps,body.theme-sombre .ch-list,body.theme-sombre #themeMenu,
+body.theme-sombre .cp-res>div,body.theme-sombre .cp-k,body.theme-sombre #m .box,body.theme-sombre .modal,body.theme-sombre #pr-qbar .pq-b,body.theme-sombre #pr-qbar .pq-chips button,body.theme-sombre .pr-bs,body.theme-sombre #tabbar .tb.on{background:var(--card)!important;color:var(--tx);border-color:var(--line)!important}
+body.theme-sombre #tabbar{background:#0c0e12;border-color:var(--line)}
+body.theme-sombre #tabbar .tb{background:#151821;color:var(--mut);border-color:var(--line)}
+body.theme-sombre input,body.theme-sombre select,body.theme-sombre textarea,body.theme-sombre .ch-inp{background:#11141a!important;color:var(--tx)!important;border-color:#343a46!important}
+body.theme-sombre input::placeholder,body.theme-sombre textarea::placeholder{color:#6f7787}
+body.theme-sombre .btn{background:#1d212a;color:var(--tx);border-color:#343a46}
+body.theme-sombre .btn:hover{background:#252a35}
+body.theme-sombre .btn.p{background:#3b82f6;border-color:#3b82f6;color:#fff}
+body.theme-sombre .btn.p:hover{background:#2f6fd8}
+body.theme-sombre .btn.d{color:#ff8a7e}
+body.theme-sombre th,body.theme-sombre thead th{background:#1d212a!important;color:var(--mut)!important}
+body.theme-sombre td{border-color:var(--line)!important}
+body.theme-sombre tr:hover td{background:#1c2029}
+body.theme-sombre .ch-it.on,body.theme-sombre #themeMenu button:hover,body.theme-sombre #themeMenu button.on{background:#232a38}
+body.theme-sombre .hello:after{color:#3b82f6;opacity:.25}
+body.theme-sombre .hello{border-left-color:#3b82f6}
+body.theme-sombre .bs-l.on{background:#123224!important;border-color:#2c7a50!important}
+body.theme-sombre .bs-valide{background:#123224;color:#8be0ae}
+body.theme-sombre .pd-total,body.theme-sombre #pr-resume,body.theme-sombre .cp-res>div:first-child{background:#3b82f6!important;color:#fff!important}
+body.theme-sombre #pr-steps button.on,body.theme-sombre #pd-steps button.on{background:#3b82f6;color:#fff}
+body.theme-sombre footer,body.theme-sombre .pr-help,body.theme-sombre .iv-help{color:var(--mut)}
+body.theme-sombre footer img{filter:invert(1)}
+body.theme-sombre .bd,body.theme-sombre .pd-cat,body.theme-sombre .pr-unit-tag{filter:brightness(.85) saturate(1.1)}
+
+/* ============================================================ HOMME — bleu nuit, acier, or */
+body.theme-homme{--brass:#c8a15a;--bg:#eef1f5;--g:#1f7a5a}
+body.theme-homme header{background:linear-gradient(100deg,#141d29,#1e2a3a 60%,#2b3a4f);border-bottom:3px solid #c8a15a}
+body.theme-homme nav button.on{background:rgba(255,255,255,.08);box-shadow:inset 0 -3px 0 #c8a15a}
+body.theme-homme .btn.p{background:#1e2a3a;border-color:#1e2a3a}
+body.theme-homme .btn.p:hover{background:#2b3a4f}
+body.theme-homme .hello{border-left-color:#1e2a3a}
+body.theme-homme .hello:after{content:"◆";color:#c8a15a;opacity:.35;font-size:46px;top:4px}
+body.theme-homme .card{border-top:3px solid #1e2a3a}
+body.theme-homme .who .av{background:linear-gradient(135deg,#e9d5a7,#c8a15a);color:#1e2a3a}
+body.theme-homme .who b{font:700 15px/1.1 "Segoe UI",system-ui,sans-serif}
+body.theme-homme #pr-steps button.on,body.theme-homme #pd-steps button.on,body.theme-homme .at-tabs button.on{background:#1e2a3a;color:#fff}
+body.theme-homme #pr-steps button.on i,body.theme-homme #pd-steps button.on i{background:#c8a15a;color:#1e2a3a}
+body.theme-homme .pd-total,body.theme-homme #pr-resume,body.theme-homme .cp-res>div:first-child{background:linear-gradient(120deg,#141d29,#2b3a4f)!important;color:#fff}
+body.theme-homme .th-salut{background:linear-gradient(110deg,#141d29,#2b3a4f);color:#fff;box-shadow:0 6px 18px rgba(20,29,41,.25)}
+body.theme-homme .th-salut small{color:#e9d5a7;opacity:1}
+@media (max-width:700px){body.theme-homme nav{background:#141d29!important;border-top-color:#c8a15a!important}}
+
+/* ============================================================ FEMME — rose poudré, prune, or rose */
+body.theme-femme{--brass:#e7a4bd;--bg:#fbf4f7;--rose:#b4547a}
+body.theme-femme header{background:linear-gradient(100deg,#7d2e52,#b4547a 55%,#d987a8);border-bottom:3px solid #f3c4d6}
+body.theme-femme nav button.on{background:rgba(255,255,255,.16);box-shadow:inset 0 -3px 0 #f3c4d6}
+body.theme-femme .btn.p{background:#b4547a;border-color:#b4547a}
+body.theme-femme .btn.p:hover{background:#9a4568}
+body.theme-femme .hello{border-left-color:#b4547a;background:linear-gradient(90deg,#fff 70%,#fdeef4)}
+body.theme-femme .hello:after{content:"❀";color:#e7a4bd;opacity:.6}
+body.theme-femme .card,body.theme-femme .at-stat,body.theme-femme .bs-card{border-radius:16px}
+body.theme-femme .card{border-top:3px solid #f3c4d6}
+body.theme-femme .who .av{background:linear-gradient(135deg,#fff,#f3c4d6);color:#7d2e52}
+body.theme-femme #pr-steps button.on,body.theme-femme #pd-steps button.on,body.theme-femme .at-tabs button.on{background:#b4547a;color:#fff}
+body.theme-femme #pr-steps button.on i,body.theme-femme #pd-steps button.on i{background:#fff;color:#b4547a}
+body.theme-femme .pd-total,body.theme-femme #pr-resume,body.theme-femme .cp-res>div:first-child{background:linear-gradient(120deg,#7d2e52,#b4547a 60%,#d987a8)!important;color:#fff}
+body.theme-femme .th-salut{background:linear-gradient(110deg,#fdeef4,#f6d5e2);color:#7d2e52;border:1px solid #f0c7d7}
+body.theme-femme::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(700px 400px at 100% 0%,rgba(231,164,189,.25),transparent 60%),radial-gradient(600px 400px at 0% 100%,rgba(212,175,140,.18),transparent 60%)}
+@media (max-width:700px){body.theme-femme nav{background:linear-gradient(100deg,#7d2e52,#b4547a)!important;border-top-color:#f3c4d6!important}}
+
+/* ============================================================ NATURE — forêt, sauge, terre */
+body.theme-nature{--brass:#a3c585;--bg:#f3f6ef;--g:#2f6b3a}
+body.theme-nature header{background:linear-gradient(100deg,#1f4a29,#2f6b3a 55%,#4f8a4f);border-bottom:3px solid #c9a46a}
+body.theme-nature nav button.on{background:rgba(255,255,255,.12);box-shadow:inset 0 -3px 0 #c9a46a}
+body.theme-nature .btn.p{background:#2f6b3a;border-color:#2f6b3a}
+body.theme-nature .btn.p:hover{background:#245430}
+body.theme-nature .hello{border-left-color:#2f6b3a}
+body.theme-nature .hello:after{content:"🌿";opacity:.35;font-size:50px;top:2px}
+body.theme-nature .card{border-top:3px solid #a3c585}
+body.theme-nature .who .av{background:linear-gradient(135deg,#f4ecd8,#c9a46a);color:#1f4a29}
+body.theme-nature #pr-steps button.on,body.theme-nature #pd-steps button.on,body.theme-nature .at-tabs button.on{background:#2f6b3a;color:#fff}
+body.theme-nature #pr-steps button.on i,body.theme-nature #pd-steps button.on i{background:#c9a46a;color:#1f4a29}
+body.theme-nature .pd-total,body.theme-nature #pr-resume,body.theme-nature .cp-res>div:first-child{background:linear-gradient(120deg,#1f4a29,#4f8a4f)!important;color:#fff}
+body.theme-nature .th-salut{background:linear-gradient(110deg,#e5efdc,#f4ecd8);color:#1f4a29;border:1px solid #d3e2c4}
+body.theme-nature::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.07;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath d='M30 90c0-30 20-50 50-55-5 30-25 50-50 55z' fill='%232f6b3a'/%3E%3Cpath d='M30 90c15-15 30-30 50-55' stroke='%23f3f6ef' stroke-width='2' fill='none'/%3E%3C/svg%3E") repeat}
+@media (max-width:700px){body.theme-nature nav{background:linear-gradient(100deg,#1f4a29,#2f6b3a)!important;border-top-color:#c9a46a!important}}
+
+/* ============================================================ ISLAMIQUE — vert profond, or, motif géométrique */
+body.theme-islamique{--brass:#c9a227;--bg:#f5f3ec;--g:#0d5c4a}
+body.theme-islamique header{background:linear-gradient(100deg,#083d31,#0d5c4a 55%,#127a62);border-bottom:3px solid #c9a227}
+body.theme-islamique nav button.on{background:rgba(255,255,255,.1);box-shadow:inset 0 -3px 0 #c9a227}
+body.theme-islamique .btn.p{background:#0d5c4a;border-color:#0d5c4a}
+body.theme-islamique .btn.p:hover{background:#0a4a3c}
+body.theme-islamique .hello{border-left-color:#0d5c4a}
+body.theme-islamique .hello:after{content:"۞";color:#c9a227;opacity:.4;font-size:52px;top:0}
+body.theme-islamique .card{border-top:3px solid #c9a227}
+body.theme-islamique .who .av{background:linear-gradient(135deg,#f3e3a6,#c9a227);color:#083d31}
+body.theme-islamique .who b{font:700 15px/1.1 "Segoe UI",system-ui,sans-serif}
+body.theme-islamique #pr-steps button.on,body.theme-islamique #pd-steps button.on,body.theme-islamique .at-tabs button.on{background:#0d5c4a;color:#fff}
+body.theme-islamique #pr-steps button.on i,body.theme-islamique #pd-steps button.on i{background:#c9a227;color:#083d31}
+body.theme-islamique .pd-total,body.theme-islamique #pr-resume,body.theme-islamique .cp-res>div:first-child{background:linear-gradient(120deg,#083d31,#127a62)!important;color:#fff}
+body.theme-islamique::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.06;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%230d5c4a' stroke-width='1.6'%3E%3Cpath d='M40 6l9.9 24.1L74 40l-24.1 9.9L40 74l-9.9-24.1L6 40l24.1-9.9z'/%3E%3Crect x='18' y='18' width='44' height='44' transform='rotate(45 40 40)'/%3E%3Ccircle cx='40' cy='40' r='9'/%3E%3C/g%3E%3C/svg%3E") repeat}
+body.theme-islamique .th-salut{display:block;background:linear-gradient(135deg,#083d31,#0d5c4a 60%,#127a62);color:#fff;border:1px solid #c9a227;box-shadow:0 8px 22px rgba(8,61,49,.22);padding:12px 16px;position:relative;overflow:hidden}
+body.theme-islamique .th-salut::after{content:"";position:absolute;inset:0;opacity:.12;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 80 80'%3E%3Cpath d='M40 6l9.9 24.1L74 40l-24.1 9.9L40 74l-9.9-24.1L6 40l24.1-9.9z' fill='none' stroke='%23c9a227' stroke-width='2'/%3E%3C/svg%3E") repeat}
+.th-isl-top{display:flex;align-items:center;justify-content:space-between;gap:10px;position:relative;z-index:1}
+.th-isl-top b{font:700 16px "Geeza Pro","Traditional Arabic","Amiri","Noto Naskh Arabic",serif;color:#f3e3a6}
+.th-isl-top button{background:rgba(0,0,0,.18);border:1px solid rgba(201,162,39,.7);color:#f3e3a6;border-radius:999px;padding:4px 12px;font:600 13px "Geeza Pro","Traditional Arabic",serif;cursor:pointer;flex:none}
+.th-hadith{position:relative;z-index:1;margin:10px 0 4px;font:500 20px/1.9 "Geeza Pro","Traditional Arabic","Amiri","Noto Naskh Arabic",serif;text-align:right;color:#fff}
+.th-hadith small{display:block;font-size:14px;color:#f3e3a6;margin-top:2px}
+.th-sens{position:relative;z-index:1;margin:2px 0 0;font-size:12.5px;color:#d6efe6;font-style:italic}
+@media (max-width:700px){
+  body.theme-islamique nav{background:linear-gradient(100deg,#083d31,#0d5c4a)!important;border-top-color:#c9a227!important}
+  .th-hadith{font-size:18px;line-height:1.8}
+}
+body.theme-sombre .btn:not(.p):not(.d){background:#1d212a!important;color:var(--tx)!important}
+body.theme-sombre .btn.d{background:#1d212a!important}
+body.theme-sombre .who b,body.theme-femme .who b,body.theme-nature .who b{font:700 15px/1.1 "Segoe UI",system-ui,sans-serif}
+body.theme-sombre .pd-cat,body.theme-sombre .pr-unit-tag{background:#262b36!important;color:#cdd3df!important}
