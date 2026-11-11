@@ -61,7 +61,8 @@
       '<form id="eq-new" class="eq-new"><div class="at-fields"><label>Nom affiché *<input id="eq-nnom" required maxlength="60" placeholder="Ex : Oussama"></label>' +
       '<label>Identifiant de connexion *<input id="eq-nid" required maxlength="40" autocapitalize="none" spellcheck="false" placeholder="Ex : oussama"></label>' +
       '<label>Mot de passe * (6 caractères min.)<input id="eq-nmdp" required minlength="6" maxlength="60" autocomplete="new-password" placeholder="Ex : Mb-oussama-26"></label>' +
-      '<label>Rôle<select id="eq-nrole"><option value="equipe">Équipe (sections choisies)</option><option value="admin">Administrateur (tout)</option></select></label></div>' +
+      '<label>Rôle<select id="eq-nrole"><option value="equipe">Équipe (sections choisies)</option><option value="admin">Administrateur (tout)</option></select></label>' +
+      '<label>Thème<select id="eq-ntheme"><option value="">Classique MARIA BAG</option><option value="mca">Mouloudia (vert, rouge, or)</option></select></label></div>' +
       '<div class="eq-sec"><span>Sections accessibles :</span>' + PRESETS.map((x, i) => '<button type="button" class="btn s" data-preset="' + i + '">' + x[0] + '</button>').join('') + '</div>' +
       '<div class="eq-chk" id="eq-nsec">' + SEC.map(x => '<label><input type="checkbox" value="' + x[0] + '"> ' + x[1] + '</label>').join('') + '</div>' +
       '<div class="at-actions"><button class="btn p" type="submit">Créer le compte</button><span id="eq-nmsg" class="eq-msg"></span></div></form>' +
@@ -70,6 +71,7 @@
       PROF.filter(p => p.role !== 'en_attente').map(p => '<tr><td><b>' + esc(p.nom || p.email) + '</b>' + (p.id === me ? ' <span class="iv-bdg ok">vous</span>' : '') + '<small>' + esc(p.email) + '</small></td><td><select data-eqsel="' + esc(p.id) + '"' + (p.id === me ? ' disabled title="Vous ne pouvez pas modifier votre propre rôle"' : '') + '>' +
         ['admin', 'equipe', 'desactive'].map(r => '<option value="' + r + '"' + (p.role === r ? ' selected' : '') + '>' + ROLES[r] + '</option>').join('') + '</select>' +
         (p.role === 'equipe' ? '<div class="eq-chk eq-chk-s" data-eqsec="' + esc(p.id) + '">' + SEC.map(x => '<label><input type="checkbox" value="' + x[0] + '"' + (!p.sections || !p.sections.length || p.sections.includes(x[0]) ? ' checked' : '') + '> ' + x[1] + '</label>').join('') + '</div>' : '') +
+        '<label class="eq-th">Thème <select data-eqtheme="' + esc(p.id) + '"><option value="">Classique</option><option value="mca"' + (p.theme === 'mca' ? ' selected' : '') + '>Mouloudia</option></select></label> ' +
         (p.id !== me ? '<button type="button" class="btn s" data-eqmdp="' + esc(p.id) + '">Changer le mot de passe</button>' : '') + '</td><td class="iv-opt">' + dt(p.derniere_connexion) + '</td></tr>').join('') + '</tbody></table></div>' +
       '<p class="iv-help"><b>Administrateur</b> : tout, plus la gestion de l’équipe et le journal. <b>Équipe</b> : seulement les sections cochées (modifiable à tout moment, effet à la prochaine ouverture de la plateforme). <b>Désactivé</b> : plus aucun accès.</p></div>';
     h += '<div class="card" style="margin-top:12px"><h2 style="margin-top:0">Inviter une personne</h2><form id="eq-inv" class="iv-bar"><label>Adresse e-mail<input id="eq-iem" type="email" required placeholder="prenom@exemple.com"></label><label>Rôle<select id="eq-irole"><option value="equipe">Équipe</option><option value="admin">Administrateur</option></select></label><button class="btn p" type="submit">Inviter</button></form>' +
@@ -143,12 +145,16 @@
     const role = $f('#eq-nrole').value, sections = [...e.target.querySelectorAll('#eq-nsec input:checked')].map(i => i.value);
     if (role !== 'admin' && !sections.length) { msg.textContent = 'Cochez au moins une section.'; return; }
     btn.disabled = true; msg.textContent = 'Création…';
-    const x = await fonctionComptes({ action: 'creer', nom: $f('#eq-nnom').value.trim(), identifiant: $f('#eq-nid').value.trim(), mot_de_passe: $f('#eq-nmdp').value, role, sections });
+    const x = await fonctionComptes({ action: 'creer', nom: $f('#eq-nnom').value.trim(), identifiant: $f('#eq-nid').value.trim(), mot_de_passe: $f('#eq-nmdp').value, role, sections, theme: $f('#eq-ntheme').value });
     btn.disabled = false;
     if (x.error) { msg.textContent = '⚠ ' + x.error; return; }
     say('Compte créé : identifiant « ' + $f('#eq-nid').value.trim() + ' ».'); await load();
   });
   document.addEventListener('change', async e => {
+    const th = e.target.closest && e.target.closest('[data-eqtheme]');
+    if (th) { const r = remote(); if (!r) return; const x = await r.from('profils').update({ theme: th.value }).eq('id', th.dataset.eqtheme);
+      say(x.error ? 'Erreur : ' + x.error.message : 'Thème enregistré (visible à la prochaine ouverture de la plateforme par cette personne).'); const p = PROF.find(y => y.id === th.dataset.eqtheme); if (p) p.theme = th.value;
+      if (window.APP_USER && window.APP_USER.id === th.dataset.eqtheme) { window.APP_USER.theme = th.value; document.dispatchEvent(new CustomEvent('mariabag:profil', { detail: window.APP_USER })); } return; }
     const box = e.target.closest && e.target.closest('[data-eqsec]'); if (!box) return;
     const r = remote(); if (!r) return;
     const sections = [...box.querySelectorAll('input:checked')].map(i => i.value);

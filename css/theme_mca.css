@@ -1,0 +1,59 @@
+/* ============================================================
+   THÈME « MOULOUDIA » — vert, rouge et or (activé par compte : body.theme-mca)
+   ============================================================ */
+body.theme-mca{--mca-v:#00853f;--mca-v2:#006b33;--mca-r:#d21034;--mca-r2:#a90d2a;--mca-o:#d4a017;--mca-o2:#f6dc7a;
+  --brass:var(--mca-o);--g:#00853f;--gb:#e2f5ea;--r:#d21034;--rb:#fde7eb;--bg:#f4f7f4}
+/* écusson en filigrane derrière la page */
+body.theme-mca::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:url("../icons/theme/mca.svg") no-repeat center 58%/min(62vmin,520px) auto;opacity:.055}
+body.theme-mca::after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(1200px 500px at 0% 0%,rgba(0,133,63,.08),transparent 60%),radial-gradient(1000px 500px at 100% 100%,rgba(210,16,52,.07),transparent 60%)}
+body.theme-mca #app,body.theme-mca main{position:relative;z-index:1}
+/* en-tête : vert | rouge, liseré or */
+body.theme-mca header{background:linear-gradient(100deg,var(--mca-v2) 0%,var(--mca-v) 46%,var(--mca-r) 54%,var(--mca-r2) 100%);border-bottom:3px solid var(--mca-o)}
+body.theme-mca header .logo{position:relative}
+body.theme-mca header .logo::after{content:"";position:absolute;right:calc(50% - 120px);top:50%;width:34px;height:44px;transform:translateY(-50%);background:url("../icons/theme/mca.svg") no-repeat center/contain;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
+body.theme-mca nav button{color:rgba(255,255,255,.82)}
+body.theme-mca nav button.on{background:rgba(0,0,0,.28);color:#fff;box-shadow:inset 0 -3px 0 var(--mca-o)}
+body.theme-mca header .btn:not(.p){border-color:rgba(255,255,255,.45)}
+body.theme-mca header .btn:not(.p):hover{background:rgba(0,0,0,.2)}
+body.theme-mca .who{border-color:var(--mca-o);background:rgba(0,0,0,.18)}
+body.theme-mca .who .av{background:linear-gradient(135deg,var(--mca-o2),var(--mca-o));color:#1b3a24}
+body.theme-mca .who small{color:var(--mca-o2)}
+/* boutons et accents */
+body.theme-mca .btn.p{background:var(--mca-v);border-color:var(--mca-v);color:#fff}
+body.theme-mca .btn.p:hover{background:var(--mca-v2)}
+body.theme-mca .btn.d{color:var(--mca-r)}
+body.theme-mca :focus-visible{outline-color:var(--mca-v)}
+body.theme-mca .hello{border-left:0;background:linear-gradient(90deg,var(--mca-v) 0 6px,var(--mca-r) 6px 12px,#fff 12px)}
+body.theme-mca .hello{padding-left:28px}
+body.theme-mca .hello:after{content:"★";color:var(--mca-o);opacity:.5;font-size:56px;top:-4px}
+body.theme-mca .hello .fl{color:var(--mca-o)}
+body.theme-mca .card,body.theme-mca .at-stat,body.theme-mca .bs-card{border-top:3px solid transparent;border-image:linear-gradient(90deg,var(--mca-v) 50%,var(--mca-r) 50%) 1;border-image-slice:1}
+body.theme-mca .card{border-left-width:1px;border-right-width:1px;border-bottom-width:1px}
+body.theme-mca .at-stat.pd-total,body.theme-mca #pr-resume,body.theme-mca .cp-res>div:first-child{background:linear-gradient(120deg,var(--mca-v2),var(--mca-v) 50%,var(--mca-r) 50%,var(--mca-r2));border-color:transparent;color:#fff}
+body.theme-mca .at-tabs button.on,body.theme-mca .bs-tabs button.on{background:var(--mca-v);color:#fff;border-color:var(--mca-v)}
+/* étapes Production / Produits */
+body.theme-mca #pr-steps button.on,body.theme-mca #pd-steps button.on{background:linear-gradient(120deg,var(--mca-v) 0 50%,var(--mca-r) 50% 100%);color:#fff}
+body.theme-mca #pr-steps button.on i,body.theme-mca #pd-steps button.on i{background:var(--mca-o);color:#1b3a24}
+body.theme-mca #pr-qbar input{border-color:var(--mca-v)}
+body.theme-mca #pr-qbar .pq-chips button.on{background:var(--mca-v);border-color:var(--mca-v)}
+body.theme-mca .pr-sync{background:#e2f5ea;border-color:#b9e3c9;color:var(--mca-v2)}
+/* petit mot de bienvenue */
+.mca-salut{display:none}
+body.theme-mca .mca-salut{display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:10px 14px;border-radius:14px;color:#fff;
+  background:linear-gradient(110deg,var(--mca-v2),var(--mca-v) 48%,var(--mca-r) 52%,var(--mca-r2));box-shadow:0 6px 18px rgba(0,80,40,.18)}
+body.theme-mca .mca-salut img{width:34px;height:44px;flex:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))}
+body.theme-mca .mca-salut b{display:block;font-size:15px}
+body.theme-mca .mca-salut small{display:block;font-size:12px;color:var(--mca-o2);letter-spacing:.04em}
+body.theme-mca .mca-salut button{margin-left:auto;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:999px;padding:5px 10px;font:600 12px inherit;font-family:inherit;cursor:pointer}
+/* menu du bas (smartphone) */
+@media (max-width:700px){
+  body.theme-mca nav{background:linear-gradient(100deg,var(--mca-v2),var(--mca-v) 48%,var(--mca-r) 52%,var(--mca-r2))!important}
+  body.theme-mca nav button.on{background:rgba(0,0,0,.25)!important}
+  body.theme-mca header .logo::after{right:16px;width:28px;height:36px}
+  body.theme-mca::before{background-size:78vw auto;background-position:center 60%}
+}
+@media print{body.theme-mca::before,body.theme-mca::after,.mca-salut{display:none!important}}
+body.theme-mca .at-stat,body.theme-mca .bs-card{border-image:none;border:1px solid var(--line);border-top:3px solid var(--mca-v)}
+body.theme-mca .at-stat:nth-child(even){border-top-color:var(--mca-r)}

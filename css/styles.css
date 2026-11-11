@@ -362,3 +362,4 @@ body[data-role="equipe"] #pr-btn-direct{display:none}
 .eq-chk label{display:flex;gap:5px;align-items:center;font-size:13.5px;cursor:pointer}
 .eq-chk-s{margin-top:8px}.eq-chk-s label{font-size:12.5px}
 .eq-msg{font-size:13px;color:#b00020;align-self:center}
+.eq-th{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;margin-top:6px}.eq-th select{padding:3px 6px}

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 260" role="img" aria-label="Écusson vert et rouge, étoile et croissant dorés">
+  <defs>
+    <linearGradient id="or" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6dc7a"/><stop offset=".5" stop-color="#d4a017"/><stop offset="1" stop-color="#9c7409"/></linearGradient>
+    <clipPath id="ecu"><path d="M20 62 Q100 40 180 62 L180 150 Q180 215 100 250 Q20 215 20 150 Z"/></clipPath>
+  </defs>
+  <!-- étoile du haut -->
+  <path fill="url(#or)" d="M100 2 l9.4 19.1 21.1 3.1-15.3 14.9 3.6 21-18.8-9.9-18.8 9.9 3.6-21-15.3-14.9 21.1-3.1z" transform="translate(0 -2) scale(1)"/>
+  <!-- écusson vert / rouge -->
+  <g clip-path="url(#ecu)">
+    <rect x="0" y="30" width="100" height="230" fill="#00853f"/>
+    <rect x="100" y="30" width="100" height="230" fill="#d21034"/>
+  </g>
+  <path d="M20 62 Q100 40 180 62 L180 150 Q180 215 100 250 Q20 215 20 150 Z" fill="none" stroke="url(#or)" stroke-width="7" stroke-linejoin="round"/>
+  <!-- croissant et étoile -->
+  <path fill="url(#or)" d="M64 112 a38 38 0 1 0 72 0 a32 30 0 1 1 -72 0z"/>
+  <path fill="url(#or)" d="M100 74 l6.8 13.8 15.2 2.2-11 10.7 2.6 15.2-13.6-7.2-13.6 7.2 2.6-15.2-11-10.7 15.2-2.2z"/>
+  <!-- lettres -->
+  <text x="100" y="205" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-weight="700" font-size="40" fill="url(#or)" letter-spacing="2">MCA</text>
+</svg>
