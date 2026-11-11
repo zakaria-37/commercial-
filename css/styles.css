@@ -312,3 +312,8 @@ form, .card, .at-form, section > div[id] { scroll-margin-top: calc(var(--hdr-h, 
 .ch-plus{padding:8px 12px;color:var(--mut,#777);font-size:12.5px}
 .ch-box .ch-inp:focus::placeholder{color:var(--ink,#222);opacity:.55}
 .ch-it.ch-new{color:var(--g,#1a7f37);font-weight:600;border-top:1px dashed var(--line,#ddd);margin-top:2px}
+
+/* Passage fluide d'une section à l'autre */
+main section.on{animation:secIn .24s cubic-bezier(.2,.7,.3,1) both}
+@keyframes secIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){main section.on{animation:none}}

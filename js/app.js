@@ -168,6 +168,8 @@ function show(v) {
   else if (v === 'commerce') { if (typeof loadCommerce === 'function') loadCommerce(true); }
   else if (v === 'equipe') { if (typeof loadEquipe === 'function') loadEquipe(); }
   else if (v === 'notes') { if (typeof loadNotes === 'function') loadNotes(); }
+  else if (v === 'production') { list(); if (typeof loadProduction === 'function') loadProduction(); }      // données à jour (synchronisées avec Produits)
+  else if (v === 'produits') { list(); if (typeof loadProduits === 'function') loadProduits(); }
   else list();
 }
 

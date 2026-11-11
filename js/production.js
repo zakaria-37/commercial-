@@ -113,18 +113,67 @@ async function depuisProduits() {
   const pr = await sb.from('produits').select('*'), li = await sb.from('produit_lignes').select('*');
   if (pr.error || li.error) return false;
   PRODS_P = pr.data || []; LIGNES_P = li.data || [];
-  let cree = 0;
+  let cree = 0, maj = 0;
   for (const p of PRODS_P) {      // chaque produit fini a son modèle ici (même sans coût de revient encore)
     let m = MODELES.find(x => String(x.id) === String(p.modele_id)) || MODELES.find(x => normP(x.nom) === normP(p.nom));
     if (!m) { const r = await sb.from('modeles').insert([{ nom: p.nom, description: 'Créé depuis Produits (coût de revient)' }]).select(); if (r.error || !r.data) continue; m = r.data[0]; MODELES.push(m); cree++; }
     if (String(p.modele_id) !== String(m.id)) await sb.from('produits').update({ modele_id: m.id }).eq('id', p.id);
-    if (!composantsDe(m.id).length) { const rows = composantsDepuis(p.id, m.id); if (rows.length) { const r = await sb.from('composants').insert(rows); if (!r.error) cree++; } }
+    // même nom des deux côtés
+    if (String(p.modele_id) === String(m.id) && m.nom !== p.nom && !MODELES.some(x => x !== m && normP(x.nom) === normP(p.nom))) { const r = await sb.from('modeles').update({ nom: p.nom }).eq('id', m.id); if (!r.error) { m.nom = p.nom; maj++; } }
+    // SYNCHRONISATION : les composants du modèle suivent toujours les lignes du coût de revient du produit
+    const rows = composantsDepuis(p.id, m.id);
+    if (rows.length && signatureP(rows) !== signatureP(composantsDe(m.id))) {
+      for (const c of composantsDe(m.id)) await sb.from('composants').delete().eq('id', c.id);
+      const r = await sb.from('composants').insert(rows); if (!r.error) maj++;
+    }
   }
   if (cree) toastP('Fiche matières : les produits finis du Stock sont dans la liste des modèles.');
-  return cree > 0;
+  return cree + maj > 0;
 }
-const produitDuModele = id => PRODS_P.find(p => String(p.modele_id) === String(id) && LIGNES_P.some(l => String(l.produit_id) === String(p.id)));
+/* Empreinte des composants (quantité avec chute incluse) : sert à savoir si le modèle et le produit disent la même chose */
+function signatureP(rows) {
+  return rows.map(c => [c.type === 'finition' ? 'f' : 'm', c.type === 'finition' ? normP(c.nom) + ':' + (Number(c.prix_unitaire) || 0) : (c.article_id ? 'a' + c.article_id : 'd' + normP(c.nom)), c.unite || '',
+    Math.round((Number(c.quantite) || 0) * (1 + (Number(c.perte_pct) || 0) / 100) * 10000) / 10000].join('|')).sort().join('\n');
+}
+/* Produit lié au modèle, et report d'une modification faite ici (Production) vers ses lignes de coût (Produits) */
 const produitLie = id => PRODS_P.find(p => String(p.modele_id) === String(id)) || null;
+const estPackP = p => !!p && LIGNES_P.some(l => String(l.produit_id) === String(p.id) && l.sous_produit_id);
+function lignesDuComposant(p, c) {
+  const L = LIGNES_P.filter(l => String(l.produit_id) === String(p.id) && !l.sous_produit_id);
+  if (c.type === 'finition') return L.filter(l => l.categorie === 'Finition' && normP(l.designation) === normP(c.nom));
+  const parArt = c.article_id ? L.filter(l => String(l.article_id) === String(c.article_id)) : [];
+  return parArt.length ? parArt : L.filter(l => l.categorie !== 'Finition' && !l.article_id && normP(l.designation) === normP(c.nom));
+}
+async function versProduit(m, avant, apres) {
+  const p = produitLie(m.id); if (!p || estPackP(p)) return;
+  try {
+    const cibles = avant ? lignesDuComposant(p, avant) : [];
+    if (!apres) { for (const l of cibles) await sb.from('produit_lignes').delete().eq('id', l.id); }
+    else if (cibles.length) {
+      const l = cibles[0], a = apres.article_id && window.StockAPI ? StockAPI.byId(apres.article_id) : null, prix = a ? StockAPI.priceFor(a, apres.unite) : null;
+      const patch = { designation: apres.nom, unite: apres.unite, quantite: apres.quantite, perte_pct: apres.perte_pct || 0, note: apres.note || '', article_id: apres.article_id || null };
+      if (apres.type === 'finition') patch.prix_unitaire = Number(apres.prix_unitaire) || 0; else if (prix != null) patch.prix_unitaire = Math.round(prix * 10000) / 10000;
+      if (l.gabarits && l.gabarits.resultat) { const g = Object.assign({}, l.gabarits); delete g.resultat; patch.gabarits = g; }      // quantité corrigée à la main : plus de recalcul automatique
+      await sb.from('produit_lignes').update(patch).eq('id', l.id);
+      for (const x of cibles.slice(1)) await sb.from('produit_lignes').delete().eq('id', x.id);       // lignes en double regroupées
+    } else {
+      const ordre = LIGNES_P.filter(l => String(l.produit_id) === String(p.id)).reduce((mx, l) => Math.max(mx, Number(l.ordre) || 0), 0);
+      const rows = typeof ligneDepuisComposants === 'function' ? ligneDepuisComposants(p.id, [apres], []) : [];
+      if (rows.length) { rows[0].ordre = ordre + 1; await sb.from('produit_lignes').insert(rows); }
+    }
+    if (typeof loadProduits === 'function') loadProduits();
+  } catch (e) { /* le modèle est enregistré ; le produit sera réaligné à la prochaine ouverture */ }
+}
+/* Appelé par la section Produits après chaque changement : le modèle suit tout de suite */
+let syncT = null;
+window.syncProduction = function () {
+  clearTimeout(syncT);
+  syncT = setTimeout(() => {
+    const ouvert = ['#pr-cform', '#pr-mform', '#pr-pkform'].some(q => { const f = $p(q); return f && getComputedStyle(f).display !== 'none'; });
+    if (!ouvert) loadProduction();
+  }, 500);
+};
+const produitDuModele = id => PRODS_P.find(p => String(p.modele_id) === String(id) && LIGNES_P.some(l => String(l.produit_id) === String(p.id)));
 
 /* ---------- Composer un pack : plusieurs modèles finis assemblés → une seule fiche matières ---------- */
 let packLignes = [];
@@ -193,7 +242,15 @@ function renderAll(errText) {
   $p('#pr-main').style.display = has ? '' : 'none';
   $p('#pr-empty').style.display = has ? 'none' : '';
   ['#pr-btn-edit', '#pr-btn-dup', '#pr-btn-del'].forEach(i => { $p(i).disabled = !has; });
-  const rp = $p('#pr-btn-reprendre'); if (rp) rp.style.display = has && produitDuModele(selModele) ? '' : 'none';
+  const rp = $p('#pr-btn-reprendre');
+  if (rp) {      // la synchronisation est automatique : le bouton devient un simple repère
+    rp.style.display = 'none';
+    let info = $p('#pr-sync-info');
+    if (!info) { info = document.createElement('span'); info.id = 'pr-sync-info'; info.className = 'pr-sync'; rp.parentNode.insertBefore(info, rp); }
+    const lie = has ? produitLie(selModele) : null;
+    info.style.display = lie ? '' : 'none';
+    if (lie) info.innerHTML = '🔗 Synchronisé avec le produit « ' + escP(lie.nom) + ' »' + (estPackP(lie) ? ' (pack)' : '') + ' <a href="#" onclick="event.preventDefault();window.selProduitDepuis && selProduitDepuis(\'' + escP(lie.id) + '\')">ouvrir le coût de revient →</a>';
+  }
   if (errText) {
     $p('#pr-empty').innerHTML = '<p style="color:#b00020">⚠ ' + escP(errText) + '</p>';
     return;
@@ -445,6 +502,9 @@ async function saveComposant() {
     if (a && StockAPI.toBase(a, 1, unite) != null) articleId = a.id;
   }
   const payload = { nom, unite, quantite, perte_pct: perte, note, article_id: articleId, type: fin ? 'finition' : 'matiere', prix_unitaire: fin ? prixFin : 0 };
+  const lieP = produitLie(m.id);
+  if (estPackP(lieP)) { toastP('« ' + m.nom + ' » est un pack : modifiez les produits qui le composent (section Produits), le pack suivra.'); return; }
+  const avantC = curComposant ? Object.assign({}, COMPOSANTS.find(x => String(x.id) === String(curComposant)) || {}) : null;
   let res;
   if (curComposant) res = await sb.from('composants').update(payload).eq('id', curComposant).select();
   else {
@@ -452,6 +512,7 @@ async function saveComposant() {
     res = await sb.from('composants').insert([{ ...payload, modele_id: m.id, ordre }]).select();
   }
   if (res.error) { toastP('Erreur : ' + errMsgP(res.error)); return; }
+  await versProduit(m, avantC && avantC.id ? avantC : null, payload);       // le coût de revient du produit suit
 
   const wasEdit = !!curComposant;
   toastP(wasEdit ? 'Composant modifié.' : 'Composant ajouté.');
@@ -462,9 +523,12 @@ async function saveComposant() {
 
 async function removeComposant(id) {
   const c = COMPOSANTS.find(x => String(x.id) === String(id));
-  if (!c || !confirm('Supprimer « ' + c.nom + ' » de ce modèle ?')) return;
+  const mC = MODELES.find(x => String(x.id) === String(c && c.modele_id)), lieP = mC && produitLie(mC.id);
+  if (c && estPackP(lieP)) { toastP('« ' + mC.nom + ' » est un pack : modifiez les produits qui le composent (section Produits).'); return; }
+  if (!c || !confirm('Supprimer « ' + c.nom + ' » de ce modèle' + (lieP ? ' et du coût de revient du produit « ' + lieP.nom + ' »' : '') + ' ?')) return;
   const { error } = await sb.from('composants').delete().eq('id', id);
   if (error) { toastP('Erreur : ' + errMsgP(error)); return; }
+  if (mC) await versProduit(mC, c, null);
   if (String(curComposant) === String(id)) cancelFormComposant();
   toastP('Composant supprimé.');
   await loadProduction();

@@ -154,6 +154,16 @@
 
   /* ---------- Vue d'ensemble (chiffres clés cliquables) ---------- */
   let chargesMois = null, pointesAuj = null, dataErr = false;
+  let dernierStock = 0, forcer = true;
+  /* Blocs « stables » : le contenu n'est remplacé que s'il a vraiment changé (plus de clignotement ni d'animations rejouées
+     à chaque actualisation) ; un bloc qui change s'illumine brièvement. */
+  const descHtml = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  function stabiliser(el, flash) {
+    if (!el || el._stab || !descHtml) return; el._stab = true; let dernier = null;
+    Object.defineProperty(el, 'innerHTML', { configurable: true, get() { return descHtml.get.call(el); },
+      set(h) { h = String(h); if (h === dernier) return; const premier = dernier === null; dernier = h; descHtml.set.call(el, h);
+        if (!premier && flash) { const c = el.closest('.dw') || el; c.classList.remove('d-maj'); void c.offsetWidth; c.classList.add('d-maj'); } } });
+  }
   async function loadExtras() {
     try {
       const today = iso(new Date()), mois = today.slice(0, 7);
@@ -164,8 +174,12 @@
       if (chargesMois) { const ac = await sb.from('acomptes').select('*').gte('date_acompte', mois + '-01').lte('date_acompte', mois + '-' + last);
         if (!ac.error) chargesMois = chargesMois.concat((ac.data || []).map(x => ({ date_charge: x.date_acompte, categorie: 'Paie des employés', montant: x.montant }))); }
       const p = await sb.from('pointages').select('*').eq('date_pointage', today);
-      try { if (window.StockAPI) await StockAPI.load(); } catch (e) { /* stock non installé */ }
-      try { if (window.PFAPI) await PFAPI.load(); } catch (e) { /* stock produits finis non installé */ }
+      // stock et produits finis : rechargés au plus toutes les 20 s (ou à la demande) pour un tableau de bord fluide
+      if (forcer || Date.now() - dernierStock > 20000) {
+        dernierStock = Date.now(); forcer = false;
+        try { if (window.StockAPI) await StockAPI.load(); } catch (e) { /* stock non installé */ }
+        try { if (window.PFAPI) await PFAPI.load(); } catch (e) { /* stock produits finis non installé */ }
+      }
       pointesAuj = p.error ? null : (p.data || []).filter(x => Number(x.heures) > 0 || (x.heure_debut && x.heure_fin)).length;
       const r = await sb.from('rendez_vous').select('*').gte('date_rdv', today).order('date_rdv', { ascending: true });
       RDV = r.error ? [] : (r.data || []).filter(x => x.statut === 'Prévu' || x.statut === 'Reporté');
@@ -186,7 +200,7 @@
       const txt = b.textContent, m = txt.match(/^([\d\s\u202f\u00a0]+)(.*)$/); if (!m) return;
       const to = Number(m[1].replace(/\D/g, '')), key = root.id + i, from = LAST[key] === undefined ? 0 : LAST[key];
       LAST[key] = to; if (from === to || !isFinite(to)) return;
-      const t0 = performance.now(), dur = 700, suf = m[2];
+      const t0 = performance.now(), dur = 700, suf = (/[\s\u202f\u00a0]$/.test(m[1]) ? '\u00a0' : '') + m[2];
       const step = t => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
         b.textContent = Math.round(from + (to - from) * e).toLocaleString('fr-FR') + suf; if (k < 1) requestAnimationFrame(step); };
       requestAnimationFrame(step);
@@ -388,16 +402,24 @@
 
   /* ---------- Rendu global ---------- */
   let timer = null;
-  function render() {
+  let enCours = false, encore = false;
+  function render(force) {
+    if (force === true) forcer = true;
     clearTimeout(timer);
     timer = setTimeout(async () => {
       const dash = $q('#v-dash'); if (!dash) return;
       hello();
       if (dash.classList.contains('on')) {
-        await loadExtras();
+        if (enCours) { encore = true; return; }       // une actualisation à la fois ; la suivante part juste après
+        enCours = true;
+        ['#d-ventes', '#d-agenda', '#urg', '#d-finance', '#d-produits', '#d-stock', '#d-pf'].forEach(q => stabiliser($q(q), true));
+        ['#kpis-all', '#d-pulse'].forEach(q => stabiliser($q(q), false));
+        const barre = setTimeout(() => dash.classList.add('d-load'), 350);
+        try { await loadExtras(); } finally { clearTimeout(barre); dash.classList.remove('d-load'); enCours = false; }
+        if (encore) { encore = false; render(); }
         renderApercu(); renderVentes(); renderAgenda(); renderPulse(); renderRelances(); renderFinance(); renderProduits(); renderStock(); renderPF();
         countUp($q('#kpis-all')); countUp($q('#d-ventes'));
-        const u = $q('#d-upd'); if (u) u.textContent = 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const u = $q('#d-upd'); if (u) u.innerHTML = '<i class="d-live" title="Le tableau de bord se met à jour tout seul"></i>En direct · mis à jour à ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
         $q('#d-refresh') && $q('#d-refresh').classList.remove('spin');
       }
     }, 120);
@@ -441,7 +463,7 @@
       const b = e.target.closest('[data-q]'); if (b && QUICK[b.dataset.q]) QUICK[b.dataset.q]();
     });
     $q('#d-edit').addEventListener('click', () => openCust($q('#d-cust').hidden));
-    $q('#d-refresh').addEventListener('click', e => { e.currentTarget.classList.add('spin'); render(); });
+    $q('#d-refresh').addEventListener('click', e => { e.currentTarget.classList.add('spin'); render(true); });
     setInterval(clock, 15000);
     // infobulle de l'histogramme des ventes
     const vb = $q('#d-ventes');
@@ -520,7 +542,7 @@
     document.addEventListener('mariabag:stock', () => { if ($q('#v-dash').classList.contains('on')) { renderApercu(); renderProduits(); renderStock(); } });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); });
     setInterval(() => { if (document.visibilityState === 'visible') render(); }, 60000);
-    document.querySelector('nav button[data-v="dash"]').addEventListener('click', render);
+    document.querySelector('nav button[data-v="dash"]').addEventListener('click', () => render(true));
     render();
   }
 

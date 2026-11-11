@@ -122,6 +122,7 @@
     Object.assign(l, q.data && q.data[0] ? q.data[0] : patch);
     bg.remove();
     if (typeof renderProduits === 'function') renderProduits();
+    if (typeof window.syncProduction === 'function') window.syncProduction();
     if (typeof toastD === 'function') toastD(appliquer ? 'Quantité appliquée : ' + nf(patch.quantite, 4) + ' m par produit.' : 'Gabarits enregistrés.');
   }
   const optsLib = (L, sel, vide) => (vide ? '<option value="">' + vide + '</option>' : '') + L.map(g => '<option value="' + esc(g.id) + '"' + (g.id === sel ? ' selected' : '') + '>' + esc(g.nom || 'Gabarit') + ' (' + nf(g.l, 1) + ' × ' + nf(g.h, 1) + ')</option>').join('');
@@ -343,6 +344,7 @@
           modifie = false;
           const n = await recalculerProduit(carteP);
           if (typeof renderProduits === 'function') renderProduits();
+          if (n && typeof window.syncProduction === 'function') window.syncProduction();
           if (typeof toastD === 'function') toastD('Gabarits enregistrés.' + (n ? ' ' + n + ' ligne(s) recalculée(s).' : ''));
         } catch (err) { t.disabled = false; t.textContent = 'Enregistrer et recalculer'; alert('Erreur : ' + (err.message || err)); }
       }

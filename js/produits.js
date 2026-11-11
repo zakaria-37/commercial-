@@ -160,6 +160,7 @@ async function loadProduits() {
   LIGNES = l.data || [];
   if (!PRODUITS.some(x => String(x.id) === String(selProduit))) selProduit = PRODUITS.length ? PRODUITS[0].id : null;
   renderProduits();
+  if (typeof window.syncProduction === 'function') window.syncProduction();      // la fiche matières (Production) suit le coût de revient
   if (typeof loadFixes === 'function') loadFixes().then(() => { if (typeof renderFixes === 'function') renderFixes(); }).catch(() => {});
   if (await produitsDepuisModeles()) return;      // des produits ont été créés : la liste est rechargée
 }
@@ -1080,3 +1081,5 @@ document.addEventListener('mariabag:stock', () => { if (produitCourant()) render
 document.addEventListener('mariabag:authenticated', loadProduits);
 if (!document.getElementById('app').classList.contains('hide')) loadProduits();
 ['#pd-lcat', '#pd-ldes'].forEach(x => { const e = $d(x); if (e) e.addEventListener(x === '#pd-lcat' ? 'change' : 'input', () => { if (!gabForm) majBtnGab(); }); });
+/* Ouvre un produit précis depuis une autre section (Production → coût de revient) */
+window.selProduitDepuis = function (id) { selProduit = id; if (typeof show === 'function') show('produits'); else loadProduits(); };
