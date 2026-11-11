@@ -7,7 +7,7 @@
      hors ligne sont gérées par js/local-db.js)
    Changez CACHE_VERSION pour forcer la mise à jour chez tous les utilisateurs.
    ============================================================ */
-const CACHE_VERSION = 'mariabag-v149';
+const CACHE_VERSION = 'mariabag-v150';
 const SHELL = [
   './',
   './index.html',
@@ -84,7 +84,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION)
       // allSettled-like : un fichier manquant ne bloque pas l'installation
-      .then((cache) => Promise.all(SHELL.map((u) => cache.add(u).catch(() => null))))
+      .then((cache) => Promise.all(SHELL.map((u) => cache.add(new Request(u, { cache: 'reload' })).catch(() => null))))      // jamais une copie périmée du navigateur
       .then(() => self.skipWaiting())
   );
 });
@@ -136,7 +136,9 @@ self.addEventListener('fetch', (event) => {
   // Connexion lente ou coupée : au bout de 4 s on ouvre la copie enregistrée.
   const fromCache = () => caches.match(req, { ignoreSearch: true })
     .then((hit) => hit || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
-  const network = fetch(req).then((res) => {
+  // « no-cache » : le téléphone redemande toujours au serveur si le fichier a changé (Safari gardait d'anciens styles)
+  let netReq; try { netReq = req.mode === 'navigate' ? new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : new Request(req, { cache: 'no-cache' }); } catch (e) { netReq = req; }
+  const network = fetch(netReq).then((res) => {
     if (res && res.ok) {
       const copy = res.clone();
       caches.open(CACHE_VERSION).then((c) => c.put(req, copy));
