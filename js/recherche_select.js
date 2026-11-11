@@ -26,7 +26,7 @@
     inp.placeholder = '🔍 Tapez le nom pour rechercher…';
     if (sel.id) inp.id = sel.id + '-ch';
     const ul = document.createElement('div'); ul.className = 'ch-list'; ul.hidden = true; ul.setAttribute('role', 'listbox');
-    sel.parentNode.insertBefore(box, sel); box.append(inp, ul, sel);
+    sel.parentNode.insertBefore(box, sel); box.append(inp, sel); document.body.appendChild(ul);
     sel.classList.add('ch-cache'); sel.tabIndex = -1; sel.setAttribute('aria-hidden', 'true');
     let vus = [], idx = -1;
     const creerFn = () => sel._chCreer || (sel.dataset.creer && window.chCreer && window.chCreer[sel.dataset.creer]) || null;
@@ -100,12 +100,12 @@
     }, 120));
     sel.addEventListener('change', maj);
     new MutationObserver(maj).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
-    sel._chMaj = maj; ACTIFS.add(sel);
+    sel._chMaj = maj; sel._chUl = ul; ACTIFS.add(sel);
     maj();
   }
 
   // valeur changée par le code (sel.value = …) : on resynchronise régulièrement les listes affichées
-  setInterval(() => ACTIFS.forEach(s => { if (!document.contains(s)) ACTIFS.delete(s); else s._chMaj(); }), 700);
+  setInterval(() => ACTIFS.forEach(s => { if (!document.contains(s)) { ACTIFS.delete(s); if (s._chUl) s._chUl.remove(); } else s._chMaj(); }), 700);
   const auScroll = () => ACTIFS.forEach(s => s._chScroll && s._chScroll());
   window.addEventListener('scroll', auScroll, true); window.addEventListener('resize', auScroll);
   const essayer = s => { if (!s.dataset.chOk && eligible(s)) ameliorer(s); };

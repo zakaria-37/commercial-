@@ -179,7 +179,7 @@ label:has(.pd-qbox){grid-column:1/-1}
   #v-produits > .tools label select,#v-produits > .tools label .ch-box,#v-produits > .tools label .ch-inp{width:100%;min-width:0;font-size:16px;font-weight:600;color:var(--ink,#111)}
   #v-produits > .tools .pd-plus{display:inline-flex;align-items:center;justify-content:center;width:50px;height:48px;padding:0;font-size:22px;grid-column:2}
   #v-produits > .tools > .btn:not(.pd-plus){display:none}
-  #v-produits > .tools.pd-open > .btn:not(.pd-plus){display:block;grid-column:1/-1;min-height:46px;animation:pdIn .18s ease both}
+  #v-produits > .tools.pd-open > .btn:not(.pd-plus){display:block;grid-column:1/-1;min-height:46px;animation:pdIn .18s ease backwards}
   /* chiffres clés : 3 petites cartes cliquables */
   #v-produits #pd-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px}
   #v-produits #pd-stats .at-stat{padding:9px 10px;border-radius:12px;min-width:0;cursor:pointer}
@@ -194,7 +194,7 @@ label:has(.pd-qbox){grid-column:1/-1}
   #pd-steps button.on{background:#111;color:#fff}
   #pd-steps button.on i{background:#fff;color:#111}
   #pd-steps button:active{transform:scale(.95)}
-  #v-produits #pd-main > [data-pd-step]{display:none;margin-top:0!important;padding:14px;animation:pdIn .22s cubic-bezier(.2,.7,.3,1) both}
+  #v-produits #pd-main > [data-pd-step]{display:none;margin-top:0!important;padding:14px;animation:pdIn .22s cubic-bezier(.2,.7,.3,1) backwards}
   #v-produits[data-step="1"] #pd-main > [data-pd-step="1"],#v-produits[data-step="2"] #pd-main > [data-pd-step="2"],
   #v-produits[data-step="3"] #pd-main > [data-pd-step="3"],#v-produits[data-step="4"] #pd-main > [data-pd-step="4"]{display:block}
   #v-produits[data-step="3"] #pd-main > [data-pd-step="3"] + [data-pd-step="3"]{margin-top:12px!important}

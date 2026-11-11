@@ -95,7 +95,7 @@
   #v-production .tools label select,#v-production .tools label .ch-box,#v-production .tools label .ch-inp{width:100%;min-width:0;font-size:16px;font-weight:600;color:var(--ink,#111)}
   #v-production .tools .pr-plus{display:inline-flex;align-items:center;justify-content:center;width:50px;height:48px;padding:0;font-size:22px;line-height:1;grid-column:2}
   #v-production .tools > .btn:not(.pr-plus){display:none}
-  #v-production .tools.pr-open > .btn:not(.pr-plus):not(#pr-btn-reprendre){display:block;grid-column:1/-1;min-height:46px;animation:prIn .18s ease both}
+  #v-production .tools.pr-open > .btn:not(.pr-plus):not(#pr-btn-reprendre){display:block;grid-column:1/-1;min-height:46px;animation:prIn .18s ease backwards}
   #v-production .tools .pr-sync{grid-column:1/-1;font-size:12px;justify-content:center}
 
   /* --- barre des étapes --- */
@@ -108,7 +108,7 @@
   #pr-steps button:active{transform:scale(.96)}
 
   /* --- une étape à la fois --- */
-  #v-production #pr-main > .card{animation:prIn .22s cubic-bezier(.2,.7,.3,1) both;margin-top:0!important;padding:14px}
+  #v-production #pr-main > .card{animation:prIn .22s cubic-bezier(.2,.7,.3,1) backwards;margin-top:0!important;padding:14px}
   #v-production[data-step="1"] #pr-main > .card + .card,
   #v-production[data-step="2"] #pr-main > #pr-steps + .card,
   #v-production[data-step="3"] #pr-main > #pr-steps + .card{display:none}
