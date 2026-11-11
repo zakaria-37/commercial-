@@ -71,10 +71,10 @@
   function carteSurface(l, p) {
     const g = l.gabarits, res = window.Calepinage ? Calepinage.calculer(g, p) : null;
     const a = article(l), pu = prixL(l);
-    if (!res || res.erreur) return '<div class="card gb-card"><h3>' + esc(nomL(l)) + '</h3><p class="cp-err">⛔ ' + esc(res && res.erreur || 'Gabarits incomplets : ouvrez « 📐 Gabarits » sur cette ligne dans Produits.') + '</p></div>';
+    if (!res || res.erreur) return '<div class="card gb-card"><div class="gb-ttl"><h3>📐 ' + esc(nomL(l)) + '</h3>' + btnModif(l, 'surface') + '</div><p class="cp-err">⛔ ' + esc(res && res.erreur || 'Gabarits incomplets : touchez « Modifier le calcul ».') + '</p></div>';
     const W = res.W, pl = plan(res, W), rl = a && window.StockAPI && StockAPI.aCond(a) ? StockAPI.condQte(a) : 0;
     const mN = res.total * N, mReel = pl.total / 100;
-    let h = '<div class="card gb-card"><div class="gb-ttl"><h3>📐 ' + esc(nomL(l)) + '</h3><span class="gb-tag">rouleau ' + nf(W, 0) + ' cm' + (res.marge ? ' · espace ' + nf(res.marge, 1) + ' cm' : '') + '</span></div>';
+    let h = '<div class="card gb-card"><div class="gb-ttl"><h3>📐 ' + esc(nomL(l)) + '</h3><span class="gb-tag">rouleau ' + nf(W, 0) + ' cm' + (res.marge ? ' · espace ' + nf(res.marge, 1) + ' cm' : '') + '</span>' + btnModif(l, 'surface') + '</div>';
     h += '<div class="gb-kpis"><div><span>Pour 1 produit</span><b>' + nf(res.total, 4) + ' m</b><small>' + (pu ? nf(res.total * pu, 2) + ' DA' : '') + '</small></div>' +
       '<div><span>Pour ' + nf(N, 0) + ' produits (calcul du coût)</span><b>' + nf(mN, 2) + ' m</b><small>' + (pu ? nf(mN * pu, 0) + ' DA' : '') + '</small></div>' +
       '<div><span>Plan de coupe réel</span><b>' + nf(mReel, 2) + ' m</b><small>rangées entières' + (mReel > mN ? ' · +' + nf(mReel - mN, 2) + ' m' : '') + '</small></div>' +
@@ -93,12 +93,13 @@
     return h;
   }
 
+  const btnModif = (l, type) => '<button type="button" class="btn s p gb-mod" data-gbmod="' + esc(l.id) + '" data-type="' + type + '">' + (type === 'longueur' ? '📏' : '📐') + ' Modifier le calcul</button>';
   /* ---------- une longueur (ligne 📏) ---------- */
   function carteLongueur(l, p) {
     const g = l.gabarits, r = window.Calepinage ? Calepinage.calculerLongueur(g, p) : null, pu = prixL(l);
-    if (!r || r.manque || !(r.cm > 0)) return '<div class="card gb-card"><h3>📏 ' + esc(nomL(l)) + '</h3><p class="cp-err">⛔ Longueur incomplète (gabarit supprimé ?) : ouvrez « 📏 Longueur » sur cette ligne dans Produits.</p></div>';
+    if (!r || r.manque || !(r.cm > 0)) return '<div class="card gb-card"><div class="gb-ttl"><h3>📏 ' + esc(nomL(l)) + '</h3>' + btnModif(l, 'longueur') + '</div><p class="cp-err">⛔ Longueur incomplète (gabarit supprimé ?) : touchez « Modifier le calcul ».</p></div>';
     const tot = r.cm, maxv = Math.max(...r.termes.map(x => Math.abs(x.cm)), Math.abs(num(g.ajout)), 1);
-    return '<div class="card gb-card"><div class="gb-ttl"><h3>📏 ' + esc(nomL(l)) + '</h3><span class="gb-tag">' + nf(tot, 1) + ' cm / produit</span></div>' +
+    return '<div class="card gb-card"><div class="gb-ttl"><h3>📏 ' + esc(nomL(l)) + '</h3><span class="gb-tag">' + nf(tot, 1) + ' cm / produit</span>' + btnModif(l, 'longueur') + '</div>' +
       '<div class="gb-kpis"><div><span>Pour 1 produit</span><b>' + nf(r.m, 4) + ' m</b><small>' + (pu ? nf(r.m * pu, 2) + ' DA' : '') + '</small></div><div><span>Pour ' + nf(N, 0) + ' produits</span><b>' + nf(r.m * N, 2) + ' m</b><small>' + (pu ? nf(r.m * N * pu, 0) + ' DA' : '') + '</small></div></div>' +
       '<div class="gb-lt">' + r.termes.map((x, i) => '<div class="gb-lr"><span>' + esc(x.g ? x.g.nom : '?') + ' — ' + (MES[x.mesure] || x.mesure) + (num(x.n) !== 1 ? ' × ' + nf(x.n, 2) : '') + '</span><i style="width:' + Math.max(2, Math.abs(x.cm) / maxv * 100) + '%;background:' + COUL[i % COUL.length] + '"></i><b>' + nf(x.cm, 1) + ' cm</b></div>').join('') +
       (num(g.ajout) ? '<div class="gb-lr"><span>' + (num(g.ajout) > 0 ? 'Ajout' : 'Retrait') + '</span><i style="width:' + Math.max(2, Math.abs(num(g.ajout)) / maxv * 100) + '%;background:' + (num(g.ajout) > 0 ? '#9fd8cf' : '#f4b4a8') + '"></i><b>' + (num(g.ajout) > 0 ? '+' : '') + nf(g.ajout, 1) + ' cm</b></div>' : '') +
@@ -117,13 +118,17 @@
       '<div class="gb-top"><label>Produit<select id="gb-prod">' + P.slice().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map(x => '<option value="' + esc(x.id) + '"' + (String(x.id) === String(sel) ? ' selected' : '') + '>' + esc(x.nom) + (lib(x).length ? ' · 📐 ' + lib(x).length : '') + '</option>').join('') + '</select></label>' +
       '<label>Produits à fabriquer<span class="gb-n"><button type="button" data-n="-">−</button><input id="gb-n" type="number" min="1" step="1" inputmode="numeric" value="' + N + '"><button type="button" data-n="+">+</button></span></label>' +
       '<button type="button" class="btn" id="gb-edit">✎ Modifier dans Produits</button></div>';
-    // bibliothèque
-    h += '<div class="card gb-card"><div class="gb-ttl"><h3>Gabarits du produit</h3><span class="gb-tag">' + L.length + ' gabarit(s)</span></div>' +
-      (L.length ? '<div class="gb-lib">' + L.map((g, i) => '<div class="gb-lb"><svg viewBox="0 0 60 60" width="46" height="46"><rect x="' + (30 - 26 * Math.min(1, g.l / Math.max(g.l, g.h))) + '" y="' + (30 - 26 * Math.min(1, g.h / Math.max(g.l, g.h))) + '" width="' + (52 * Math.min(1, g.l / Math.max(g.l, g.h))) + '" height="' + (52 * Math.min(1, g.h / Math.max(g.l, g.h))) + '" rx="3" fill="' + COUL[i % COUL.length] + '" stroke="#555"/></svg><div><b>' + esc(g.nom || 'Gabarit') + '</b><small>' + nf(g.l, 1) + ' × ' + nf(g.h, 1) + ' cm · périmètre ' + nf(num(g.p) > 0 ? g.p : 2 * (num(g.l) + num(g.h)), 1) + ' cm</small></div></div>').join('') + '</div>'
-        : '<p class="gb-help">Aucun gabarit pour ce produit. Ajoutez-les dans <b>Produits › 📐 Gabarits du produit</b>.</p>') + '</div>';
+    // gabarits du produit : modifiables ici (même carte que dans Produits, avec recalcul automatique)
+    h += '<div class="card gb-card" id="gb-libcard"></div>';
     h += surf.map(l => carteSurface(l, p)).join('') + lon.map(l => carteLongueur(l, p)).join('');
-    if (!surf.length && !lon.length) h += '<div class="card gb-card"><p class="gb-help">Aucune ligne de ce produit n’est encore calculée avec les gabarits. Dans <b>Produits</b>, utilisez <b>📐 Gabarits</b> (tissu, doublure, PVC) ou <b>📏 Longueur</b> (fermeture, tafta, liseré…).</p></div>';
+    // lignes du coût de revient pas encore calculées avec les gabarits
+    const autres = lg.filter(l => !(l.gabarits && l.gabarits.resultat) && l.categorie !== 'Finition' && (l.unite === 'm' || (window.Calepinage && Calepinage.estSurface(l))));
+    if (autres.length) h += '<div class="card gb-card"><div class="gb-ttl"><h3>À calculer avec les gabarits</h3><span class="gb-tag">' + autres.length + ' ligne(s)</span></div><div class="gb-todo">' +
+      autres.map(l => { const surfL = window.Calepinage && Calepinage.estSurface(l); return '<div class="gb-td"><div><b>' + esc(nomL(l)) + '</b><small>' + nf(l.quantite, 4) + ' ' + esc(l.unite) + ' / produit (saisi à la main)</small></div><button type="button" class="btn s p" data-gbmod="' + esc(l.id) + '" data-type="' + (surfL ? 'surface' : 'longueur') + '">' + (surfL ? '📐 Calculer' : '📏 Calculer') + '</button></div>'; }).join('') + '</div></div>';
+    if (!surf.length && !lon.length && !autres.length) h += '<div class="card gb-card"><p class="gb-help">Ce produit n’a pas encore de lignes de tissu ou de longueur dans son coût de revient.</p></div>';
     el.innerHTML = h;
+    const libc = document.getElementById('gb-libcard'); if (libc && window.Calepinage) Calepinage.carte(p, libc);
+    const ed = document.getElementById('gb-edit'); if (ed && typeof window.sectionPermise === 'function' && !window.sectionPermise('produits')) ed.style.display = 'none';
   }
 
   async function load() {
@@ -142,7 +147,9 @@
   document.addEventListener('click', e => {
     const el = root(); if (!el || !el.contains(e.target)) return;
     const b = e.target.closest('[data-n]'); if (b) { const pas = N >= 1000 ? 100 : N >= 200 ? 50 : N >= 50 ? 10 : 1; N = Math.max(1, b.dataset.n === '+' ? N + pas : N - pas); try { sessionStorage.setItem('mariabag_gb_n', N); } catch (x) {} render(); return; }
-    if (e.target.closest('#gb-edit')) { if (typeof window.selProduitDepuis === 'function') window.selProduitDepuis(sel); }
+    if (e.target.closest('#gb-edit')) { if (typeof window.selProduitDepuis === 'function') window.selProduitDepuis(sel); return; }
+    const m = e.target.closest('[data-gbmod]');
+    if (m && window.Calepinage) { (m.dataset.type === 'longueur' ? Calepinage.ouvrirLongueur : Calepinage.ouvrir)(m.dataset.gbmod); }
   });
   document.addEventListener('mariabag:produits', () => { if (document.getElementById('v-gabarits') && document.getElementById('v-gabarits').classList.contains('on')) render(); });
   window.loadGabarits = load;

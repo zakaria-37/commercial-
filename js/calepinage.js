@@ -73,6 +73,9 @@
     const somme = termes.reduce((s, x) => s + x.cm, 0), cm = somme + num(cfg.ajout);
     return { termes, somme, cm, m: cm / 100, manque: termes.filter(x => !x.g).length };
   }
+  /* message : dans la section Produits (toastD) ou ailleurs (toast général) */
+  const dire = m => { const pd = document.getElementById('v-produits'); if (pd && pd.classList.contains('on') && typeof toastD === 'function') toastD(m); else if (typeof toast === 'function') toast(m); };
+  const prevenir = () => { document.dispatchEvent(new Event('mariabag:produits')); if (typeof window.syncProduction === 'function') window.syncProduction(); };
   const resultatDe = (gab, p) => {
     if (!gab) return null;
     if (gab.type === 'longueur') { const r = calculerLongueur(gab, p); return r.cm > 0 && !r.manque ? r.m : null; }
@@ -172,8 +175,8 @@
     Object.assign(l, q.data && q.data[0] ? q.data[0] : patch);
     bg.remove();
     if (typeof renderProduits === 'function') renderProduits();
-    if (typeof window.syncProduction === 'function') window.syncProduction();
-    if (typeof toastD === 'function') toastD(appliquer ? 'Quantité appliquée : ' + nf(patch.quantite, 4) + ' m par produit.' : 'Gabarits enregistrés.');
+    prevenir();
+    dire(appliquer ? 'Quantité appliquée : ' + nf(patch.quantite, 4) + ' m par produit.' : 'Gabarits enregistrés.');
   }
   const optsLib = (L, sel, vide) => (vide ? '<option value="">' + vide + '</option>' : '') + L.map(g => '<option value="' + esc(g.id) + '"' + (g.id === sel ? ' selected' : '') + '>' + esc(g.nom || 'Gabarit') + ' (' + nf(g.l, 1) + ' × ' + nf(g.h, 1) + ')</option>').join('');
 
@@ -347,11 +350,16 @@
 
   /* ---------- Carte « Gabarits du produit » (page Produits) ---------- */
   let carteP = null, carteItems = [], modifie = false;
-  function carte(p) {
-    const lignesCard = document.getElementById('pd-lignes-body'); if (!lignesCard) return;
-    const anchor = lignesCard.closest('.card'); if (!anchor) return;
-    let box = document.getElementById('pd-gabcard');
-    if (!box) { box = document.createElement('div'); box.id = 'pd-gabcard'; box.className = 'card'; box.style.marginTop = '16px'; anchor.parentNode.insertBefore(box, anchor); brancher(box); }
+  /* carte(p) : dans la page Produits ; carte(p, element) : dans un autre endroit (ex. section Gabarits) */
+  function carte(p, cible) {
+    let box;
+    if (cible) { box = cible; if (!box._branche) { box._branche = true; brancher(box); } }
+    else {
+      const lignesCard = document.getElementById('pd-lignes-body'); if (!lignesCard) return;
+      const anchor = lignesCard.closest('.card'); if (!anchor) return;
+      box = document.getElementById('pd-gabcard');
+      if (!box) { box = document.createElement('div'); box.id = 'pd-gabcard'; box.className = 'card'; box.style.marginTop = '16px'; anchor.parentNode.insertBefore(box, anchor); brancher(box); }
+    }
     if (!p) { box.style.display = 'none'; return; }
     box.style.display = '';
     if (!carteP || String(carteP.id) !== String(p.id) || !modifie) { carteP = p; carteItems = lib(p).map(g => ({ ...g })); modifie = false; }
@@ -398,8 +406,8 @@
           modifie = false;
           const n = await recalculerProduit(carteP);
           if (typeof renderProduits === 'function') renderProduits();
-          if (n && typeof window.syncProduction === 'function') window.syncProduction();
-          if (typeof toastD === 'function') toastD('Gabarits enregistrés.' + (n ? ' ' + n + ' ligne(s) recalculée(s).' : ''));
+          prevenir();
+          dire('Gabarits enregistrés.' + (n ? ' ' + n + ' ligne(s) recalculée(s) : coût de revient et fiche matières à jour.' : ''));
         } catch (err) { t.disabled = false; t.textContent = 'Enregistrer et recalculer'; alert('Erreur : ' + (err.message || err)); }
       }
     });
@@ -415,7 +423,7 @@
     if (vus[p.id] === cle) return 0; vus[p.id] = cle;
     if (!lignes.some(l => { const e = etatLigne(l, p); return e && e.k === 'dec'; })) return 0;
     const n = await recalculerProduit(p);
-    if (n) { if (typeof renderProduits === 'function') renderProduits(); if (typeof window.syncProduction === 'function') window.syncProduction(); if (typeof toastD === 'function') toastD(n + ' ligne(s) recalculée(s) avec les gabarits à jour.'); }
+    if (n) { if (typeof renderProduits === 'function') renderProduits(); prevenir(); dire(n + ' ligne(s) recalculée(s) avec les gabarits à jour.'); }
     return n;
   }
   window.Calepinage = { calculer, calculerLongueur, maxPieces: null, ouvrir, ouvrirLongueur, carte, recalculerProduit, estSurface, etatLigne, verifierProduit, controler };
