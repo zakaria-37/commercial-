@@ -33,7 +33,7 @@
 
   const TYPES = {
     entree: ['Entrée', 'g', 1], livraison: ['Livraison', 'r', -1], retour: ['Retour client', 'g', 1],
-    perte: ['Perte / casse', 'o', -1], ajustement: ['Inventaire', 'o', 0]
+    perte: ['Perte / casse', 'o', -1], ajustement: ['Inventaire', 'o', 0], transfert: ['Transfert magasin', 'o', -1]
   };
 
   function toast(msg) {

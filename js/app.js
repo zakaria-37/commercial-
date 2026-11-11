@@ -170,6 +170,7 @@ function show(v) {
   else if (v === 'notes') { if (typeof loadNotes === 'function') loadNotes(); }
   else if (v === 'gabarits') { list(); if (typeof loadGabarits === 'function') loadGabarits(); }
   else if (v === 'sorties') { if (typeof loadSorties === 'function') loadSorties(); }
+  else if (v === 'magasins' || v === 'depot') { if (typeof loadMagasins === 'function') loadMagasins(); }
   else if (v === 'production') { list(); if (typeof loadProduction === 'function') loadProduction(); }      // données à jour (synchronisées avec Produits)
   else if (v === 'produits') { list(); if (typeof loadProduits === 'function') loadProduits(); }
   else list();

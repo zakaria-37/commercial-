@@ -21,7 +21,7 @@
 
   // Ordre = parents d'abord (important pour envoyer les nouvelles lignes à Supabase)
   var TABLES = ['contacts', 'ateliers', 'employes', 'modeles', 'stock_articles', 'composants', 'productions', 'commandes',
-                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers', 'credits_employes', 'rendez_vous', 'notes_perso', 'zacksmart_messages', 'credits_tiers', 'caisse', 'bons_sortie'];
+                'acomptes', 'pointages', 'charges', 'produits', 'produit_lignes', 'stock_mouvements', 'charges_fixes', 'pf_mouvements', 'inventaires', 'inventaire_lignes', 'documents', 'document_lignes', 'paiements', 'parametres', 'remises_hs', 'paiements_ateliers', 'credits_employes', 'rendez_vous', 'notes_perso', 'zacksmart_messages', 'credits_tiers', 'caisse', 'bons_sortie', 'magasins', 'commandes_magasin'];
 
   // Valeurs par défaut (les mêmes que dans les fichiers supabase/*.sql)
   var DEFAULTS = {
@@ -41,7 +41,9 @@
     stock_articles: { unite: 'm', cond_nom: '', cond_qte: 0, prix_achat: 0, seuil_alerte: 0, fournisseur: '', contact_id: null, marque: 'MARIA BAG', couleur: '', note: '' },
     stock_mouvements: { date_mvt: null, type: 'entree', prix_achat: null, fournisseur: '', contact_id: null, reference: '', note: '', source: 'manuel' },
     bons_sortie: { numero: '', date_bon: null, modele_id: null, modele_nom: '', quantite: 0, atelier: '', chef: '', lignes: [], statut: 'a_preparer', cree_par: '', valide_par: '', valide_le: null, message: '', stock_sorti: false, note: '' },
-    produits: { description: '', modele_id: null, mo_date: null, mo_salaires: 0, mo_charges: 0, mo_pieces: 0, prix_vente: 0, prix_achat: 0, seuil_pf: 0, marque: 'MARIA BAG', gabarits: null },
+    magasins: { responsable: '', adresse: '', note: '' },
+    commandes_magasin: { numero: '', magasin_id: null, magasin_nom: '', date_cmd: null, lignes: [], statut: 'envoyee', cree_par: '', prepare_par: '', valide_le: null, message: '', note: '', stock_sorti: false },
+    produits: { description: '', modele_id: null, mo_date: null, mo_salaires: 0, mo_charges: 0, mo_pieces: 0, prix_vente: 0, prix_achat: 0, seuil_pf: 0, marque: 'MARIA BAG', gabarits: null, par_carton: 0 },
     pf_mouvements: { date_mvt: null, type: 'entree', contact_id: null, client_nom: '', commande_id: null, production_id: null, prix_vente: null, prix_achat: null, reference: '', note: '' },
     paiements_ateliers: { atelier_id: null, atelier_nom: '', production_id: null, type: 'paiement', date_paiement: null, mode: 'especes', reference: '', note: '' },
     paiements: { date_paiement: null, contact_id: null, contact_nom: '', mode: 'especes', reference: '', note: '', document_id: null },
