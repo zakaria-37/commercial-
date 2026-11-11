@@ -254,20 +254,20 @@ function renderLignes() {
   const ordre = k => { const i = CATS_D.findIndex(c => c.k === k); return i < 0 ? 99 : i; };
   const sorted = [...list].sort((a, b) => ordre(a.categorie) - ordre(b.categorie) || (Number(a.ordre) || 0) - (Number(b.ordre) || 0));
   $d('#pd-lignes-body').innerHTML = sorted.length ? sorted.map(l =>
-    '<tr><td><span class="pd-cat pd-cat-' + ordre(l.categorie) + '">' + escD(catLbl(l.categorie)) + '</span></td>' +
-    '<td><b>' + escD(nomLigne(l)) + '</b>' + (l.note ? '<small class="pd-note">' + escD(l.note) + '</small>' : '') +
+    '<tr class="pl-row" data-lid="' + escD(l.id) + '" data-pack="' + (l.sous_produit_id ? 1 : '') + '"><td class="pl-c"><span class="pd-cat pd-cat-' + ordre(l.categorie) + '">' + escD(catLbl(l.categorie)) + '</span></td>' +
+    '<td class="pl-n"><b>' + escD(nomLigne(l)) + '</b>' + (l.note ? '<small class="pd-note">' + escD(l.note) + '</small>' : '') +
       (l.gabarits && l.gabarits.resultat ? '<small class="pd-note">' + (l.gabarits.type === 'longueur' ? '📏 longueur calculée avec ' + (l.gabarits.termes || []).length + ' mesure(s) de gabarits' : '📐 métrage : ' + (l.gabarits.items || []).length + ' gabarit(s), laize ' + escD(l.gabarits.laize) + ' cm') + '</small>' : '') + '</td>' +
-    '<td>' + numD(l.quantite, 4) + ' ' + escD(l.unite) + '</td>' +
-    '<td>' + numD(prixLigne(l), 2) + ' DA / ' + escD(l.unite) + (articleLigne(l) ? '<small class="pd-note">✔ Synchronisé avec le Stock</small>' : l.sous_produit_id ? '<small class="pd-note">coût de revient du produit</small>' : '') + '</td>' +
-    '<td>' + (Number(l.perte_pct) ? numD(l.perte_pct, 2) + ' %' : '—') + '</td>' +
-    '<td><b>' + moneyD(coutLigne(l)) + '</b></td>' +
-    '<td class="emp-act">' + (l.sous_produit_id ? '' : window.Calepinage && Calepinage.estSurface(l)
+    '<td class="pl-q">' + numD(l.quantite, 4) + ' ' + escD(l.unite) + '</td>' +
+    '<td class="pl-p">' + numD(prixLigne(l), 2) + ' DA / ' + escD(l.unite) + (articleLigne(l) ? '<small class="pd-note">✔ Synchronisé avec le Stock</small>' : l.sous_produit_id ? '<small class="pd-note">coût de revient du produit</small>' : '') + '</td>' +
+    '<td class="pl-ch' + (Number(l.perte_pct) ? '' : ' pc-nil') + '">' + (Number(l.perte_pct) ? numD(l.perte_pct, 2) + ' %' : '—') + '</td>' +
+    '<td class="pl-t"><b>' + moneyD(coutLigne(l)) + '</b></td>' +
+    '<td class="emp-act pl-a">' + (l.sous_produit_id ? '' : window.Calepinage && Calepinage.estSurface(l)
       ? '<button class="btn s p" type="button" onclick="ouvrirCalepinage(\'' + escD(l.id) + '\')" title="Mètres de tissu par pièce à partir des gabarits">📐 Gabarits</button> '
       : l.unite === 'm' || /fermeture|curseur|tafta|lis[eé]r|sangle|biais|passepoil|ruban|cordon/i.test(l.categorie + ' ' + nomLigne(l)) ? '<button class="btn s p" type="button" onclick="ouvrirLongueurGab(\'' + escD(l.id) + '\')" title="Longueur à partir des gabarits (périmètre, côté…)">📏 Longueur</button> ' : '') +
       '<button class="btn s" type="button" onclick="' + (l.sous_produit_id ? 'showFormPack' : 'showFormLigne') + '(\'' + escD(l.id) + '\')">Modifier</button> ' +
     '<button class="btn s d" type="button" onclick="removeLigne(\'' + escD(l.id) + '\')">Supprimer</button></td></tr>'
   ).join('') +
-    '<tr class="pr-total"><td colspan="5">Total matières et fournitures (1 pièce)</td><td>' + moneyD(coutMatieres(list)) + '</td><td></td></tr>'
+    '<tr class="pr-total pl-tot"><td colspan="5">Total matières et fournitures (1 pièce)</td><td>' + moneyD(coutMatieres(list)) + '</td><td></td></tr>'
     : '<tr><td colspan="7" class="at-empty">Aucune ligne. Cliquez sur « + Ajouter une ligne » ou importez la fiche matières d’un modèle.</td></tr>';
 
   // modèles de la fiche matières (onglet Production) pour l'import

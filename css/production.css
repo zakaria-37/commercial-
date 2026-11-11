@@ -244,3 +244,5 @@
   #pr-fin-body tr.pr-need td:last-child{text-align:right!important}
   #pr-fin-body tr.pr-need td:last-child small{font-size:11.5px;color:var(--mut)}
 }
+#v-production .tools label select,#v-production .tools label .ch-box{min-width:240px}
+@media (max-width:700px){#v-production .tools label select,#v-production .tools label .ch-box{min-width:0}}

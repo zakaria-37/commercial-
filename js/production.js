@@ -74,7 +74,18 @@ const composantsMat = id => composantsDe(id).filter(c => !isFin(c));
 const composantsFin = id => composantsDe(id).filter(isFin);
 
 /* ---------- Chargement ---------- */
-async function loadProduction() {
+let chargeEnCours = null;
+async function loadProduction(sansSync) {
+  // un seul chargement à la fois (évite les synchronisations en double, source de composants dupliqués)
+  if (chargeEnCours && !sansSync) {        // déjà en cours : on attend la fin puis on recharge une fois (données fraîches)
+    if (!chargeEnCours._suite) chargeEnCours._suite = chargeEnCours.catch(() => {}).then(() => loadProduction());
+    return chargeEnCours._suite;
+  }
+  const run = chargerProduction(sansSync);
+  if (!sansSync) { chargeEnCours = run; run.finally(() => { if (chargeEnCours === run) chargeEnCours = null; }); }
+  return run;
+}
+async function chargerProduction(sansSync) {
   try { if (window.StockAPI) await StockAPI.load(); } catch (e) { /* stock non installé : la fiche matières marche sans */ }
   const m = await sb.from('modeles').select('*').order('nom', { ascending: true });
   if (m.error) { MODELES = []; COMPOSANTS = []; toastP('Erreur : ' + errMsgP(m.error)); renderAll(errMsgP(m.error)); return; }
@@ -82,7 +93,7 @@ async function loadProduction() {
   if (c.error) { MODELES = m.data || []; COMPOSANTS = []; toastP('Erreur : ' + errMsgP(c.error)); renderAll(errMsgP(c.error)); return; }
   MODELES = m.data || [];
   COMPOSANTS = c.data || [];
-  if (await depuisProduits()) return loadProduction();
+  if (!sansSync && await depuisProduits()) return chargerProduction(true);      // une seule passe de synchronisation, puis affichage
   if (!MODELES.some(x => String(x.id) === String(selModele))) selModele = MODELES.length ? MODELES[0].id : null;
   renderAll();
 }
@@ -123,7 +134,7 @@ async function depuisProduits() {
     // SYNCHRONISATION : les composants du modèle suivent toujours les lignes du coût de revient du produit
     const rows = composantsDepuis(p.id, m.id);
     if (rows.length && signatureP(rows) !== signatureP(composantsDe(m.id))) {
-      for (const c of composantsDe(m.id)) await sb.from('composants').delete().eq('id', c.id);
+      await sb.from('composants').delete().eq('modele_id', m.id);       // tous les composants du modèle (doublons compris)
       const r = await sb.from('composants').insert(rows); if (!r.error) maj++;
     }
   }
@@ -502,6 +513,8 @@ async function saveComposant() {
     if (a && StockAPI.toBase(a, 1, unite) != null) articleId = a.id;
   }
   const payload = { nom, unite, quantite, perte_pct: perte, note, article_id: articleId, type: fin ? 'finition' : 'matiere', prix_unitaire: fin ? prixFin : 0 };
+  const cle = c => [c.type || 'matiere', c.article_id || String(c.nom || '').trim().toLowerCase(), c.unite, Number(c.prix_unitaire) || 0].join('|');
+  if (composantsDe(m.id).some(c => String(c.id) !== String(curComposant || '') && cle(c) === cle(payload))) { toastP('« ' + nom + ' » est déjà dans ce modèle : modifiez la ligne existante.'); return; }
   const lieP = produitLie(m.id);
   if (estPackP(lieP)) { toastP('« ' + m.nom + ' » est un pack : modifiez les produits qui le composent (section Produits), le pack suivra.'); return; }
   const avantC = curComposant ? Object.assign({}, COMPOSANTS.find(x => String(x.id) === String(curComposant)) || {}) : null;

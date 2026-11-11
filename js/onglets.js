@@ -39,9 +39,11 @@
     }
     T.ouverts = T.ouverts.filter(v => navBtn(v));
     if (!T.ouverts.includes('dash')) T.ouverts.unshift('dash');
-    bar.innerHTML = T.ouverts.map(v => '<button type="button" role="tab" class="tb' + (v === T.actif ? ' on' : '') + '" data-tab="' + v + '" title="' + nom(v) + '">' +
+    const html = T.ouverts.map(v => '<button type="button" role="tab" class="tb' + (v === T.actif ? ' on' : '') + '" data-tab="' + v + '" title="' + nom(v) + '">' +
       '<span class="tb-n">' + nom(v) + '</span>' + (maj.has(v) && v !== T.actif ? '<i class="tb-maj" title="Données mises à jour">●</i>' : '') +
       (v === 'dash' ? '' : '<span class="tb-x" data-tclose="' + v + '" title="Fermer l’onglet">×</span>') + '</button>').join('');
+    if (bar._html === html) return;          // rien n'a changé : on ne touche pas aux boutons (un clic en cours n'est pas perdu)
+    bar._html = html; bar.innerHTML = html;
     const on = bar.querySelector('.tb.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
@@ -83,7 +85,8 @@
   }
 
   // données modifiées (cette section, une autre, ou un autre appareil) : point sur les onglets cachés
-  if (window.LocalDB && LocalDB.onChange) LocalDB.onChange(() => { T.ouverts.forEach(v => { if (v !== T.actif) maj.add(v); }); rendre(); });
+  let tMaj = null;
+  if (window.LocalDB && LocalDB.onChange) LocalDB.onChange(() => { T.ouverts.forEach(v => { if (v !== T.actif) maj.add(v); }); clearTimeout(tMaj); tMaj = setTimeout(rendre, 250); });
 
   document.addEventListener('keydown', e => {
     if (!e.ctrlKey || e.key !== 'Tab' || T.ouverts.length < 2) return;

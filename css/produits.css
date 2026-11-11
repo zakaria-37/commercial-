@@ -166,3 +166,103 @@ label:has(.pd-qbox){grid-column:1/-1}
   .cp-lt select,.cp-lt input{font-size:16px}
 }
 @media (min-width:701px){ .cp-lt,.cp-gc{width:100%;min-width:0!important} }
+
+/* ============================================================
+   PRODUITS sur smartphone : 4 étapes, lignes compactes
+   ============================================================ */
+#pd-steps,.pd-plus,.pd-lsupp{display:none}
+@media (max-width:700px){
+  #v-produits .hello,#v-produits .back-stock,#v-produits #pd-desc:empty{display:none}
+  /* produit + menu ⋯ */
+  #v-produits > .tools{display:grid;grid-template-columns:minmax(0,1fr) 50px;gap:8px;align-items:end;margin:4px 0 10px}
+  #v-produits > .tools label{display:flex!important;flex-direction:column;align-items:stretch!important;gap:4px!important;font-size:12px;color:var(--mut);min-width:0;grid-column:1}
+  #v-produits > .tools label select,#v-produits > .tools label .ch-box,#v-produits > .tools label .ch-inp{width:100%;min-width:0;font-size:16px;font-weight:600;color:var(--ink,#111)}
+  #v-produits > .tools .pd-plus{display:inline-flex;align-items:center;justify-content:center;width:50px;height:48px;padding:0;font-size:22px;grid-column:2}
+  #v-produits > .tools > .btn:not(.pd-plus){display:none}
+  #v-produits > .tools.pd-open > .btn:not(.pd-plus){display:block;grid-column:1/-1;min-height:46px;animation:pdIn .18s ease both}
+  /* chiffres clés : 3 petites cartes cliquables */
+  #v-produits #pd-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px}
+  #v-produits #pd-stats .at-stat{padding:9px 10px;border-radius:12px;min-width:0;cursor:pointer}
+  #v-produits #pd-stats .at-stat span{font-size:11px;line-height:1.2}
+  #v-produits #pd-stats .at-stat b{font-size:15px;white-space:nowrap}
+  #v-produits #pd-stats .at-stat small{display:none}
+  /* étapes */
+  #pd-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;position:sticky;top:calc(var(--hdr-h,0px) + 4px);z-index:25;padding:4px;margin:0 0 12px;
+    background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--line,#e6e0e3);border-radius:14px;box-shadow:0 4px 14px rgba(20,10,15,.07)}
+  #pd-steps button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:48px;padding:4px 2px;border:0;border-radius:10px;background:none;font:600 11.5px inherit;font-family:inherit;color:var(--mut);cursor:pointer;transition:background .2s,color .2s,transform .12s;line-height:1.1}
+  #pd-steps button i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;background:var(--nb,#f1ecee);font-size:11px}
+  #pd-steps button.on{background:#111;color:#fff}
+  #pd-steps button.on i{background:#fff;color:#111}
+  #pd-steps button:active{transform:scale(.95)}
+  #v-produits #pd-main > [data-pd-step]{display:none;margin-top:0!important;padding:14px;animation:pdIn .22s cubic-bezier(.2,.7,.3,1) both}
+  #v-produits[data-step="1"] #pd-main > [data-pd-step="1"],#v-produits[data-step="2"] #pd-main > [data-pd-step="2"],
+  #v-produits[data-step="3"] #pd-main > [data-pd-step="3"],#v-produits[data-step="4"] #pd-main > [data-pd-step="4"]{display:block}
+  #v-produits[data-step="3"] #pd-main > [data-pd-step="3"] + [data-pd-step="3"]{margin-top:12px!important}
+  #v-produits > .card:last-of-type{display:none}
+  @keyframes pdIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  #v-produits .pr-help{font-size:12.5px}
+
+  /* ① matières : en-tête et lignes compactes */
+  #v-produits [data-pd-step="1"] > .at-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  #v-produits [data-pd-step="1"] > .at-actions h2{grid-column:1/-1;font-size:15px;line-height:1.25;margin:0}
+  #v-produits [data-pd-step="1"] > .at-actions .btn{min-height:44px;font-size:13px;width:100%;white-space:normal;line-height:1.2}
+  #v-produits [data-pd-step="1"] > .pr-help{display:none}
+  #v-produits [data-pd-step="1"] > .at-actions:not(:first-child){display:flex;flex-wrap:wrap;gap:6px}
+  #v-produits [data-pd-step="1"] > .at-actions:not(:first-child) .btn{width:auto;min-height:38px;flex:1 1 auto}
+  #pd-lignes-body tr.pl-row{display:grid!important;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:11px 30px 11px 12px!important;margin-bottom:8px!important;border-radius:12px!important;position:relative;cursor:pointer;transition:background .15s,transform .12s}
+  #pd-lignes-body tr.pl-row:active{background:#faf6f7;transform:scale(.99)}
+  #pd-lignes-body tr.pl-row::after{content:"›";position:absolute;right:11px;top:50%;transform:translateY(-50%);color:#b9aeb2;font-size:22px;line-height:1}
+  #pd-lignes-body tr.pl-row td{display:block!important;padding:0!important;border:0!important;text-align:left!important;min-width:0}
+  #pd-lignes-body tr.pl-row td::before{display:none!important}
+  #pd-lignes-body td.pl-n{grid-column:1;grid-row:1;font-size:14.5px!important}
+  #pd-lignes-body td.pl-n small{font-size:11.5px}
+  #pd-lignes-body td.pl-t{grid-column:2;grid-row:1;text-align:right!important;white-space:nowrap}
+  #pd-lignes-body td.pl-t b{font-size:15.5px}
+  #pd-lignes-body td.pl-c{grid-column:1;grid-row:2}
+  #pd-lignes-body td.pl-c .pd-cat{font-size:11px;padding:2px 8px}
+  #pd-lignes-body td.pl-q{grid-column:2;grid-row:2;text-align:right!important;font-size:12.5px;color:var(--mut);white-space:nowrap}
+  #pd-lignes-body td.pl-p{grid-column:1/-1;font-size:12px;color:var(--mut)}
+  #pd-lignes-body td.pl-p small{display:inline!important;margin-left:6px}
+  #pd-lignes-body td.pl-ch{grid-column:1/-1;font-size:12px;color:var(--mut)}
+  #pd-lignes-body td.pl-ch:not(.pc-nil)::before{display:inline!important;content:"Chute : "!important;font-weight:400!important;font-size:12px!important;max-width:none!important}
+  #pd-lignes-body td.pc-nil{display:none!important}
+  #pd-lignes-body td.pl-a{grid-column:1/-1;display:flex!important;gap:6px;padding-top:6px!important}
+  #pd-lignes-body td.pl-a .btn:not(.p){display:none}
+  #pd-lignes-body td.pl-a .btn.p{min-height:34px;font-size:12.5px;padding:4px 12px}
+  #pd-lignes-body tr.pl-tot{display:flex!important;justify-content:space-between;align-items:center;padding:12px!important;border-radius:12px!important;background:#111!important;color:#fff}
+  #pd-lignes-body tr.pl-tot td{display:block!important;border:0!important;padding:0!important;color:#fff;font-weight:700}
+  #pd-lignes-body tr.pl-tot td::before{display:none!important}
+  #pd-lignes-body tr.pl-tot td:empty{display:none!important}
+
+  /* formulaires */
+  #v-produits .at-form{border-radius:14px;padding:14px}
+  #v-produits .at-form input,#v-produits .at-form select{font-size:16px;min-height:46px}
+  #v-produits .at-form > .at-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  #v-produits .at-form > .at-actions .btn{min-height:48px;width:100%}
+  #v-produits .at-form .pd-lsupp{display:block;grid-column:1/-1;background:#fff}
+  #v-produits .at-fields{grid-template-columns:1fr 1fr!important}
+  #v-produits .at-fields > label:has(input[type=text]),#v-produits .at-fields > label:has(select){grid-column:1/-1}
+
+  /* ③ main d'œuvre et ④ coût */
+  #v-produits [data-pd-step="3"] h2,#v-produits [data-pd-step="4"] h2{font-size:15px}
+  #v-produits [data-pd-step] .at-actions:not(.at-form .at-actions){display:grid;grid-template-columns:1fr;gap:8px}
+  #v-produits [data-pd-step="3"] .at-actions .btn,#v-produits [data-pd-step="4"] .at-actions .btn{min-height:48px;width:100%;white-space:normal;line-height:1.2}
+  #v-produits [data-pd-step="4"] .at-fields{max-width:none!important}
+  #v-produits button,#v-produits .pl-row{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+}
+@media (max-width:700px) and (prefers-reduced-motion:reduce){#v-produits #pd-main > [data-pd-step],#v-produits > .tools.pd-open > .btn{animation:none}}
+@media (max-width:700px){
+  #v-produits [data-pd-step="1"] > .pd-import{display:none}
+  #pd-lignes-body tr.pl-row td.pc-nil{display:none!important}
+  #v-produits [data-pd-step="1"] > .at-actions:first-child .btn:nth-of-type(2){background:#fff}
+  /* ④ coût : une ligne par élément */
+  #pd-cout-body tr{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:10px 12px!important;margin-bottom:6px!important;border-radius:10px!important}
+  #pd-cout-body tr td{display:block!important;padding:0!important;border:0!important;text-align:left!important;font-size:14px!important}
+  #pd-cout-body tr td::before{display:none!important}
+  #pd-cout-body tr td:nth-child(2){font-weight:700;white-space:nowrap}
+  #pd-cout-body tr td:nth-child(3){font-size:12px!important;color:var(--mut);min-width:44px;text-align:right!important}
+  #pd-cout-body tr:last-child{background:#111!important;color:#fff}
+  #pd-cout-body tr:last-child td{color:#fff;font-weight:700}
+  #v-produits #pd-stats .at-stat.pd-total{grid-column:auto}
+  #v-produits #pd-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+}

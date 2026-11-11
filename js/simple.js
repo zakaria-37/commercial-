@@ -427,10 +427,14 @@
   function appliquerMode() {
     const simple = mode === 'simple';
     document.body.classList.toggle('mode-simple', simple);
-    ['production', 'produits'].forEach(v => { const b = document.querySelector('nav button[data-v="' + v + '"]'); if (b) b.hidden = simple; });
+    // sur smartphone, Production et Produits sont toujours deux sections séparées dans le menu du bas
+    const tel = window.matchMedia('(max-width:700px)').matches;
+    ['production', 'produits'].forEach(v => { const b = document.querySelector('nav button[data-v="' + v + '"]'); if (b) b.hidden = simple && !tel; });
+    document.body.classList.toggle('mode-tel', tel);
     const mb = $('#bMode'); if (mb) { mb.textContent = simple ? 'Mode complet' : 'Mode simple'; mb.title = simple ? 'Afficher aussi les onglets Production et Produits' : 'Masquer les onglets Production et Produits'; }
     const lk = $('#sp-modelink'); if (lk) lk.textContent = simple ? 'afficher tous les onglets (mode complet)' : 'revenir au mode simple';
   }
+  try { window.matchMedia('(max-width:700px)').addEventListener('change', () => appliquerMode()); } catch (e) {}
   function basculerMode() { mode = mode === 'simple' ? 'complet' : 'simple'; try { localStorage.setItem('mariabag_mode', mode); } catch (e) {} appliquerMode(); }
 
   /* ---------- Listes de départ ---------- */
