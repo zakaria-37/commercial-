@@ -418,3 +418,31 @@ body[data-role="equipe"] #pr-btn-direct{display:none}
 .mg-ann{background:#f3eeee!important;color:#7a6a6a!important}
 .mg-warn{background:#fff1f0;color:#a12b20;border-radius:10px;padding:8px 10px;font-size:13px}
 @media (max-width:700px){ .mg-hello p{display:none} }
+/* commande magasin : tableau libre (ligne sur ordinateur, fiche sur smartphone) */
+.mg-tab-cmd{padding:12px}.mg-tab-cmd h3{margin:0 0 4px;font-size:16px}
+.mg-aide{font-size:12.5px;color:var(--mut);margin:0 0 10px;line-height:1.45}
+.mg-tbl{display:flex;flex-direction:column;gap:0;border:1px solid var(--line,#e6e0e3);border-radius:12px;overflow:hidden}
+.mg-th,.mg-tr{display:grid;grid-template-columns:110px minmax(140px,1.6fr) minmax(120px,1.3fr) 78px 78px 96px 84px 40px;gap:6px;align-items:center;padding:6px 8px}
+.mg-th{background:#f6f1f3;font-size:12px;font-weight:700;color:var(--mut)}
+.mg-tr{border-top:1px solid var(--line,#eee)}
+.mg-tr label{display:block;min-width:0}.mg-tr label span{display:none}
+.mg-tr input{width:100%;box-sizing:border-box;height:40px;border:1.5px solid var(--line,#e6e0e3);border-radius:9px;padding:0 8px;font:inherit;font-size:15px;background:#fff}
+.mg-tr input:focus{border-color:var(--ink,#3a2422);outline:0}
+.mg-tr input[type=number]{text-align:center}
+.mg-tr .mg-x{grid-area:auto}
+.c-tot{text-align:right;font-size:13px;white-space:nowrap}.c-tot i{color:var(--mut);font-style:normal}
+.mg-add{width:100%;margin:10px 0 0;min-height:46px;border-style:dashed}
+.mg-nm .mg-t{display:block;font-size:14.5px}
+.mg-nm .mg-q{display:block;color:var(--ink,#333)!important;font-size:12.5px}
+.mg-nm .mg-c{display:block;color:#7a4b8a!important;font-size:12px}
+.mg-env em{font-style:normal;min-width:44px}
+.mg-diff{color:#b3261e!important}
+@media (max-width:700px){
+  .mg-th{display:none}
+  .mg-tbl{border:0;gap:10px;overflow:visible}
+  .mg-tr{grid-template-columns:1fr 1fr 1fr;grid-template-areas:"ref des des" "coul coul coul" "ct pcs pc" "tot tot x";border:1px solid var(--line,#e6e0e3);border-radius:12px;padding:10px;gap:8px;background:#fff}
+  .mg-tr label span{display:block;font-size:11.5px;color:var(--mut);margin:0 0 3px}
+  .c-ref{grid-area:ref}.c-des{grid-area:des}.c-coul{grid-area:coul}.c-ct{grid-area:ct}.c-pcs{grid-area:pcs}.c-pc{grid-area:pc}
+  .c-tot{grid-area:tot;text-align:left;font-size:14px}.mg-tr .mg-x{grid-area:x;justify-self:end}
+  .mg-tr input{height:44px;font-size:16px}
+}
