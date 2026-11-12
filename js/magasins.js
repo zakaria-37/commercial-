@@ -38,12 +38,14 @@
     const nc = listeCouleurs(l).length, pc = int(l.par_couleur), c = int(l.cartons), p = int(l.pcs);
     if (pc && nc) return pc * nc;
     if (c && p) return c * p;
+    if (p && !c) return p;                                 // pas de cartons : ce sont des pièces
     if (pc && !nc && !c) return pc;
     return null;                                           // inconnu (ex. seulement des cartons)
   }
   function qteTxt(l) {
     const c = int(l.cartons), p = int(l.pcs), pc = int(l.par_couleur), nc = listeCouleurs(l).length, t = [];
     if (c) t.push(p ? c + ' × ' + p + ' = ' + nf(c * p) + ' pcs' : c + ' carton' + (c > 1 ? 's' : ''));
+    else if (p && !pc) t.push(nf(p) + ' pièce' + (p > 1 ? 's' : ''));
     if (pc) t.push(pc + ' de chaque couleur' + (nc ? ' (' + nc + ' couleur' + (nc > 1 ? 's' : '') + ' = ' + nf(pc * nc) + ' pcs)' : ''));
     return t.join(' · ') || '—';
   }
@@ -128,9 +130,9 @@
   function vueCommander() {
     const refs = [...connusRefs().values()];
     return '<div class="card mg-tab-cmd"><h3>Nouvelle commande</h3>' +
-      '<p class="mg-aide">Une ligne par modèle. <b>Cartons × pièces</b> : ex. 1 × 50. Pièces par carton inconnues ? Remplissez seulement les cartons. Par couleur : ex. 2467, couleurs « noir, beige, marron », 10 de chaque.</p>' +
+      '<p class="mg-aide">Une ligne par modèle. <b>Cartons × pièces</b> : ex. 1 × 50. Pièces par carton inconnues ? Remplissez seulement les cartons. <b>Sans carton</b> : laissez Cartons vide et mettez le nombre de pièces (ex. 10). Par couleur : ex. 2467, couleurs « noir, beige, marron », 10 de chaque.</p>' +
       '<datalist id="mg-refs">' + refs.map(r => '<option value="' + esc(r.ref) + '">' + esc(r.designation) + '</option>').join('') + '</datalist>' +
-      '<div class="mg-tbl"><div class="mg-th"><span>Modèle</span><span>Désignation</span><span>Couleurs</span><span>Cartons</span><span>× Pcs</span><span>De chaque couleur</span><span>Total</span><span></span></div>' +
+      '<div class="mg-tbl"><div class="mg-th"><span>Modèle</span><span>Désignation</span><span>Couleurs</span><span>Cartons</span><span>Pièces <small>(÷ carton)</small></span><span>De chaque couleur</span><span>Total</span><span></span></div>' +
       panier.map((l, i) => ligneSaisie(l, i)).join('') + '</div>' +
       '<button type="button" class="btn mg-add" data-addl="1">＋ Ajouter une ligne</button>' +
       '<textarea id="mg-note" rows="2" maxlength="300" placeholder="Note pour le dépôt (facultatif)">' + esc(noteCmd) + '</textarea>' +
@@ -143,11 +145,12 @@
       '<label class="c-des"><span>Désignation</span><input data-f="designation" autocomplete="off" placeholder="ex : sac à main femme" value="' + esc(l.designation) + '"></label>' +
       '<label class="c-coul"><span>Couleurs</span><input data-f="couleurs" autocomplete="off" placeholder="noir, beige… (facultatif)" value="' + esc(l.couleurs) + '"></label>' +
       '<label class="c-ct"><span>Cartons</span><input data-f="cartons" type="number" inputmode="numeric" min="0" step="1" placeholder="0" value="' + esc(l.cartons) + '"></label>' +
-      '<label class="c-pcs"><span>× Pièces / carton</span><input data-f="pcs" type="number" inputmode="numeric" min="0" step="1" placeholder="?" value="' + esc(l.pcs) + '"></label>' +
+      '<label class="c-pcs"><span>' + pcsLabel(l) + '</span><input data-f="pcs" type="number" inputmode="numeric" min="0" step="1" placeholder="' + (int(l.cartons) ? '?' : '0') + '" value="' + esc(l.pcs) + '"></label>' +
       '<label class="c-pc"><span>De chaque couleur</span><input data-f="par_couleur" type="number" inputmode="numeric" min="0" step="1" placeholder="—" value="' + esc(l.par_couleur) + '"></label>' +
       '<div class="c-tot" data-tot="' + i + '">' + totCell(l, t) + '</div>' +
       '<button type="button" class="mg-x" data-retirer="' + i + '" aria-label="Retirer la ligne">✕</button></div>';
   }
+  const pcsLabel = l => int(l.cartons) ? '× Pièces / carton' : 'Pièces';
   const totCell = (l, t) => t != null ? '<b>' + nf(t) + '</b> pcs' : int(l.cartons) ? '<b>' + int(l.cartons) + '</b> ctn' : '<i>—</i>';
 
   async function envoyerCommande() {
@@ -333,6 +336,7 @@
                  if (!l.pcs && k.pcs) { l.pcs = k.pcs; const p = tr.querySelector('[data-f="pcs"]'); if (p) p.value = k.pcs; } }
       }
       const tot = tr.querySelector('[data-tot]'); if (tot) tot.innerHTML = totCell(l, totalPieces(l));
+      const lb = tr.querySelector('.c-pcs span'); if (lb) lb.textContent = pcsLabel(l);
       garderPanier();
     }
   });
