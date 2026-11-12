@@ -160,6 +160,7 @@ async function loadProduits() {
   LIGNES = l.data || [];
   if (!PRODUITS.some(x => String(x.id) === String(selProduit))) selProduit = PRODUITS.length ? PRODUITS[0].id : null;
   renderProduits();
+  if (window.Calepinage && Calepinage.recalculerTout) setTimeout(() => Calepinage.recalculerTout(), 0);
   if (typeof window.syncProduction === 'function') window.syncProduction();      // la fiche matières (Production) suit le coût de revient
   if (typeof loadFixes === 'function') loadFixes().then(() => { if (typeof renderFixes === 'function') renderFixes(); }).catch(() => {});
   if (await produitsDepuisModeles()) return;      // des produits ont été créés : la liste est rechargée

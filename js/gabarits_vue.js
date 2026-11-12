@@ -80,16 +80,16 @@
       '<div><span>Plan de coupe réel</span><b>' + nf(mReel, 2) + ' m</b><small>rangées entières' + (mReel > mN ? ' · +' + nf(mReel - mN, 2) + ' m' : '') + '</small></div>' +
       (rl ? '<div><span>' + esc(StockAPI.plur ? StockAPI.plur(a.cond_nom, 2) : a.cond_nom) + ' de ' + nf(rl, 2) + ' m</span><b>' + nf(mReel / rl, 2) + '</b><small>en stock : ' + nf(StockAPI.qty(a.id) / rl, 2) + '</small></div>' : '') + '</div>';
     h += '<div class="gb-list">' + res.lignes.map((x, i) => {
-      const n = Math.floor(W / x.court), reste = W - n * x.court, besoin = x.g.n * N, rangs = Math.ceil(besoin / Math.max(1, n));
+      const n = x.parRang, reste = W - n * x.court, besoin = x.g.n * N, rangs = Math.ceil(besoin / Math.max(1, n));
       return '<div class="gb-item"><div class="gb-ih"><i class="cp-c" style="background:' + COUL[i % COUL.length] + '"></i><b>' + esc(x.g.nom || 'Gabarit') + '</b><span>' + nf(Math.min(x.g.l, x.g.h), 1) + ' × ' + nf(Math.max(x.g.l, x.g.h), 1) + ' cm · ' + nf(x.g.n, 2) + ' par produit</span></div>' +
         rangee(x, W, COUL[i % COUL.length]) +
-        '<div class="gb-det"><div><span>Côte à côte (largeur)</span><b>' + nf(x.parRang, 2) + '</b><small>' + n + ' pièces entières · chute ' + nf(reste, 1) + ' cm</small></div>' +
-        '<div><span>Pièces dans 1 m</span><b>' + nf(x.pieces, 2) + '</b><small>(' + nf(W, 0) + ' ÷ ' + nf(x.court, 1) + ') × (100 ÷ ' + nf(x.long, 1) + ')</small></div>' +
+        '<div class="gb-det"><div><span>Côte à côte (largeur)</span><b>' + n + ' pièces</b><small>' + (reste > .01 ? 'chute ' + nf(reste, 1) + ' cm perdue (hors calcul)' : 'sans chute') + '</small></div>' +
+        '<div><span>Pièces dans 1 m</span><b>' + nf(x.pieces, 2) + '</b><small>' + n + ' × (100 ÷ ' + nf(x.long, 1) + ')</small></div>' +
         '<div><span>Mètres / produit</span><b>' + nf(x.metres, 4) + ' m</b><small>' + nf(x.g.n, 2) + ' ÷ ' + nf(x.pieces, 2) + (pu ? ' · ' + nf(x.metres * pu, 2) + ' DA' : '') + '</small></div>' +
         '<div><span>Pour ' + nf(N, 0) + ' produits</span><b>' + nf(besoin, 0) + ' pièces</b><small>' + rangs + ' rangée(s) de ' + n + ' → ' + nf(rangs * x.long / 100, 2) + ' m</small></div></div></div>';
     }).join('') + '</div>';
     h += '<h4 class="gb-h4">Plan de coupe — ' + nf(N, 0) + ' produits, rouleau déroulé (' + nf(mReel, 2) + ' m)</h4>' + pl.html +
-      '<p class="gb-help">Chaque bloc = un gabarit, coupé rangée après rangée (traits fins). Les zones hachurées sont la chute de largeur. Le grand côté de chaque gabarit est dans le sens de la longueur du rouleau.</p></div>';
+      '<p class="gb-help">Chaque bloc = un gabarit, coupé rangée après rangée (traits fins). Les zones hachurées sont la chute de largeur : elle n’est pas utilisée, donc le calcul ne compte que les pièces entières côte à côte. Le grand côté de chaque gabarit est dans le sens de la longueur du rouleau.</p></div>';
     return h;
   }
 
