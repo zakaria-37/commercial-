@@ -18,6 +18,7 @@
   const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
   const pdfT = s => String(s ?? '').replace(/œ/g, 'oe').replace(/Œ/g, 'OE').replace(/[  ]/g, ' ').replace(/×/g, 'x');
   const qui = () => (window.APP_USER && (window.APP_USER.nom || window.APP_USER.email)) || 'Utilisateur';
+  const DEPOT_NOM = 'Hamza Dépôt';   // tous les bons de transfert sont au nom du magasinier du dépôt, quel que soit le compte qui valide
   const say = t => { if (typeof toast === 'function') toast(t); };
   const perm = v => typeof window.sectionPermise === 'function' ? window.sectionPermise(v) : true;
   const vibre = () => { if (navigator.vibrate) try { navigator.vibrate(12); } catch (x) {} };
@@ -222,7 +223,7 @@
         ? '<div class="bs-act">' + (depot ? (tout ? '<button type="button" class="btn p bs-valider" data-valcmd="' + esc(c.id) + '">✔ Valider et envoyer au magasin</button>'
             : '<button type="button" class="btn bs-valider" disabled>Cochez chaque ligne préparée (' + n + ' / ' + L.length + ')</button>') : '') +
           '<button type="button" class="btn s d" data-anncmd="' + esc(c.id) + '" data-depot="' + (depot ? 1 : '') + '">' + (depot ? 'Refuser la commande' : 'Annuler cette commande') + '</button></div>'
-        : c.statut === 'livree' ? '<div class="bs-valide">Envoyée par <b>' + esc(c.prepare_par || '?') + '</b> le ' + fdt(c.valide_le) + (c.message ? '<p>« ' + esc(c.message) + ' »</p>' : '') +
+        : c.statut === 'livree' ? '<div class="bs-valide">Envoyée par <b>' + esc(DEPOT_NOM) + '</b> le ' + fdt(c.valide_le) + (c.message ? '<p>« ' + esc(c.message) + ' »</p>' : '') +
           '<button type="button" class="btn s mg-pdf" data-pdf="' + esc(c.id) + '">📄 Bon de transfert (PDF)</button></div>' : '<div class="bs-valide mg-ann">' + esc(c.message || 'Annulée') + '</div>') +
       '</div>';
   }
@@ -246,7 +247,7 @@
       const btn = bg.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Envoi…';
       const message = bg.querySelector('#mg-msg').value.trim();
       const lignes = (c.lignes || []).map(l => Object.assign({}, l, { envoye: envoye(l) }));
-      const u = await sb.from('commandes_magasin').update({ statut: 'livree', prepare_par: qui(), valide_le: new Date().toISOString(), message, lignes }).eq('id', c.id);
+      const u = await sb.from('commandes_magasin').update({ statut: 'livree', prepare_par: DEPOT_NOM, valide_le: new Date().toISOString(), message, lignes }).eq('id', c.id);
       if (u.error) { btn.disabled = false; btn.textContent = 'Valider et envoyer'; say('Erreur : ' + u.error.message); return; }
       bg.remove(); vibre(); say('🚚 Commande ' + c.numero + ' envoyée au magasin ' + c.magasin_nom + '.');
       await load();
@@ -270,7 +271,7 @@
     doc.setDrawColor(180); doc.line(M, 33, W - M, 33);
     doc.setFontSize(8.5); doc.setTextColor(90); T('DE', M, 40); T('VERS', W / 2, 40);
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); T('Depot', M, 46); T('Magasin ' + m.nom, W / 2, 46);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); T('Prepare par : ' + (c.prepare_par || ''), M, 51); T([m.responsable && 'Responsable : ' + m.responsable, 'Commande par : ' + (c.cree_par || '')].filter(Boolean).join('  -  '), W / 2, 51);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); T('Prepare par : ' + DEPOT_NOM, M, 51); T([m.responsable && 'Responsable : ' + m.responsable, 'Commande par : ' + (c.cree_par || '')].filter(Boolean).join('  -  '), W / 2, 51);
     const L = c.lignes || [];
     const cartons = l => int(l.cartons) ? (int(l.pcs) ? int(l.cartons) + ' x ' + int(l.pcs) : String(int(l.cartons))) : '';
     doc.autoTable({ startY: 57, margin: { left: M, right: M, bottom: 20 }, theme: 'grid', styles: { fontSize: 8.5, cellPadding: 1.8 }, headStyles: { fillColor: [74, 44, 42], textColor: 255 },

@@ -300,13 +300,17 @@
   }
 
   // permet à une autre page (ex. Notes) de poser une question à ZACKsmart : ouvre le chat et envoie
-  window.zsAsk = txt => { build(); const b = $('#zs-btn'); if (b) b.classList.add('on'); const p = $('#zs-panel'); if (p && !p.classList.contains('on')) b.click(); setTimeout(() => send(txt), 300); };
-  document.addEventListener('mariabag:authenticated', () => { build(); $('#zs-btn').classList.add('on'); setTimeout(() => rafraichir(true), 1500); });
+  // ZACKsmart est réservé au compte administrateur : caché pour tous les autres comptes
+  const estAdmin = () => !!(window.APP_USER && window.APP_USER.role === 'admin');
+  const cacher = () => { const b = $('#zs-btn'), p = $('#zs-panel'); if (b) b.classList.remove('on'); if (p) p.classList.remove('on'); document.documentElement.classList.remove('zs-lock'); };
+  window.zsAsk = txt => { if (!estAdmin()) return; build(); const b = $('#zs-btn'); if (b) b.classList.add('on'); const p = $('#zs-panel'); if (p && !p.classList.contains('on')) b.click(); setTimeout(() => send(txt), 300); };
+  document.addEventListener('mariabag:authenticated', () => { if (!estAdmin()) { cacher(); return; } build(); $('#zs-btn').classList.add('on'); setTimeout(() => rafraichir(true), 1500); });
   // autres appareils : on relit la conversation régulièrement quand la fenêtre est ouverte, et au retour sur l'application
   setInterval(() => { const p = $('#zs-panel'); if (p && p.classList.contains('on') && document.visibilityState === 'visible') rafraichir(); }, 6000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && $('#zs-btn')) rafraichir(); });
   window.addEventListener('online', () => { if ($('#zs-btn')) rafraichir(true); });
   // déconnexion : on masque l'assistant quand l'écran de connexion est affiché (la connexion par ancien mot de passe n'a pas de profil)
   document.addEventListener('mariabag:profil', () => setTimeout(() => { const l = $('#login'), b = $('#zs-btn'), p = $('#zs-panel');
+    if (!estAdmin()) { cacher(); return; }
     if (l && b && getComputedStyle(l).display !== 'none') { b.classList.remove('on'); if (p) p.classList.remove('on'); document.documentElement.classList.remove('zs-lock'); } }, 60));
 })();
