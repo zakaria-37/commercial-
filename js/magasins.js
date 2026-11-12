@@ -218,7 +218,7 @@
       (enCours
         ? '<div class="bs-act">' + (depot ? (tout ? '<button type="button" class="btn p bs-valider" data-valcmd="' + esc(c.id) + '">✔ Valider et envoyer au magasin</button>'
             : '<button type="button" class="btn bs-valider" disabled>Cochez chaque ligne préparée (' + n + ' / ' + L.length + ')</button>') : '') +
-          '<button type="button" class="btn s d" data-anncmd="' + esc(c.id) + '">Annuler cette commande</button></div>'
+          '<button type="button" class="btn s d" data-anncmd="' + esc(c.id) + '" data-depot="' + (depot ? 1 : '') + '">' + (depot ? 'Refuser la commande' : 'Annuler cette commande') + '</button></div>'
         : c.statut === 'livree' ? '<div class="bs-valide">Envoyée par <b>' + esc(c.prepare_par || '?') + '</b> le ' + fdt(c.valide_le) + (c.message ? '<p>« ' + esc(c.message) + ' »</p>' : '') +
           '<button type="button" class="btn s mg-pdf" data-pdf="' + esc(c.id) + '">📄 Bon de transfert (PDF)</button></div>' : '<div class="bs-valide mg-ann">' + esc(c.message || 'Annulée') + '</div>') +
       '</div>';
@@ -306,7 +306,11 @@
     if ((b = t.closest('[data-valcmd]'))) { validerCmd(b.dataset.valcmd); return; }
     if ((b = t.closest('[data-anncmd]'))) {
       const c = CMDS.find(x => x.id === b.dataset.anncmd);
-      if (c && confirm('Annuler la commande ' + c.numero + ' (' + c.magasin_nom + ') ?')) { await sb.from('commandes_magasin').update({ statut: 'annulee', message: 'Annulée par ' + qui() }).eq('id', c.id); await load(); }
+      if (!c) return;
+      if (b.dataset.depot) {
+        const raison = prompt('Refuser la commande ' + c.numero + ' (' + c.magasin_nom + ').\nRaison (envoyée au magasin) :', ''); if (raison === null) return;
+        await sb.from('commandes_magasin').update({ statut: 'annulee', message: 'Refusée par le dépôt (' + qui() + ')' + (raison.trim() ? ' : ' + raison.trim() : '') }).eq('id', c.id); await load();
+      } else if (confirm('Annuler la commande ' + c.numero + ' (' + c.magasin_nom + ') ?')) { await sb.from('commandes_magasin').update({ statut: 'annulee', message: 'Annulée par ' + qui() }).eq('id', c.id); await load(); }
       return;
     }
     const li = t.closest('#dp-root button.bs-l[data-l]');
