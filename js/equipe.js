@@ -57,7 +57,7 @@
       att.map(p => '<tr><td><b>' + esc(p.nom || p.email) + '</b><small>' + esc(p.email) + ' · créé le ' + dt(p.created_at) + '</small></td><td class="n"><button class="btn s p" type="button" data-eqrole="equipe" data-id="' + esc(p.id) + '">Approuver (équipe)</button> <button class="btn s d" type="button" data-eqrole="desactive" data-id="' + esc(p.id) + '">Refuser</button></td></tr>').join('') + '</tbody></table></div></div>';
     // ---- Créer un compte (identifiant + mot de passe) avec ses sections ----
     const SEC = window.SECTIONS_APP || [];
-    const PRESETS = [['Production + Produits', ['production', 'produits', 'gabarits']], ['Magasinier (bons de sortie)', ['sorties']], ['Dépôt (commandes magasins)', ['depot', 'gabarits']], ['Commerce + Stock', ['commerce', 'stock', 'list']], ['Tout', SEC.map(x => x[0])]];
+    const PRESETS = [['Production + Produits', ['production', 'produits', 'gabarits']], ['Magasinier (bons de sortie)', ['sorties']], ['Hamza dépôt (commandes magasins)', ['depot']], ['Commerce + Stock', ['commerce', 'stock', 'list']], ['Tout', SEC.map(x => x[0])]];
     h += '<div class="card"' + (att.length ? ' style="margin-top:12px"' : '') + '><h2 style="margin-top:0">Créer un compte</h2>' +
       '<form id="eq-new" class="eq-new"><div class="at-fields"><label>Nom affiché *<input id="eq-nnom" required maxlength="60" placeholder="Ex : Oussama"></label>' +
       '<label>Identifiant de connexion *<input id="eq-nid" required maxlength="40" autocapitalize="none" spellcheck="false" placeholder="Ex : oussama"></label>' +
@@ -113,8 +113,10 @@
       return;
     }
     const pr = e.target.closest('[data-preset]');
-    if (pr) { const PRE = [['production', 'produits', 'gabarits'], ['sorties'], ['depot', 'gabarits'], ['commerce', 'stock', 'list'], (window.SECTIONS_APP || []).map(x => x[0])][+pr.dataset.preset] || [];
-      root.querySelectorAll('#eq-nsec input').forEach(i => { i.checked = PRE.includes(i.value); }); const sm = root.querySelector('#eq-nmag'); if (sm) sm.value = ''; return; }
+    if (pr) { const PRE = [['production', 'produits', 'gabarits'], ['sorties'], ['depot'], ['commerce', 'stock', 'list'], (window.SECTIONS_APP || []).map(x => x[0])][+pr.dataset.preset] || [];
+      root.querySelectorAll('#eq-nsec input').forEach(i => { i.checked = PRE.includes(i.value); }); const sm = root.querySelector('#eq-nmag'); if (sm) sm.value = '';
+      if (PRE.length === 1 && PRE[0] === 'depot') { const n = root.querySelector('#eq-nnom'), id = root.querySelector('#eq-nid'); if (n && !n.value) n.value = 'Hamza dépôt'; if (id && !id.value) id.value = 'hamzadepot'; }
+      return; }
     const pm = e.target.closest('[data-presetmag]');
     if (pm) { root.querySelectorAll('#eq-nsec input').forEach(i => { i.checked = i.value === 'magasins'; }); const sm = root.querySelector('#eq-nmag'); if (sm) sm.value = pm.dataset.presetmag;
       const m = MAGS.find(x => x.id === pm.dataset.presetmag), n = root.querySelector('#eq-nnom'), id = root.querySelector('#eq-nid');

@@ -30,7 +30,7 @@
     // fonction affichée sous le nom (ex. « Production · Produits », « Magasinier »)
     const wr = document.querySelector('.who small');
     if (wr) { if (!wr.dataset.orig) wr.dataset.orig = wr.textContent;
-      wr.textContent = !profil ? wr.dataset.orig : admin ? 'Administrateur' : permises ? (permises.length === 1 && permises[0] === 'sorties' ? 'Magasinier' : permises.length === 1 && permises[0] === 'magasins' ? 'Vendeur magasin' : permises.map(v => (window.SECTIONS_APP.find(x => x[0] === v) || [, v])[1]).slice(0, 2).join(' · ')) : 'Équipe'; }
+      wr.textContent = !profil ? wr.dataset.orig : admin ? 'Administrateur' : permises ? (permises.length === 1 && permises[0] === 'sorties' ? 'Magasinier' : permises.length === 1 && permises[0] === 'magasins' ? 'Vendeur magasin' : permises.length === 1 && permises[0] === 'depot' ? 'Magasinier dépôt' : permises.map(v => (window.SECTIONS_APP.find(x => x[0] === v) || [, v])[1]).slice(0, 2).join(' · ')) : 'Équipe'; }
     const av = document.querySelector('.who .av'); if (av && profil && profil.nom) av.textContent = profil.nom.trim().charAt(0).toUpperCase();
     // nom écrit proprement (« OUSSAMA » → « Oussama ») dans l'en-tête et le pied de page
     const joli = n => String(n || '').trim().toLowerCase().replace(/(^|[\s'-])\S/g, c => c.toUpperCase());

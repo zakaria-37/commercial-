@@ -5,7 +5,7 @@
      • « 1 × 50 »  = 1 carton de 50 pièces ;  pièces par carton inconnues → seulement le nombre de cartons ;
      • couleurs : « 2467, 10 de chaque couleur (noir, beige, marron) ».
    1. Le vendeur (Idris — Boumati, Fatah — Bab El Zouar) remplit le tableau et l'envoie au dépôt.
-   2. Le magasinier du dépôt (Hamza) coche chaque ligne préparée (et corrige la quantité envoyée).
+   2. Le magasinier du dépôt (« Hamza dépôt », pas le Hamza des gabarits) coche chaque ligne préparée (et corrige la quantité envoyée).
    3. Il valide avec un message : le magasin est prévenu, le bon daté (PDF) reste dans l'historique.
    ============================================================ */
 (function () {
