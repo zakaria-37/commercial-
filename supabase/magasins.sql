@@ -14,3 +14,6 @@ create policy commandes_magasin_all on public.commandes_magasin for all using (t
 create index if not exists commandes_magasin_statut_idx on public.commandes_magasin (statut, date_cmd);
 insert into public.magasins (nom, responsable) select * from (values ('Boumati','Idris'),('Bab El Zouar','Fatah')) v(nom, responsable) where not exists (select 1 from public.magasins);
 notify pgrst, 'reload schema';
+-- chaque vendeur est relié à SON magasin (il ne voit que ses commandes)
+alter table public.profils add column if not exists magasin_id uuid references public.magasins(id) on delete set null;
+notify pgrst, 'reload schema';

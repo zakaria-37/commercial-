@@ -66,10 +66,12 @@
     if (avant) CMDS.forEach(x => {
       const a = avant.get(x.id);
       if (!a && x.statut === 'envoyee' && perm('depot')) say('🛒 Nouvelle commande ' + x.numero + ' — ' + x.magasin_nom);
-      if (a === 'envoyee' && x.statut === 'livree' && perm('magasins')) say('🚚 Commande ' + x.numero + ' envoyée par le dépôt' + (x.message ? ' : « ' + x.message + ' »' : ''));
+      const imp = magasinImpose();
+      if (a === 'envoyee' && x.statut === 'livree' && perm('magasins') && (!imp || imp === x.magasin_id)) say('🚚 Commande ' + x.numero + ' envoyée par le dépôt' + (x.message ? ' : « ' + x.message + ' »' : ''));
     });
     connus = etat;
-    if (!magId || !MAGS.some(x => x.id === magId)) magId = choisirMagasinParDefaut();
+    const imp = magasinImpose();
+    if (imp) magId = imp; else if (!magId || !MAGS.some(x => x.id === magId)) magId = choisirMagasinParDefaut();
     badge();
     const a = document.activeElement;
     if (!(a && a.closest && a.closest('#mg-root .mg-tab-cmd'))) renderMagasin();   // on ne casse pas une saisie en cours
@@ -84,6 +86,13 @@
     return m ? m.id : (MAGS[0] ? MAGS[0].id : '');
   }
   const magasin = () => MAGS.find(m => m.id === magId) || null;
+  /* Compte vendeur relié à SON magasin (Équipe › Magasin) : il ne voit que ce magasin et ses commandes.
+     '' = libre (administrateur, dépôt) · id = magasin imposé · null = vendeur pas encore relié */
+  function magasinImpose() {
+    const u = window.APP_USER; if (!u || u.role === 'admin') return '';
+    if (u.magasin_id) return u.magasin_id;
+    return window.ACCES_LIMITE && typeof window.sectionPermise === 'function' && window.sectionPermise('magasins') && !window.sectionPermise('depot') ? null : '';
+  }
   function badge() {
     const n = CMDS.filter(c => c.statut === 'envoyee').length;
     const b = document.querySelector('nav button[data-v="depot"]');
@@ -101,12 +110,14 @@
     const el = document.getElementById('mg-root'); if (!el) return;
     if (!charge) { el.innerHTML = '<div class="card">Chargement…</div>'; return; }
     if (erreur) { el.innerHTML = '<div class="card">' + esc(erreur) + '</div>'; return; }
+    const imp = magasinImpose();
+    if (imp === null) { el.innerHTML = '<div class="card bs-vide">🏬 Votre compte n’est relié à aucun magasin.<br>Demandez à l’administrateur de choisir votre magasin dans <b>Équipe › Magasin</b>.</div>'; return; }
     const m = magasin(), mes = CMDS.filter(c => c.magasin_id === magId);
     const enCours = mes.filter(c => c.statut === 'envoyee'), hist = mes.filter(c => c.statut !== 'envoyee');
     const nbL = panier.filter(ligneOk).length;
     el.innerHTML =
       '<div class="hello mg-hello"><span class="fl"></span><div><h2>🏬 ' + esc(m ? 'Magasin ' + m.nom : 'Magasin') + '</h2><p>' + esc(m && m.responsable ? m.responsable + ' · ' : '') + 'Commandez au dépôt : le magasinier prépare la commande et vous l’envoie avec un bon daté.</p></div></div>' +
-      (MAGS.length > 1 ? '<div class="mg-chips">' + MAGS.map(x => '<button type="button" data-mag="' + esc(x.id) + '" class="' + (x.id === magId ? 'on' : '') + '">' + esc(x.nom) + (x.responsable ? '<small>' + esc(x.responsable) + '</small>' : '') + '</button>').join('') + '</div>' : '') +
+      (MAGS.length > 1 && !imp ? '<div class="mg-chips">' + MAGS.map(x => '<button type="button" data-mag="' + esc(x.id) + '" class="' + (x.id === magId ? 'on' : '') + '">' + esc(x.nom) + (x.responsable ? '<small>' + esc(x.responsable) + '</small>' : '') + '</button>').join('') + '</div>' : '') +
       '<div class="at-tabs mg-tabs"><button type="button" data-om="nouvelle" class="' + (ongletM === 'nouvelle' ? 'on' : '') + '">🛒 Commander' + (nbL ? ' (' + nbL + ')' : '') + '</button>' +
         '<button type="button" data-om="encours" class="' + (ongletM === 'encours' ? 'on' : '') + '">En cours (' + enCours.length + ')</button>' +
         '<button type="button" data-om="hist" class="' + (ongletM === 'hist' ? 'on' : '') + '">Historique</button></div>' +
@@ -279,7 +290,7 @@
   document.addEventListener('click', async e => {
     if (!dansRoot(e.target)) return;
     const t = e.target; let b;
-    if ((b = t.closest('[data-mag]'))) { magId = b.dataset.mag; try { localStorage.setItem(KEY_MAG, magId); } catch (x) {} renderMagasin(); return; }
+    if ((b = t.closest('[data-mag]'))) { if (magasinImpose()) return; magId = b.dataset.mag; try { localStorage.setItem(KEY_MAG, magId); } catch (x) {} renderMagasin(); return; }
     if ((b = t.closest('[data-om]'))) { ongletM = b.dataset.om; renderMagasin(); return; }
     if ((b = t.closest('[data-od]'))) { ongletD = b.dataset.od; renderDepot(); return; }
     if ((b = t.closest('[data-fd]'))) { filtreD = b.dataset.fd; renderDepot(); return; }
@@ -342,6 +353,7 @@
   let tm = null;
   if (window.LocalDB && LocalDB.onChange) LocalDB.onChange(() => { clearTimeout(tm); tm = setTimeout(() => { const a = document.activeElement; if (a && dansRoot(a) && /INPUT|TEXTAREA/.test(a.tagName)) return; load(); }, 500); });
   document.addEventListener('mariabag:authenticated', load);
+  document.addEventListener('mariabag:profil', () => { if (charge) { const imp = magasinImpose(); if (imp) magId = imp; renderMagasin(); } });
   window.MagasinsAPI = { load, commandes: () => CMDS, magasins: () => MAGS, aPreparer: () => CMDS.filter(c => c.statut === 'envoyee').length };
   window.loadMagasins = load;
 })();

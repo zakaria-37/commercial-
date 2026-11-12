@@ -67,7 +67,7 @@
     if (!v || v.includes('@')) return v;
     return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9._-]/g, '') + '@mariabag.app';
   }
-  const versProfil = p => ({ id: p.id, email: p.email, nom: p.nom || '', role: p.role, sections: Array.isArray(p.sections) && p.sections.length ? p.sections : null, theme: p.theme || '' });
+  const versProfil = p => ({ id: p.id, email: p.email, nom: p.nom || '', role: p.role, sections: Array.isArray(p.sections) && p.sections.length ? p.sections : null, theme: p.theme || '', magasin_id: p.magasin_id || null });
   /* Lit le profil (rôle) du compte connecté ; null si introuvable */
   async function lireProfil(user){
     const r = remote(); if (!r) return null;

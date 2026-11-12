@@ -15,7 +15,7 @@
     charges_fixes: 'Charges fixes', pf_mouvements: 'Produits finis : mouvements', inventaires: 'Inventaires', inventaire_lignes: 'Inventaire : lignes', paiements: 'Paiements', paiements_ateliers: 'Paiements des ateliers', credits_employes: 'Crédits des employés', rendez_vous: 'Notes et rendez-vous', notes_perso: 'Notes personnelles', documents: 'Commerce : documents', document_lignes: 'Commerce : lignes' };
   const ACT = { INSERT: 'Ajout', UPDATE: 'Modification', DELETE: 'Suppression' };
 
-  let PROF = [], INVS = [], JOUR = [], err = '', filtreT = '', filtreU = '';
+  let PROF = [], MAGS = [], INVS = [], JOUR = [], err = '', filtreT = '', filtreU = '';
 
   const admin = () => window.APP_USER && window.APP_USER.role === 'admin';
 
@@ -31,6 +31,7 @@
     const e = p.error || i.error || j.error;
     err = e ? (/does not exist|relation|schema cache/i.test(e.message) ? 'Tables des comptes introuvables : exécutez supabase/comptes.sql dans SQL Editor.' : e.message) : '';
     PROF = p.data || []; INVS = i.data || []; JOUR = j.data || [];
+    try { const m = await r.from('magasins').select('id,nom,responsable').order('nom'); MAGS = m.error ? [] : (m.data || []); } catch (x) { MAGS = []; }
     render();
   }
 
@@ -56,14 +57,16 @@
       att.map(p => '<tr><td><b>' + esc(p.nom || p.email) + '</b><small>' + esc(p.email) + ' · créé le ' + dt(p.created_at) + '</small></td><td class="n"><button class="btn s p" type="button" data-eqrole="equipe" data-id="' + esc(p.id) + '">Approuver (équipe)</button> <button class="btn s d" type="button" data-eqrole="desactive" data-id="' + esc(p.id) + '">Refuser</button></td></tr>').join('') + '</tbody></table></div></div>';
     // ---- Créer un compte (identifiant + mot de passe) avec ses sections ----
     const SEC = window.SECTIONS_APP || [];
-    const PRESETS = [['Production + Produits', ['production', 'produits', 'gabarits']], ['Magasinier (bons de sortie)', ['sorties']], ['Vendeur magasin', ['magasins']], ['Dépôt (commandes magasins)', ['depot', 'gabarits']], ['Commerce + Stock', ['commerce', 'stock', 'list']], ['Tout', SEC.map(x => x[0])]];
+    const PRESETS = [['Production + Produits', ['production', 'produits', 'gabarits']], ['Magasinier (bons de sortie)', ['sorties']], ['Dépôt (commandes magasins)', ['depot', 'gabarits']], ['Commerce + Stock', ['commerce', 'stock', 'list']], ['Tout', SEC.map(x => x[0])]];
     h += '<div class="card"' + (att.length ? ' style="margin-top:12px"' : '') + '><h2 style="margin-top:0">Créer un compte</h2>' +
       '<form id="eq-new" class="eq-new"><div class="at-fields"><label>Nom affiché *<input id="eq-nnom" required maxlength="60" placeholder="Ex : Oussama"></label>' +
       '<label>Identifiant de connexion *<input id="eq-nid" required maxlength="40" autocapitalize="none" spellcheck="false" placeholder="Ex : oussama"></label>' +
       '<label>Mot de passe * (6 caractères min.)<input id="eq-nmdp" required minlength="6" maxlength="60" autocomplete="new-password" placeholder="Ex : Mb-oussama-26"></label>' +
       '<label>Rôle<select id="eq-nrole"><option value="equipe">Équipe (sections choisies)</option><option value="admin">Administrateur (tout)</option></select></label>' +
+      '<label>Magasin (vendeur)<select id="eq-nmag"><option value="">— aucun —</option>' + MAGS.map(m => '<option value="' + esc(m.id) + '">' + esc(m.nom) + '</option>').join('') + '</select></label>' +
       '<label>Thème<select id="eq-ntheme">' + (window.THEMES_APP || [['', 'Classique']]).map(t => '<option value="' + t[0] + '">' + t[1] + '</option>').join('') + '</select></label></div>' +
-      '<div class="eq-sec"><span>Sections accessibles :</span>' + PRESETS.map((x, i) => '<button type="button" class="btn s" data-preset="' + i + '">' + x[0] + '</button>').join('') + '</div>' +
+      '<div class="eq-sec"><span>Sections accessibles :</span>' + PRESETS.map((x, i) => '<button type="button" class="btn s" data-preset="' + i + '">' + x[0] + '</button>').join('') +
+        MAGS.map(m => '<button type="button" class="btn s" data-presetmag="' + esc(m.id) + '">Vendeur ' + esc(m.nom) + (m.responsable ? ' (' + esc(m.responsable) + ')' : '') + '</button>').join('') + '</div>' +
       '<div class="eq-chk" id="eq-nsec">' + SEC.map(x => '<label><input type="checkbox" value="' + x[0] + '"> ' + x[1] + '</label>').join('') + '</div>' +
       '<div class="at-actions"><button class="btn p" type="submit">Créer le compte</button><span id="eq-nmsg" class="eq-msg"></span></div></form>' +
       '<p class="iv-help">La personne se connecte avec son <b>identifiant</b> (ex. <b>oussama</b>) et ce mot de passe, sans adresse e-mail. Elle ne voit que les sections cochées ; toutes les données restent synchronisées avec le reste de la plateforme.</p></div>';
@@ -71,6 +74,7 @@
       PROF.filter(p => p.role !== 'en_attente').map(p => '<tr><td><b>' + esc(p.nom || p.email) + '</b>' + (p.id === me ? ' <span class="iv-bdg ok">vous</span>' : '') + '<small>' + esc(p.email) + '</small></td><td><select data-eqsel="' + esc(p.id) + '"' + (p.id === me ? ' disabled title="Vous ne pouvez pas modifier votre propre rôle"' : '') + '>' +
         ['admin', 'equipe', 'desactive'].map(r => '<option value="' + r + '"' + (p.role === r ? ' selected' : '') + '>' + ROLES[r] + '</option>').join('') + '</select>' +
         (p.role === 'equipe' ? '<div class="eq-chk eq-chk-s" data-eqsec="' + esc(p.id) + '">' + SEC.map(x => '<label><input type="checkbox" value="' + x[0] + '"' + (!p.sections || !p.sections.length || p.sections.includes(x[0]) ? ' checked' : '') + '> ' + x[1] + '</label>').join('') + '</div>' : '') +
+        (p.role === 'equipe' && (!p.sections || !p.sections.length || p.sections.includes('magasins')) ? '<label class="eq-th">🏬 Magasin <select data-eqmag="' + esc(p.id) + '"><option value="">— aucun —</option>' + MAGS.map(m => '<option value="' + esc(m.id) + '"' + (p.magasin_id === m.id ? ' selected' : '') + '>' + esc(m.nom) + '</option>').join('') + '</select></label> ' : '') +
         '<label class="eq-th">Thème <select data-eqtheme="' + esc(p.id) + '">' + (window.THEMES_APP || [['', 'Classique']]).map(t => '<option value="' + t[0] + '"' + ((p.theme || '') === t[0] ? ' selected' : '') + '>' + t[1] + '</option>').join('') + '</select></label> ' +
         (p.id !== me ? '<button type="button" class="btn s" data-eqmdp="' + esc(p.id) + '">Changer le mot de passe</button>' : '') + '</td><td class="iv-opt">' + dt(p.derniere_connexion) + '</td></tr>').join('') + '</tbody></table></div>' +
       '<p class="iv-help"><b>Administrateur</b> : tout, plus la gestion de l’équipe et le journal. <b>Équipe</b> : seulement les sections cochées (modifiable à tout moment, effet à la prochaine ouverture de la plateforme). <b>Désactivé</b> : plus aucun accès.</p></div>';
@@ -109,8 +113,12 @@
       return;
     }
     const pr = e.target.closest('[data-preset]');
-    if (pr) { const PRE = [['production', 'produits', 'gabarits'], ['sorties'], ['magasins'], ['depot', 'gabarits'], ['commerce', 'stock', 'list'], (window.SECTIONS_APP || []).map(x => x[0])][+pr.dataset.preset] || [];
-      root.querySelectorAll('#eq-nsec input').forEach(i => { i.checked = PRE.includes(i.value); }); return; }
+    if (pr) { const PRE = [['production', 'produits', 'gabarits'], ['sorties'], ['depot', 'gabarits'], ['commerce', 'stock', 'list'], (window.SECTIONS_APP || []).map(x => x[0])][+pr.dataset.preset] || [];
+      root.querySelectorAll('#eq-nsec input').forEach(i => { i.checked = PRE.includes(i.value); }); const sm = root.querySelector('#eq-nmag'); if (sm) sm.value = ''; return; }
+    const pm = e.target.closest('[data-presetmag]');
+    if (pm) { root.querySelectorAll('#eq-nsec input').forEach(i => { i.checked = i.value === 'magasins'; }); const sm = root.querySelector('#eq-nmag'); if (sm) sm.value = pm.dataset.presetmag;
+      const m = MAGS.find(x => x.id === pm.dataset.presetmag), n = root.querySelector('#eq-nnom'), id = root.querySelector('#eq-nid');
+      if (m && m.responsable && n && !n.value) n.value = m.responsable; if (m && m.responsable && id && !id.value) id.value = m.responsable.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ''); return; }
     const md = e.target.closest('[data-eqmdp]');
     if (md) {
       const p = PROF.find(x => x.id === md.dataset.eqmdp), mdp = prompt('Nouveau mot de passe pour ' + (p ? p.nom || p.email : 'ce compte') + ' (6 caractères minimum) :');
@@ -163,8 +171,9 @@
     const $f = q => e.target.querySelector(q), msg = $f('#eq-nmsg'), btn = $f('button[type=submit]');
     const role = $f('#eq-nrole').value, sections = [...e.target.querySelectorAll('#eq-nsec input:checked')].map(i => i.value);
     if (role !== 'admin' && !sections.length) { msg.textContent = 'Cochez au moins une section.'; return; }
+    if (role !== 'admin' && sections.includes('magasins') && !$f('#eq-nmag').value) { msg.textContent = 'Choisissez le magasin de ce vendeur (il ne verra que ses commandes).'; return; }
     btn.disabled = true; msg.textContent = 'Création…';
-    const x = await fonctionComptes({ action: 'creer', nom: $f('#eq-nnom').value.trim(), identifiant: $f('#eq-nid').value.trim(), mot_de_passe: $f('#eq-nmdp').value, role, sections, theme: $f('#eq-ntheme').value });
+    const x = await fonctionComptes({ action: 'creer', nom: $f('#eq-nnom').value.trim(), identifiant: $f('#eq-nid').value.trim(), mot_de_passe: $f('#eq-nmdp').value, role, sections, theme: $f('#eq-ntheme').value, magasin_id: $f('#eq-nmag').value || null });
     btn.disabled = false;
     if (x.error) { msg.textContent = '⚠ ' + x.error; return; }
     say('Compte créé : identifiant « ' + $f('#eq-nid').value.trim() + ' ».'); await load();
@@ -174,13 +183,16 @@
     if (th) { const r = remote(); if (!r) return; const x = await r.from('profils').update({ theme: th.value }).eq('id', th.dataset.eqtheme);
       say(x.error ? 'Erreur : ' + x.error.message : 'Thème enregistré (visible à la prochaine ouverture de la plateforme par cette personne).'); const p = PROF.find(y => y.id === th.dataset.eqtheme); if (p) p.theme = th.value;
       if (window.APP_USER && window.APP_USER.id === th.dataset.eqtheme) { window.APP_USER.theme = th.value; document.dispatchEvent(new CustomEvent('mariabag:profil', { detail: window.APP_USER })); } return; }
+    const mg = e.target.closest && e.target.closest('[data-eqmag]');
+    if (mg) { const r = remote(); if (!r) return; const x = await r.from('profils').update({ magasin_id: mg.value || null }).eq('id', mg.dataset.eqmag);
+      say(x.error ? 'Erreur : ' + x.error.message : 'Magasin enregistré : ce vendeur ne verra que les commandes de ce magasin (à sa prochaine ouverture).'); const p = PROF.find(y => y.id === mg.dataset.eqmag); if (p) p.magasin_id = mg.value || null; return; }
     const box = e.target.closest && e.target.closest('[data-eqsec]'); if (!box) return;
     const r = remote(); if (!r) return;
     const sections = [...box.querySelectorAll('input:checked')].map(i => i.value);
     if (!sections.length) { say('Gardez au moins une section.'); e.target.checked = true; return; }
     const x = await r.from('profils').update({ sections }).eq('id', box.dataset.eqsec);
     say(x.error ? 'Erreur : ' + x.error.message : 'Sections mises à jour (effet à la prochaine ouverture de la plateforme par cette personne).');
-    const p = PROF.find(y => y.id === box.dataset.eqsec); if (p) p.sections = sections;
+    const p = PROF.find(y => y.id === box.dataset.eqsec); if (p) { p.sections = sections; render(); }
   });
   document.addEventListener('mariabag:profil', ev => { const b = $('#navEquipe'); if (b) b.hidden = !(ev.detail && ev.detail.role === 'admin'); });
   window.loadEquipe = load;
