@@ -446,3 +446,39 @@ body[data-role="equipe"] #pr-btn-direct{display:none}
   .c-tot{grid-area:tot;text-align:left;font-size:14px}.mg-tr .mg-x{grid-area:x;justify-self:end}
   .mg-tr input{height:44px;font-size:16px}
 }
+/* ---------- Barre des sections (ordinateur) : une seule ligne, icône + libellé, style pro ---------- */
+@media (min-width:701px){
+  nav{flex:0 0 100%;order:5;margin:2px 0 0;display:flex;flex-wrap:nowrap;justify-content:safe center;gap:2px;padding:4px;
+      background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;overflow-x:auto;scrollbar-width:none;
+      -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%)}
+  nav::-webkit-scrollbar{display:none}
+  nav button{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:7px 11px;border-radius:8px;font-size:13px;font-weight:600;
+      letter-spacing:.1px;line-height:1.2;color:#bfbabc;transition:background .15s,color .15s}
+  nav button:hover{background:rgba(255,255,255,.07);color:#fff}
+  body:not([class*="theme-"]) nav button.on{background:#fff;color:#000;box-shadow:none}
+  nav button.on{color:#fff}
+  body:not([class*="theme-"]) nav button.on{color:#000}
+  nav button::before{font-size:14px;line-height:1;filter:grayscale(1) brightness(1.5);opacity:.75}
+  nav button:hover::before,nav button.on::before{filter:none;opacity:1}
+  nav button[data-v="dash"]::before{content:"\1F3E0"}
+  nav button[data-v="commerce"]::before{content:"\1F9FE"}
+  nav button[data-v="stock"]::before{content:"\1F4E6"}
+  nav button[data-v="production"]::before{content:"\1F4CB"}
+  nav button[data-v="produits"]::before{content:"\1F45C"}
+  nav button[data-v="gabarits"]::before{content:"\1F4D0"}
+  nav button[data-v="sorties"]::before{content:"\1F69A"}
+  nav button[data-v="magasins"]::before{content:"\1F3EC"}
+  nav button[data-v="depot"]::before{content:"\1F3ED"}
+  nav button[data-v="ateliers"]::before{content:"\1F9F5"}
+  nav button[data-v="employes"]::before{content:"\1F9D1\200D\1F527"}
+  nav button[data-v="list"]::before{content:"\1F465"}
+  nav button[data-v="charges"]::before{content:"\1F4B8"}
+  nav button[data-v="inventaire"]::before{content:"\1F4CA"}
+  nav button[data-v="notes"]::before{content:"\1F4DD"}
+  nav button[data-v="equipe"]::before{content:"\1F512"}
+  nav button.bs-has::after{top:-3px;right:-3px}
+  .act{order:1;margin-left:auto}
+  header{row-gap:8px}
+}
+@media (min-width:701px) and (max-width:1699px){ nav button{padding:7px 8px;font-size:12.5px;gap:0} nav button::before{display:none} }
+@media (min-width:701px) and (max-width:1199px){ nav button{padding:6px 7px;font-size:12px} nav{justify-content:flex-start} }
