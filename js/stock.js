@@ -606,6 +606,8 @@ $s('#st-mtype').addEventListener('change', () => { majMvt(); });
 ['#st-mqte', '#st-mprix'].forEach(s => $s(s).addEventListener('input', majMvt));
 $s('#st-munite').addEventListener('change', majMvt);
 $s('#st-q').addEventListener('input', renderTable);
+/* Tableau de bord → « Stock à surveiller » : liste des articles en alerte (ruptures d'abord) */
+window.stockAlertes = function () { stAlertes = true; stFiltreCat = ''; const q = $s('#st-q'); if (q) q.value = ''; renderChips(); renderTable(); };
 $s('#st-chips').addEventListener('click', e => {
   const c = e.target.closest('[data-sc]'), al = e.target.closest('[data-sal]');
   if (c) { stFiltreCat = c.dataset.sc; stAlertes = false; }

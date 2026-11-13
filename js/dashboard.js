@@ -140,6 +140,27 @@
   /* ---------- Raccourcis ---------- */
   function go(view) { const b = $q('nav button[data-v="' + view + '"]'); if (b) b.click(); }
   function goAtelier(tab) { go('ateliers'); const t = $q('[data-at-tab="' + tab + '"]'); if (t) t.click(); }
+  /* Arrivée directe sur la bonne partie de la section : on fait défiler jusqu'à l'élément et on le met en évidence */
+  function arriver(sel, delai) {
+    setTimeout(() => {
+      const el = typeof sel === 'string' ? $q(sel) : sel;
+      if (!el || !el.offsetParent) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+      const hd = document.querySelector('header'), off = hd && getComputedStyle(hd).position === 'sticky' ? hd.offsetHeight + 8 : 8;
+      window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - off), behavior: 'smooth' });
+      el.classList.remove('d-arrive'); void el.offsetWidth; el.classList.add('d-arrive');
+      setTimeout(() => el.classList.remove('d-arrive'), 1800);
+    }, delai == null ? 350 : delai);
+  }
+  function stockRuptures() {
+    go('stock'); const t = $q('#st-tabs [data-stp="mat"]'); if (t) t.click();
+    const f = () => { if (typeof window.stockAlertes === 'function') window.stockAlertes(); arriver('#st-chips', 0); };
+    if (window.StockAPI && StockAPI.load) Promise.resolve(StockAPI.load()).catch(() => {}).then(() => setTimeout(f, 250)); else setTimeout(f, 300);
+  }
+  // les productions / commandes en retard : première ligne en retard si elle est visible, sinon le haut de l'onglet
+  function premiereEnRetard(pane) {
+    const p = $q('#' + pane); if (!p) return null;
+    return [...p.querySelectorAll('tr, .m-card, .at-card, .card')].find(x => x.offsetParent && /retard/i.test(x.textContent) && x.textContent.length < 600) || p;
+  }
   const QUICK = {
     contact: () => { go('list'); if (typeof edit === 'function') edit(); },
     charge: () => { go('charges'); if (typeof showFormCharge === 'function') showFormCharge(); },
@@ -520,17 +541,19 @@
       const g = e.target.closest('[data-dgo]');
       if (g) {
         const k = g.dataset.dgo;
-        if (k === 'rel') return contactsFiltre(D.some(c => rel(c).k === 'late') ? 'late' : 'soon');
-        if (k === 'prod') return goAtelier('productions-pane');
-        if (k === 'cmd') return goAtelier('suivi-pane');
-        if (k === 'charges') return go('charges');
-        if (k === 'sorties') return go('sorties');
-        if (k === 'pointage') return go('employes');
-        if (k === 'produits') return go('produits');
-        if (k === 'stock') return go('stock');
-        if (k === 'pf') { go('stock'); if (window.PFAPI) PFAPI.open(); return; }
-        if (k === 'notes') return go('notes');
-        if (k === 'factures') { go('commerce'); const t = $q('#cm-tabs [data-t="facture"]'); if (t) t.click(); return; }
+        e.preventDefault(); e.stopPropagation();
+        if (k === 'rel') { contactsFiltre(D.some(c => rel(c).k === 'late') ? 'late' : 'soon'); return arriver('#v-list .tools, #v-list'); }
+        if (k === 'prod') { goAtelier('productions-pane'); return arriver(premiereEnRetard('productions-pane'), 450); }
+        if (k === 'cmd') { goAtelier('suivi-pane'); return arriver(premiereEnRetard('suivi-pane'), 450); }
+        if (k === 'charges') { go('charges'); return arriver('#v-charges .hello + *'); }
+        if (k === 'sorties') { go('sorties'); return arriver('#bs-root .bs-tabs'); }
+        if (k === 'pointage') { go('employes'); return arriver('#v-employes .hello + *'); }
+        if (k === 'produits') { go('produits'); return arriver('#v-produits .hello + *'); }
+        if (k === 'stock') return stockRuptures();
+        if (k === 'pf') { go('stock'); if (window.PFAPI) PFAPI.open(); return arriver('#st-tabs'); }
+        if (k === 'notes') { go('notes'); return arriver('#v-notes'); }
+        if (k === 'factures') { go('commerce'); const t = $q('#cm-tabs [data-t="facture"]'); if (t) t.click(); return arriver('#cm-tabs'); }
+        if (k === 'magasins' || k === 'depot') { go(k); return arriver('#v-' + k); }
       }
     }, true);   // phase de capture ; nos blocs utilisent data-dgo (les lignes ateliers gardent data-go, géré par ateliers.js)
 
