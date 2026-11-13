@@ -175,6 +175,43 @@ async function versProduit(m, avant, apres) {
     if (typeof loadProduits === 'function') loadProduits();
   } catch (e) { /* le modèle est enregistré ; le produit sera réaligné à la prochaine ouverture */ }
 }
+/* PACK : un composant modifié ou retiré dans le pack est reporté dans TOUS les produits qui le composent
+   (ex. « 3 pieces 380 » : Pafine blanc → autre matière, une seule fois pour les 3 produits). */
+function sousProduitsP(packId, prof, acc) {
+  prof = prof || 0; acc = acc || new Map(); if (prof > 5) return acc;
+  LIGNES_P.filter(l => String(l.produit_id) === String(packId) && l.sous_produit_id).forEach(l => {
+    const sp = PRODS_P.find(p => String(p.id) === String(l.sous_produit_id)); if (!sp) return;
+    if (estPackP(sp)) sousProduitsP(sp.id, prof + 1, acc); else acc.set(String(sp.id), sp);
+  });
+  return [...acc.values()];
+}
+async function versPack(pack, avant, apres) {
+  const cibles = sousProduitsP(pack.id).map(sp => ({ sp, lignes: lignesDuComposant(sp, avant) })).filter(x => x.lignes.length);
+  if (!cibles.length) { toastP('Ce composant n’a pas été retrouvé dans les produits du pack : modifiez-le dans la section Produits.'); return false; }
+  const noms = cibles.map(x => '• ' + x.sp.nom).join('\n');
+  if (!apres) {
+    if (!confirm('Retirer « ' + avant.nom + ' » du pack « ' + pack.nom + ' » ?\n\nIl sera retiré de chaque produit du pack :\n' + noms)) return false;
+    for (const x of cibles) for (const l of x.lignes) await sb.from('produit_lignes').delete().eq('id', l.id);
+    return true;
+  }
+  const tot = c => (Number(c.quantite) || 0) * (1 + (Number(c.perte_pct) || 0) / 100);
+  const ratio = tot(avant) > 0 ? tot(apres) / tot(avant) : 1, change = Math.abs(ratio - 1) > 1e-6;
+  const a = apres.article_id && window.StockAPI ? StockAPI.byId(apres.article_id) : null;
+  if (!confirm('Modifier « ' + avant.nom + ' »' + (apres.nom !== avant.nom ? ' → « ' + apres.nom + ' »' : '') + ' dans le pack « ' + pack.nom + ' » ?\n\n' +
+    'La modification est faite dans chaque produit du pack :\n' + noms + (change ? '\n\nQuantités ajustées de ' + (ratio > 1 ? '+' : '') + fmtN((ratio - 1) * 100, 1) + ' % dans chaque produit.' : ''))) return false;
+  for (const x of cibles) for (const l of x.lignes) {
+    const unite = a ? apres.unite : (apres.unite || l.unite), prix = a ? StockAPI.priceFor(a, unite) : null;
+    const patch = { designation: apres.nom, unite, article_id: apres.article_id || null, note: apres.note || l.note || '' };
+    if (avant.type === 'finition') patch.prix_unitaire = Number(apres.prix_unitaire) || 0; else if (prix != null) patch.prix_unitaire = Math.round(prix * 10000) / 10000;
+    if (change) {
+      patch.quantite = Math.round((Number(l.quantite) || 0) * ratio * 10000) / 10000;
+      if (l.gabarits && l.gabarits.resultat) { const g = Object.assign({}, l.gabarits); delete g.resultat; patch.gabarits = g; }
+    }
+    const r = await sb.from('produit_lignes').update(patch).eq('id', l.id);
+    if (r.error) { toastP('Erreur : ' + errMsgP(r.error)); return false; }
+  }
+  return true;
+}
 /* Appelé par la section Produits après chaque changement : le modèle suit tout de suite */
 let syncT = null;
 window.syncProduction = function () {
@@ -516,7 +553,16 @@ async function saveComposant() {
   const cle = c => [c.type || 'matiere', c.article_id || String(c.nom || '').trim().toLowerCase(), c.unite, Number(c.prix_unitaire) || 0].join('|');
   if (composantsDe(m.id).some(c => String(c.id) !== String(curComposant || '') && cle(c) === cle(payload))) { toastP('« ' + nom + ' » est déjà dans ce modèle : modifiez la ligne existante.'); return; }
   const lieP = produitLie(m.id);
-  if (estPackP(lieP)) { toastP('« ' + m.nom + ' » est un pack : modifiez les produits qui le composent (section Produits), le pack suivra.'); return; }
+  if (estPackP(lieP)) {
+    if (!curComposant) { toastP('« ' + m.nom + ' » est un pack : ajoutez ce composant dans les produits qui le composent (section Produits).'); return; }
+    const av = COMPOSANTS.find(x => String(x.id) === String(curComposant));
+    if (!av || !(await versPack(lieP, av, payload))) return;
+    toastP('Composant modifié dans tous les produits du pack « ' + m.nom + ' ».');
+    cancelFormComposant();
+    if (typeof loadProduits === 'function') await loadProduits();
+    await loadProduction();
+    return;
+  }
   const avantC = curComposant ? Object.assign({}, COMPOSANTS.find(x => String(x.id) === String(curComposant)) || {}) : null;
   let res;
   if (curComposant) res = await sb.from('composants').update(payload).eq('id', curComposant).select();
@@ -537,7 +583,13 @@ async function saveComposant() {
 async function removeComposant(id) {
   const c = COMPOSANTS.find(x => String(x.id) === String(id));
   const mC = MODELES.find(x => String(x.id) === String(c && c.modele_id)), lieP = mC && produitLie(mC.id);
-  if (c && estPackP(lieP)) { toastP('« ' + mC.nom + ' » est un pack : modifiez les produits qui le composent (section Produits).'); return; }
+  if (c && estPackP(lieP)) {
+    if (!(await versPack(lieP, c, null))) return;
+    if (String(curComposant) === String(id)) cancelFormComposant();
+    toastP('« ' + c.nom + ' » retiré de tous les produits du pack.');
+    if (typeof loadProduits === 'function') await loadProduits();
+    await loadProduction(); return;
+  }
   if (!c || !confirm('Supprimer « ' + c.nom + ' » de ce modèle' + (lieP ? ' et du coût de revient du produit « ' + lieP.nom + ' »' : '') + ' ?')) return;
   const { error } = await sb.from('composants').delete().eq('id', id);
   if (error) { toastP('Erreur : ' + errMsgP(error)); return; }
