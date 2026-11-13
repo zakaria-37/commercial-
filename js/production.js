@@ -143,7 +143,7 @@ async function depuisProduits() {
 }
 /* Empreinte des composants (quantité avec chute incluse) : sert à savoir si le modèle et le produit disent la même chose */
 function signatureP(rows) {
-  return rows.map(c => [c.type === 'finition' ? 'f' : 'm', c.type === 'finition' ? normP(c.nom) + ':' + (Number(c.prix_unitaire) || 0) : (c.article_id ? 'a' + c.article_id : 'd' + normP(c.nom)), c.unite || '',
+  return rows.map(c => [c.type === 'finition' ? 'f' : 'm', c.type === 'finition' ? normP(c.nom) + ':' + (Number(c.prix_unitaire) || 0) : (c.article_id ? 'a' + c.article_id + ':' + normP(c.nom) : 'd' + normP(c.nom)), c.unite || '',
     Math.round((Number(c.quantite) || 0) * (1 + (Number(c.perte_pct) || 0) / 100) * 10000) / 10000].join('|')).sort().join('\n');
 }
 /* Produit lié au modèle, et report d'une modification faite ici (Production) vers ses lignes de coût (Produits) */
