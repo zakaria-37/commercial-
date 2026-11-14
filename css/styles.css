@@ -482,3 +482,13 @@ body[data-role="equipe"] #pr-btn-direct{display:none}
 }
 @media (min-width:701px) and (max-width:1699px){ nav button{padding:7px 8px;font-size:12.5px;gap:0} nav button::before{display:none} }
 @media (min-width:701px) and (max-width:1199px){ nav button{padding:6px 7px;font-size:12px} nav{justify-content:flex-start} }
+/* ---------- Envoi d'un PDF sur smartphone ---------- */
+.pdfs-bg{position:fixed;inset:0;z-index:5000;background:rgba(20,10,15,.45);display:flex;align-items:flex-end;justify-content:center;padding:0 10px calc(10px + env(safe-area-inset-bottom))}
+.pdfs{background:#fff;color:#111;width:min(460px,100%);border-radius:20px;padding:18px 16px 12px;text-align:center;box-shadow:0 -10px 40px rgba(0,0,0,.25);animation:pdfsIn .22s ease-out}
+@keyframes pdfsIn{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
+.pdfs-ic{font-size:34px;line-height:1}
+.pdfs-n{display:block;font-size:14.5px;margin:6px 0 2px;word-break:break-all}
+.pdfs p{margin:0 0 12px;color:#6b7385;font-size:13px}
+.pdfs .btn{display:block;width:100%;margin:0 0 8px;min-height:50px;border-radius:14px;font-size:16px}
+.pdfs-go small{display:block;font-weight:400;font-size:12px;opacity:.75}
+.pdfs-x{border:0!important;color:#6b7385}
