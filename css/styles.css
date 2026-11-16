@@ -492,3 +492,9 @@ body[data-role="equipe"] #pr-btn-direct{display:none}
 .pdfs .btn{display:block;width:100%;margin:0 0 8px;min-height:50px;border-radius:14px;font-size:16px}
 .pdfs-go small{display:block;font-weight:400;font-size:12px;opacity:.75}
 .pdfs-x{border:0!important;color:#6b7385}
+/* ---------- Carte « Activer les notifications » (Dépôt / Magasin) ---------- */
+.push-card{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:#fff8e6;border:1px solid #f0d58a;border-radius:14px;padding:12px 14px;margin:0 0 12px}
+.push-card>span{font-size:22px}
+.push-card p{flex:1 1 200px;margin:0;font-size:13.5px;line-height:1.4}
+.push-card .btn.p{min-height:44px;border-radius:12px}
+.push-card.on{background:#effaf2;border-color:#9fd9b0}

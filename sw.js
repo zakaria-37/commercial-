@@ -7,7 +7,7 @@
      hors ligne sont gérées par js/local-db.js)
    Changez CACHE_VERSION pour forcer la mise à jour chez tous les utilisateurs.
    ============================================================ */
-const CACHE_VERSION = 'mariabag-v169';
+const CACHE_VERSION = 'mariabag-v170';
 const SHELL = [
   './',
   './index.html',
@@ -66,6 +66,7 @@ const SHELL = [
   './js/acces.js',
   './js/themes.js',
   './js/sorties.js',
+  './js/push.js',
   './js/magasins.js',
   './js/yards.js',
   './js/ateliers_paiements.js',
@@ -156,5 +157,23 @@ self.addEventListener('fetch', (event) => {
     const timer = setTimeout(() => fromCache().then(finish), 4000);
     network.then((res) => { clearTimeout(timer); finish(res); })
       .catch(() => { clearTimeout(timer); fromCache().then((hit) => { finish(hit); if (!done) { done = true; resolve(Response.error()); } }); });
+  }));
+});
+/* ---------- Notifications (Web Push) : nouvelle commande d'un magasin, commande envoyée… ---------- */
+self.addEventListener('push', (event) => {
+  let d = {}; try { d = event.data ? event.data.json() : {}; } catch (e) { d = { title: 'MARIA BAG', body: event.data ? event.data.text() : '' }; }
+  event.waitUntil(self.registration.showNotification(d.title || 'MARIA BAG', {
+    body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag, icon: './icons/icon-192.png', badge: './icons/favicon-48.png',
+    vibrate: [120, 60, 120], data: { url: d.url || './index.html' }
+  }));
+});
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || './index.html', self.registration.scope).href;
+  const hash = new URL(url).hash;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const c = list.find((w) => w.url.startsWith(self.registration.scope));
+    if (c) { c.postMessage({ type: 'ouvrir', hash }); return c.focus(); }
+    return self.clients.openWindow(url);
   }));
 });

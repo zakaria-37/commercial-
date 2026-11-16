@@ -120,6 +120,7 @@
     const nbL = panier.filter(ligneOk).length;
     el.innerHTML =
       '<div class="hello mg-hello"><span class="fl"></span><div><h2>🏬 ' + esc(m ? 'Magasin ' + m.nom : 'Magasin') + '</h2><p>' + esc(m && m.responsable ? m.responsable + ' · ' : '') + 'Commandez au dépôt : le magasinier prépare la commande et vous l’envoie avec un bon daté.</p></div></div>' +
+      (window.PushMB ? PushMB.zone('magasins') : '') +
       (MAGS.length > 1 && !imp ? '<div class="mg-chips">' + MAGS.map(x => '<button type="button" data-mag="' + esc(x.id) + '" class="' + (x.id === magId ? 'on' : '') + '">' + esc(x.nom) + (x.responsable ? '<small>' + esc(x.responsable) + '</small>' : '') + '</button>').join('') + '</div>' : '') +
       '<div class="at-tabs mg-tabs"><button type="button" data-om="nouvelle" class="' + (ongletM === 'nouvelle' ? 'on' : '') + '">🛒 Commander' + (nbL ? ' (' + nbL + ')' : '') + '</button>' +
         '<button type="button" data-om="encours" class="' + (ongletM === 'encours' ? 'on' : '') + '">En cours (' + enCours.length + ')</button>' +
@@ -183,6 +184,7 @@
     const af = CMDS.filter(c => c.statut === 'envoyee' && filt(c)).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
     const hi = CMDS.filter(c => c.statut !== 'envoyee' && filt(c));
     el.innerHTML = '<div class="hello mg-hello"><span class="fl"></span><div><h2>🏭 Dépôt — commandes des magasins</h2><p>Préparez chaque ligne, cochez-la, puis validez : le magasin est prévenu et le bon daté reste dans l’historique.</p></div></div>' +
+      (window.PushMB ? PushMB.zone('depot') : '') +
       '<div class="mg-chips"><button type="button" data-fd="" class="' + (!filtreD ? 'on' : '') + '">Tous</button>' + MAGS.map(x => {
         const n = CMDS.filter(c => c.statut === 'envoyee' && c.magasin_id === x.id).length;
         return '<button type="button" data-fd="' + esc(x.id) + '" class="' + (filtreD === x.id ? 'on' : '') + '">' + esc(x.nom) + (n ? ' <i>' + n + '</i>' : '') + '</button>'; }).join('') + '</div>' +
