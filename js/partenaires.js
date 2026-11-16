@@ -203,14 +203,27 @@
       const q = Number(m.quantite) || 0, n = -q;                                      // livraison : +pièces ; retour : −pièces
       const pv = m.prix_vente != null ? Number(m.prix_vente) : (p ? Number(p.prix_vente) || 0 : 0);
       const c = p ? PFAPI.coutProduit(p) : null;
-      const g = groupes.get(k.key) || { key: k.key, id: k.id, nom: k.nom || 'Client non indiqué', liv: 0, pieces: 0, ca: 0, cout: 0, coutOk: true, retours: 0, livrees: 0, dernier: '' };
+      const g = groupes.get(k.key) || { key: k.key, id: k.id, nom: k.nom || 'Client non indiqué', liv: 0, pieces: 0, ca: 0, cout: 0, coutOk: true, ben: 0, avecCout: 0, retours: 0, livrees: 0, dernier: '' };
       g.pieces += n; g.ca += n * pv;
-      if (c != null && c > 0) g.cout += n * c; else g.coutOk = false;
+      if (c != null && c > 0) { g.cout += n * c; g.ben += (pv - c) * n; g.avecCout++; } else g.coutOk = false;
       if (m.type === 'livraison') { g.liv++; g.livrees += n; if (String(m.date_mvt || '') > g.dernier) g.dernier = String(m.date_mvt || ''); }
       else g.retours += -n;
       groupes.set(k.key, g);
     });
-    const liste = [...groupes.values()].map(g => Object.assign(g, { marge: g.coutOk ? g.ca - g.cout : null }));
+    // BÉNÉFICE avec chaque client (même calcul que sa fiche) : (prix de vente − coût de revient) des pièces livrées
+    // − retours − REMISES des bons de livraison / factures qui ont sorti des pièces du stock
+    const mv = PFAPI.mouvements(), docs = window.CommerceAPI ? CommerceAPI.docs() : [];
+    const liste = [...groupes.values()].map(g => {
+      let remises = 0;
+      if (g.id) docs.forEach(d => {
+        if (String(d.contact_id) !== String(g.id) || d.statut === 'annulee' || !['bon_livraison', 'facture'].includes(d.type) || !dansPeriode(d.date_doc)) return;
+        const mk = d.type === 'facture' ? 'Facture ' + d.numero : 'Bon de livraison ' + d.numero;
+        if (!mv.some(m => String(m.note || '') === mk || String(m.note || '').startsWith(mk + ' '))) return;
+        remises += CommerceAPI.totaux(d, CommerceAPI.lignesDe(d.id)).remise || 0;
+      });
+      g.remises = Math.round(remises * 100) / 100; g.ca -= g.remises;
+      return Object.assign(g, { marge: g.avecCout ? Math.round((g.ben - g.remises) * 100) / 100 : null });
+    });
     const actifs = new Set(liste.map(g => g.id).filter(Boolean));
     const sansAchat = contacts().filter(c => c.type === 'Client' && !actifs.has(c.id)).length;
     return { liste, sansAchat };
@@ -239,12 +252,12 @@
     let h = '<div class="ct-kpis">' +
       '<div class="ct-kpi"><span>Chiffre d’affaires livré</span><b>' + money(ca) + '</b><small>' + reels.length + ' client' + (reels.length > 1 ? 's' : '') + ' actif' + (reels.length > 1 ? 's' : '') + '</small></div>' +
       '<div class="ct-kpi"><span>★ Meilleur client</span><b>' + (top ? esc(top.nom) : '—') + '</b><small>' + (top && ca > 0 ? Math.round(top.ca / ca * 100) + ' % du chiffre d’affaires' : '') + '</small></div>' +
-      '<div class="ct-kpi"><span>Marge estimée</span><b>' + (margeOk.length ? money(margeTot) : '—') + '</b><small>' + (margeOk.length ? (ca > 0 ? Math.round(margeTot / ca * 100) + ' % du CA · ' : '') + 'prix de vente − coût de revient' : 'Renseignez les coûts dans Produits') + '</small></div></div>';
-    h += '<div class="card"><div class="tw"><table class="ct-tbl"><thead><tr><th>#</th><th>Client</th><th class="n">Livraisons</th><th class="n">Pièces</th><th class="n">Chiffre d’affaires</th><th class="n ct-col-opt">Marge estimée</th><th class="n ct-col-opt">Retours</th><th class="ct-col-opt">Dernière livraison</th></tr></thead><tbody>' +
+      '<div class="ct-kpi"><span>Bénéfice avec les clients</span><b>' + (margeOk.length ? money(margeTot) : '—') + '</b><small>' + (margeOk.length ? (ca > 0 ? Math.round(margeTot / ca * 100) + ' % du CA · ' : '') + 'prix de vente − coût de revient − remises' : 'Renseignez les coûts dans Produits') + '</small></div></div>';
+    h += '<div class="card"><div class="tw"><table class="ct-tbl"><thead><tr><th>#</th><th>Client</th><th class="n">Livraisons</th><th class="n">Pièces</th><th class="n">Chiffre d’affaires</th><th class="n ct-col-opt">Bénéfice</th><th class="n ct-col-opt">Retours</th><th class="ct-col-opt">Dernière livraison</th></tr></thead><tbody>' +
       tries.map((g, i) => {
         const b = [];
         if (top && g === top) b.push('<span class="ct-bdg g">★ Meilleur client</span>');
-        if (topMarge && g === topMarge && reels.length > 1) b.push('<span class="ct-bdg b">★ Meilleure marge</span>');
+        if (topMarge && g === topMarge && reels.length > 1) b.push('<span class="ct-bdg b">★ Meilleur bénéfice</span>');
         if (fidele && g === fidele && g.liv >= 3 && reels.length > 1) b.push('<span class="ct-bdg b">Le plus régulier</span>');
         if (g.key !== 'none' && g.dernier && g.dernier < lim) b.push('<span class="ct-bdg o">Inactif depuis 90 jours</span>');
         if (g.key !== 'none' && !g.id) b.push('<span class="ct-bdg x">Pas dans les Contacts</span>');
@@ -253,7 +266,7 @@
           '<td class="n ct-col-opt">' + (g.marge == null ? '—' : '<span class="' + (g.marge >= 0 ? 'ct-neg' : 'ct-pos') + '">' + money(g.marge) + '</span>') + '</td>' +
           '<td class="n ct-col-opt">' + (g.retours ? num(g.retours) + ' pc' : '—') + '</td><td class="ct-col-opt">' + fd(g.dernier) + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
-      '<p class="ct-note">Classement d’après les livraisons (moins les retours) du Stock des modèles finis. La marge utilise le coût de revient de l’onglet Produits' + (margeOk.length < reels.length ? ' (« — » = coût de revient manquant pour un modèle livré)' : '') + '.' +
+      '<p class="ct-note">Classement d’après les livraisons (moins les retours) du Stock des modèles finis. Le bénéfice = prix de vente − coût de revient (onglet Produits) − remises des bons et factures : le même chiffre que « Bénéfice avec ce client » dans sa fiche' + (margeOk.length < reels.length ? ' (« — » = coût de revient manquant)' : '') + '.' +
       (r.sansAchat ? ' <b>' + r.sansAchat + '</b> client' + (r.sansAchat > 1 ? 's' : '') + ' de vos Contacts ' + (r.sansAchat > 1 ? 'n’ont' : 'n’a') + ' encore aucune livraison enregistrée.' : '') + '</p></div>';
     box.insertAdjacentHTML('beforeend', h);
   }
@@ -390,7 +403,7 @@
     if (tab === 'ca') { renderCA(box); return; }
     if (tab === 'pay') { if (window.PayAPI) PayAPI.render(box); return; }
     const four = tab === 'four';
-    const tris = four ? [['prix', 'Meilleur prix'], ['vol', 'Plus gros achats'], ['nb', 'Plus d’achats']] : [['ca', 'Chiffre d’affaires'], ['marge', 'Marge'], ['pieces', 'Pièces livrées'], ['liv', 'Nombre de livraisons']];
+    const tris = four ? [['prix', 'Meilleur prix'], ['vol', 'Plus gros achats'], ['nb', 'Plus d’achats']] : [['ca', 'Chiffre d’affaires'], ['marge', 'Bénéfice'], ['pieces', 'Pièces livrées'], ['liv', 'Nombre de livraisons']];
     box.innerHTML = '<div class="ct-bar"><label>Période <select id="ct-per">' +
       [['all', 'Depuis le début'], ['year', 'Cette année'], ['month', 'Ce mois-ci'], ['365', '12 derniers mois'], ['90', '3 derniers mois'], ['30', '30 derniers jours']].map(o => '<option value="' + o[0] + '"' + (periode === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' +
       '<label>Classer par <select id="ct-tri">' + tris.map(o => '<option value="' + o[0] + '"' + (tri[tab] === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label></div>';
