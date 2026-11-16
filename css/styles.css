@@ -500,3 +500,11 @@ body[data-role="equipe"] #pr-btn-direct{display:none}
 .push-card.on{background:#effaf2;border-color:#9fd9b0}
 .pr-regler{display:block;margin-top:8px;min-height:38px;border-radius:10px;width:100%}
 .ch-ben b{color:var(--g)}.ch-ben.neg b{color:var(--r)}
+/* ---------- Commerce › Bénéfices ---------- */
+.bn-bar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.bn-bar button{border:1.5px solid var(--line,#e6e0e3);background:#fff;border-radius:999px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer;min-height:40px}
+.bn-bar button.on{background:#000;color:#fff;border-color:#000}
+.bn-dates{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px}.bn-dates label{display:flex;gap:6px;align-items:center;font-size:13px}.bn-dates input{padding:8px;border:1px solid #ccc;border-radius:8px;font:inherit}
+.bn-titre{margin:4px 0 10px;font-size:16px;text-transform:none}
+.bn-kpis .bn-net{background:#0f5132;color:#fff;border-color:#0f5132}.bn-kpis .bn-net span,.bn-kpis .bn-net small{color:rgba(255,255,255,.8)}.bn-kpis .bn-net b{color:#fff}
+.bn-kpis .bn-net.neg{background:#8a1c12;border-color:#8a1c12}

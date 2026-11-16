@@ -130,10 +130,11 @@
     if (ed) { root.innerHTML = editeur(); return; }
     let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Commerce</h2><p>Bons de livraison (avec facture) et bons de réception, paiements, versements, crédits, journal des opérations et caisse.</p></div></div>';
     h += '<div class="at-tabs" id="cm-tabs">' + ['bon_livraison', 'bon_reception', 'facture', 'devis', 'bon_commande'].filter(t => isBon(t) || DOCS.some(d => d.type === t) || tab === t).map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + TYPES[t].lp + '</button>').join('') +
-      ['versements', 'credits', 'journal'].map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + ({ versements: 'Versements', credits: 'Crédits', journal: 'Journal & caisse' })[t] + '</button>').join('') + '<button type="button" data-t="entreprise" class="' + (tab === 'entreprise' ? 'on' : '') + '">Mon entreprise</button></div>';
-    h += tab === 'entreprise' ? paneEntreprise() : (tab === 'versements' || tab === 'credits' || tab === 'journal') ? (window.CommerceFin ? CommerceFin.html(tab) : '') : paneListe(tab);
+      ['versements', 'credits', 'journal'].map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + ({ versements: 'Versements', credits: 'Crédits', journal: 'Journal & caisse' })[t] + '</button>').join('') + '<button type="button" data-t="benefices" class="' + (tab === 'benefices' ? 'on' : '') + '">💰 Bénéfices</button><button type="button" data-t="entreprise" class="' + (tab === 'entreprise' ? 'on' : '') + '">Mon entreprise</button></div>';
+    h += tab === 'benefices' ? (window.Benefices ? Benefices.html() : '') : tab === 'entreprise' ? paneEntreprise() : (tab === 'versements' || tab === 'credits' || tab === 'journal') ? (window.CommerceFin ? CommerceFin.html(tab) : '') : paneListe(tab);
     root.innerHTML = h;
     if (window.CommerceFin && tab === 'versements') CommerceFin.apres();
+    if (window.Benefices && tab === 'benefices') Benefices.apres();
   }
 
   function paneListe(type) {

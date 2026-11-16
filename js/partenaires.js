@@ -252,7 +252,9 @@
     let h = '<div class="ct-kpis">' +
       '<div class="ct-kpi"><span>Chiffre d’affaires livré</span><b>' + money(ca) + '</b><small>' + reels.length + ' client' + (reels.length > 1 ? 's' : '') + ' actif' + (reels.length > 1 ? 's' : '') + '</small></div>' +
       '<div class="ct-kpi"><span>★ Meilleur client</span><b>' + (top ? esc(top.nom) : '—') + '</b><small>' + (top && ca > 0 ? Math.round(top.ca / ca * 100) + ' % du chiffre d’affaires' : '') + '</small></div>' +
-      '<div class="ct-kpi"><span>Bénéfice avec les clients</span><b>' + (margeOk.length ? money(margeTot) : '—') + '</b><small>' + (margeOk.length ? (ca > 0 ? Math.round(margeTot / ca * 100) + ' % du CA · ' : '') + 'prix de vente − coût de revient − remises' : 'Renseignez les coûts dans Produits') + '</small></div></div>';
+      '<div class="ct-kpi"><span>Bénéfice avec les clients</span><b>' + (margeOk.length ? money(margeTot) : '—') + '</b><small>' + (margeOk.length ? (ca > 0 ? Math.round(margeTot / ca * 100) + ' % du CA · ' : '') + 'prix de vente − coût de revient − remises' : 'Renseignez les coûts dans Produits') + '</small></div>' +
+      (function () { const I = window.Benefices ? Benefices.internes() : new Set(); if (!I.size) return ''; const a = margeOk.filter(g => !(g.id && I.has(String(g.id)))), m = margeOk.filter(g => g.id && I.has(String(g.id)));
+        return '<div class="ct-kpi"><span>Bénéfice avec les autres clients</span><b class="py-av">' + money(a.reduce((x, g) => x + g.marge, 0)) + '</b><small>hors magasin MARIA BAG (' + money(m.reduce((x, g) => x + g.marge, 0)) + ') · ' + a.length + ' client(s)</small></div>'; })() + '</div>';
     h += '<div class="card"><div class="tw"><table class="ct-tbl"><thead><tr><th>#</th><th>Client</th><th class="n">Livraisons</th><th class="n">Pièces</th><th class="n">Chiffre d’affaires</th><th class="n ct-col-opt">Bénéfice</th><th class="n ct-col-opt">Retours</th><th class="ct-col-opt">Dernière livraison</th></tr></thead><tbody>' +
       tries.map((g, i) => {
         const b = [];
