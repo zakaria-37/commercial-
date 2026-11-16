@@ -7,9 +7,10 @@
    ============================================================ */
 (function () {
   'use strict';
-  const J = window.jspdf && window.jspdf.jsPDF; if (!J || !J.API) return;
+  const J = window.jspdf && window.jspdf.jsPDF; if (!J) return;
   const telephone = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
-  const origSave = J.API.save;
+  // jsPDF 2.5 crée « save » dans CHAQUE document : on garde l'original de chaque document (doc.__saveOrig)
+  const origSave = function (nom, opts) { return this.__saveOrig(nom, opts); };
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   function feuille(doc, nom, file) {
@@ -31,7 +32,7 @@
     });
   }
 
-  J.API.save = function (nom, opts) {
+  function saveTel(nom, opts) {
     nom = String(nom || 'document.pdf'); if (!/\.pdf$/i.test(nom)) nom += '.pdf';
     if (!telephone() || !navigator.share || !navigator.canShare) return origSave.call(this, nom, opts);
     let file;
@@ -39,5 +40,13 @@
     if (!navigator.canShare({ files: [file] })) return origSave.call(this, nom, opts);
     feuille(this, nom, file);
     return this;
-  };
+  }
+  // constructeur enveloppé : chaque nouveau document reçoit le « save » adapté au téléphone
+  function JsPDF() {
+    const d = new J(...arguments);
+    if (typeof d.save === 'function' && !d.__saveOrig) { d.__saveOrig = d.save; d.save = saveTel; }
+    return d;
+  }
+  Object.setPrototypeOf(JsPDF, J); JsPDF.prototype = J.prototype;
+  window.jspdf.jsPDF = JsPDF;
 })();
