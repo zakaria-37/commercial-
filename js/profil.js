@@ -81,9 +81,44 @@
   }
 
   /* Case « Différence » : + = reste à payer, − = payé en plus (avance), 0 = soldé */
-  function diff(v, plus, moins) {
+  function diff(v, plus, moins, sens) {
     v = r2(v); const z = Math.abs(v) < 0.005;
-    return '<div class="ct-kpi"><span>Différence</span><b class="' + (z ? 'py-av' : v > 0 ? 'py-due' : 'pr-moins') + '">' + (z ? '0 DA' : (v > 0 ? '+ ' : '− ') + money(Math.abs(v))) + '</b><small>' + (z ? '✔ compte soldé' : v > 0 ? plus : moins) + '</small></div>';
+    return '<div class="ct-kpi"><span>Différence</span><b class="' + (z ? 'py-av' : v > 0 ? 'py-due' : 'pr-moins') + '">' + (z ? '0 DA' : (v > 0 ? '+ ' : '− ') + money(Math.abs(v))) + '</b><small>' + (z ? '✔ compte soldé' : v > 0 ? plus : moins) + '</small>' +
+      (z || !sens ? '' : '<button type="button" class="btn s p pr-regler" data-pr="regler" data-sens="' + sens + '">⚖ Régler la différence</button>') + '</div>';
+  }
+  /* « Régler la différence » : remet le compte à 0 en une fois.
+     + (il reste à payer) → un versement du montant restant ;
+     − (payé en plus)     → d'abord on corrige les paiements « comptant » automatiques en trop (les plus récents d'abord),
+                            puis, s'il reste une vraie avance, on l'enregistre comme remboursée. */
+  async function regler(sens) {
+    const cl = sens === 'client', s = cl ? P.sc : P.sf, v = r2(s ? s.solde : 0);
+    if (Math.abs(v) < 0.005) return;
+    const c = P.c, nom = lbl(c), sensPay = cl ? 'encaissement' : 'reglement', today = new Date().toISOString().slice(0, 10);
+    if (v > 0) {
+      if (!confirm((cl ? 'Enregistrer un versement reçu de ' : 'Enregistrer un versement fait de ') + money(v) + ' (espèces) pour solder le compte de « ' + nom + ' » ?')) return;
+      const r = await sb.from('paiements').insert([{ date_paiement: today, sens: sensPay, contact_id: c.id, contact_nom: nom, montant: v, mode: 'especes', reference: '', note: 'Règlement du solde' }]);
+      if (r.error) { say('Erreur : ' + r.error.message); return; }
+    } else {
+      let reste = -v;
+      const auto = P.pays.filter(p => p.sens === sensPay && p.document_id && /paiement comptant/i.test(p.note || '')).sort((a, b) => String(b.date_paiement).localeCompare(String(a.date_paiement)) || String(b.created_at).localeCompare(String(a.created_at)));
+      const plan = [];
+      for (const p of auto) { if (reste < 0.005) break; const m = Number(p.montant), x = Math.min(m, reste); plan.push([p, r2(m - x), x]); reste = r2(reste - x); }
+      const txt = plan.map(([p, n, x]) => '• ' + (p.reference || 'paiement') + ' : ' + money(Number(p.montant)) + ' → ' + money(n) + ' (−' + money(x) + ')').join('\n');
+      if (!confirm('« ' + nom + ' » a payé ' + money(-v) + ' de plus que ses ' + (cl ? 'achats' : 'ventes') + '.\n\n' +
+        (plan.length ? 'Correction des paiements comptant enregistrés en trop (l’avance déjà versée n’avait pas été déduite) :\n' + txt + '\n' : '') +
+        (reste > 0.005 ? '\nAvance restante ' + money(reste) + ' enregistrée comme remboursée ' + (cl ? 'au client' : 'par le fournisseur') + '.\n' : '') + '\nLe compte sera à 0 DA. Continuer ?')) return;
+      for (const [p, n] of plan) {
+        const r = n > 0.005 ? await sb.from('paiements').update({ montant: n, note: (p.note || '') + ' (avance de ' + money(Number(p.montant) - n) + ' déduite)' }).eq('id', p.id) : await sb.from('paiements').delete().eq('id', p.id);
+        if (r.error) { say('Erreur : ' + r.error.message); return; }
+      }
+      if (reste > 0.005) {
+        const r = await sb.from('paiements').insert([{ date_paiement: today, sens: cl ? 'report_client' : 'report_fournisseur', contact_id: c.id, contact_nom: nom, montant: reste, mode: 'especes', reference: '', note: cl ? 'Avance remboursée au client' : 'Avance remboursée par le fournisseur' }]);
+        if (r.error) { say('Erreur : ' + r.error.message); return; }
+      }
+    }
+    if (window.PayAPI) await PayAPI.load();
+    say('✔ Compte de « ' + nom + ' » soldé : différence 0 DA.');
+    await ouvrir(cur, onglet);
   }
   function html() {
     const c = P.c, tel = String(c.tel || '').split(/[\s\/,;-]+/).map(t => t.replace(/[^\d+]/g, '')).filter(t => t.length >= 9)[0] || '';
@@ -97,9 +132,9 @@
     // chiffres clés
     h += '<div class="ct-kpis">';
     if (P.client) h += '<div class="ct-kpi"><span>Ventes (livraisons)</span><b>' + money(sum(P.ventes)) + '</b><small>' + P.ventes.length + ' opération(s)</small></div><div class="ct-kpi"><span>Versements reçus</span><b class="py-av">' + money(enc) + '</b><small>' + P.pays.filter(p => p.sens === 'encaissement').length + ' versement(s)</small></div>' +
-      diff(P.sc ? P.sc.solde : 0, 'le client nous doit encore', 'le client a payé en plus (avance)');
+      diff(P.sc ? P.sc.solde : 0, 'le client nous doit encore', 'le client a payé en plus (avance)', 'client');
     if (P.four) h += '<div class="ct-kpi"><span>Achats</span><b>' + money(sum(P.achats)) + '</b><small>' + P.achats.length + ' opération(s)</small></div><div class="ct-kpi"><span>Versements faits</span><b>' + money(reg) + '</b><small>' + P.pays.filter(p => p.sens === 'reglement').length + ' versement(s)</small></div>' +
-      diff(P.sf ? P.sf.solde : 0, 'nous lui devons encore', 'nous avons payé en plus (avance chez lui)');
+      diff(P.sf ? P.sf.solde : 0, 'nous lui devons encore', 'nous avons payé en plus (avance chez lui)', 'fournisseur');
     if (P.client && P.ben && P.ventes.length) { const b = P.ben;
       h += '<div class="ct-kpi"><span>Bénéfice avec ce client</span><b class="' + (b.ben < 0 ? 'py-due' : 'py-av') + '">' + money(b.ben) + '</b><small>' + (b.ca > 0 ? Math.round(b.ben / b.ca * 100) + ' % des ventes' : '') + (b.remises ? ' · remises déduites : ' + money(b.remises) : '') + (b.sansCout ? ' · ⚠ ' + b.sansCout + ' vente(s) sans coût renseigné' : '') + '</small></div>'; }
     h += '</div>';
@@ -196,6 +231,7 @@
     const a = b.dataset.pr;
     if (a === 'close') return fermer();
     if (a === 'pdf') return relevePdf();
+    if (a === 'regler') { b.disabled = true; try { await regler(b.dataset.sens); } finally { b.disabled = false; } return; }
     if (a === 'edit') { const id = cur; fermer(); if (typeof edit === 'function') edit(id); return; }
     if (a === 'vers' || a === 'cred') { fermer(); if (typeof show === 'function') show('commerce'); setTimeout(() => { const tb = document.querySelector('#cm-tabs [data-t="' + (a === 'vers' ? 'versements' : 'credits') + '"]'); if (tb) tb.click(); }, 150); return; }
   });

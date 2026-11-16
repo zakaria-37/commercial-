@@ -345,12 +345,27 @@
     return { sorti, rendu, echecs };
   }
 
+  /* Avance disponible du contact AVANT ce document (ses ventes/achats et paiements, sans ceux de ce document) */
+  function avanceHorsDoc(d, fac) {
+    try {
+      if (!window.PayAPI || !d.contact_id) return 0;
+      const v = fac ? 'client' : 'fournisseur', x = PayAPI.soldes(v).find(s => String(s.id) === String(d.contact_id)); if (!x) return 0;
+      if (!window.PartAPI || !PartAPI.ops({}).length) return 0;          // ventes pas encore chargées : prudence, pas de déduction
+      const num_ = String(d.numero || ''), rep = v === 'client' ? 'report_client' : 'report_fournisseur';
+      const ops = x.ops.filter(o => !num_ || String(o.ref || '') !== num_).reduce((s, o) => s + Number(o.montant || 0), 0);
+      const payes = x.pays.filter(p => p.sens !== rep && String(p.document_id) !== String(d.id)).reduce((s, p) => s + Number(p.montant || 0), 0);
+      return Math.max(0, -r2(x.report + ops - payes));
+    } catch (e) { return 0; }
+  }
   /* Paiement « Cash » : l'encaissement (ou le règlement) du total est enregistré automatiquement et suit le montant de la facture */
   async function synchroniserCash() {
     const d = ed.doc; if ((d.type !== 'facture' && d.type !== 'bon_commande' && !isBon(d.type)) || d.paiement !== 'cash' || d.statut === 'annulee') return;
-    const ttc = totaux(d, ed.lignes).ttc, liees = pays().filter(p => String(p.document_id) === String(d.id)), paye = r2(liees.reduce((s, p) => s + Number(p.montant), 0));
-    if (Math.abs(ttc - paye) < 0.005) return;
+    const total = totaux(d, ed.lignes).ttc, liees = pays().filter(p => String(p.document_id) === String(d.id)), paye = r2(liees.reduce((s, p) => s + Number(p.montant), 0));
     const c = cById(d.contact_id), fac = encaisse(d);
+    // L'AVANCE du client (ou chez le fournisseur) est utilisée d'abord : on n'encaisse que ce qui manque.
+    // (sinon le paiement comptant compte deux fois l'argent déjà versé → « payé en plus » faux)
+    const ttc = r2(Math.max(0, total - avanceHorsDoc(d, fac)));
+    if (Math.abs(ttc - paye) < 0.005) return;
     if (paye > ttc) for (const p of liees) await sb.from('paiements').delete().eq('id', p.id);
     const du = paye > ttc ? ttc : r2(ttc - paye);
     if (du > 0) await sb.from('paiements').insert([{ date_paiement: d.date_doc || today(), sens: fac ? 'encaissement' : 'reglement', contact_id: d.contact_id, contact_nom: c ? lbl(c) : d.contact_nom, montant: du, mode: d.mode_paiement || 'especes', reference: d.numero, note: TYPES[d.type].l + ' ' + d.numero + ' : paiement comptant', document_id: d.id }]);
