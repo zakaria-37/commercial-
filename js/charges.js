@@ -114,6 +114,7 @@ async function loadCharges() {
     return;
   }
   CHARGES = c.data || [];
+  try { if (window.PFAPI && !PFAPI.mouvements().length) await PFAPI.load(); } catch (e) {}
   renderCharges();
 }
 
@@ -126,11 +127,10 @@ function joursDuMois() {
     const d = mois + '-' + String(i).padStart(2, '0');
     if (d > today) break;
     const saisies = CHARGES.filter(c => c.date_charge === d);
-    // acomptes donnés ce jour-là (automatique) + anciennes saisies « Paie des employés »
-    const acs = ACOMPTES_C.filter(a => a.date_acompte === d), acomptes = sumC(acs);
-    const paie = round2C(acomptes + sumC(saisies.filter(c => c.categorie === CAT_PAIE)));
-    const variables = sumC(saisies.filter(c => c.categorie !== CAT_PAIE));
-    if (paie || variables) out.push({ d, paie, nbAc: acs.length, variables, total: round2C(paie + variables) });      // charges fixes : seulement dans la main d'œuvre (Produits)
+    // Les acomptes et la paie des employés ne sont PAS des charges ici : ils sont déjà dans la main d'œuvre
+    // (coût de revient des produits). Les charges fixes aussi. Restent les charges variables.
+    const vs = saisies.filter(c => c.categorie !== CAT_PAIE), variables = sumC(vs);
+    if (variables) out.push({ d, nb: vs.length, variables, total: variables });
   }
   return out;
 }
@@ -145,16 +145,30 @@ function filteredCharges() {
     .sort((a, b) => b.date_charge.localeCompare(a.date_charge) || String(b.created_at).localeCompare(String(a.created_at)));
 }
 
+/* Marge des ventes du mois : pour chaque pièce livrée (moins les retours), prix de vente − coût de revient
+   (matières + main d'œuvre, section Produits). La paie des employés est donc déjà dedans. */
+function margeVentesMois(mois) {
+  if (!window.PFAPI) return null;
+  const prods = new Map(PFAPI.produits().map(p => [String(p.id), p]));
+  let ca = 0, cout = 0, pieces = 0, sansCout = 0;
+  PFAPI.mouvements().forEach(m => {
+    if ((m.type !== 'livraison' && m.type !== 'retour') || String(m.date_mvt || '').slice(0, 7) !== mois) return;
+    const p = prods.get(String(m.produit_id)), n = -(Number(m.quantite) || 0);
+    const pv = m.prix_vente != null ? Number(m.prix_vente) : (p ? Number(p.prix_vente) || 0 : 0), cu = p ? Number(PFAPI.coutProduit(p)) || 0 : 0;
+    ca += pv * n; cout += cu * n; pieces += n; if (!(cu > 0) && n > 0) sansCout++;
+  });
+  return { ca: round2C(ca), cout: round2C(cout), marge: round2C(ca - cout), pieces, sansCout };
+}
+window.margeVentesMois = margeVentesMois;
+
 function renderStatsCharges() {
-  const jours = joursDuMois();
-  const paie = round2C(jours.reduce((s, j) => s + j.paie, 0));
-  const vars = round2C(jours.reduce((s, j) => s + j.variables, 0)), total = round2C(paie + vars);
-  const nj = jours.length || 1;
-  const pc = v => (total ? Math.round(v / total * 100) : 0) + ' % du total';
+  const mois = moisC(), vars = round2C(CHARGES.filter(c => c.categorie !== CAT_PAIE).reduce((s, c) => s + Number(c.montant || 0), 0));
+  const nj = joursDuMois().length || 1, mv = margeVentesMois(mois);
+  const ben = mv ? round2C(mv.marge - vars) : null;
   $c('#ch-stats').innerHTML =
-    '<div class="at-stat"><span>Total des charges du mois</span><b>' + moneyC(total) + '</b><small style="color:var(--mut)">Moyenne : ' + moneyC(total / nj) + ' / jour travaillé</small></div>' +
-    '<div class="at-stat"><span>Acomptes des employés</span><b>' + moneyC(paie) + '</b><small style="color:var(--mut)">automatique (onglet Employés) · ' + pc(paie) + '</small></div>' +
-    '<div class="at-stat"><span>Charges variables</span><b>' + moneyC(vars) + '</b><small style="color:var(--mut)">' + pc(vars) + '</small></div>';
+    '<div class="at-stat"><span>Charges du mois</span><b>' + moneyC(vars) + '</b><small style="color:var(--mut)">charges variables · moyenne ' + moneyC(vars / nj) + ' / jour</small></div>' +
+    '<div class="at-stat"><span>Marge des ventes du mois</span><b>' + (mv ? moneyC(mv.marge) : '—') + '</b><small style="color:var(--mut)">' + (mv ? 'ventes ' + moneyC(mv.ca) + ' − coût de revient ' + moneyC(mv.cout) + ' · ' + mv.pieces.toLocaleString('fr-FR') + ' pièces' + (mv.sansCout ? ' · ⚠ ' + mv.sansCout + ' vente(s) sans coût' : '') : 'stock des produits finis non chargé') + '</small></div>' +
+    '<div class="at-stat ch-ben' + (ben != null && ben < 0 ? ' neg' : '') + '"><span>Bénéfice du mois</span><b>' + (ben == null ? '—' : moneyC(ben)) + '</b><small style="color:var(--mut)">marge des ventes − charges · la paie des employés est déjà dans la main d’œuvre</small></div>';
 }
 
 function renderFixes() {
@@ -182,7 +196,7 @@ function renderCharges(errText) {
 
   if (errText) {
     body.innerHTML = '<tr><td colspan="5" class="at-empty" style="color:#b00020">⚠ ' + escC(errText) + '</td></tr>';
-    recap.innerHTML = '<tr><td colspan="5" class="at-empty">—</td></tr>';
+    recap.innerHTML = '<tr><td colspan="4" class="at-empty">—</td></tr>';
     return;
   }
 
@@ -190,14 +204,12 @@ function renderCharges(errText) {
   const jours = joursDuMois();
   recap.innerHTML = jours.length ? jours.map(j =>
     '<tr><td><b>' + fdC(j.d) + '</b></td><td>' + jourC(j.d) + '</td>' +
-    '<td>' + (j.paie ? moneyC(j.paie) + (j.nbAc ? '<small>' + j.nbAc + ' acompte' + (j.nbAc > 1 ? 's' : '') + '</small>' : '') : '—') + '</td>' +
-    '<td>' + (j.variables ? moneyC(j.variables) : '—') + '</td>' +
+    '<td>' + j.nb + '</td>' +
     '<td><b>' + moneyC(j.total) + '</b></td></tr>'
   ).join('') +
     '<tr style="font-weight:700;background:var(--nb)"><td colspan="2">Total du mois</td>' +
-    '<td>' + moneyC(jours.reduce((s, j) => s + j.paie, 0)) + '</td>' +
-    '<td>' + moneyC(jours.reduce((s, j) => s + j.variables, 0)) + '</td><td>' + moneyC(jours.reduce((s, j) => s + j.total, 0)) + '</td></tr>'
-    : '<tr><td colspan="5" class="at-empty">Aucune charge pour ce mois.</td></tr>';
+    '<td>' + jours.reduce((s, j) => s + j.nb, 0) + '</td><td>' + moneyC(jours.reduce((s, j) => s + j.total, 0)) + '</td></tr>'
+    : '<tr><td colspan="4" class="at-empty">Aucune charge pour ce mois.</td></tr>';
 
   // Détail des charges saisies
   body.innerHTML = list.length ? list.map(c =>
@@ -394,9 +406,9 @@ function exportCharges() {
   const mois = moisC();
   const jours = joursDuMois();
   const parJour = jours.map(j => ({
-    Date: fdC(j.d), Jour: jourC(j.d), 'Acomptes des employés': j.paie, 'Charges variables': j.variables, 'Total du jour': j.total
+    Date: fdC(j.d), Jour: jourC(j.d), 'Nombre de charges': j.nb, 'Charges du jour': j.total
   }));
-  parJour.push({ Date: 'TOTAL', Jour: '', 'Acomptes des employés': round2C(jours.reduce((s, j) => s + j.paie, 0)), 'Charges variables': round2C(jours.reduce((s, j) => s + j.variables, 0)), 'Total du jour': round2C(jours.reduce((s, j) => s + j.total, 0)) });
+  parJour.push({ Date: 'TOTAL', Jour: '', 'Nombre de charges': jours.reduce((s, j) => s + j.nb, 0), 'Charges du jour': round2C(jours.reduce((s, j) => s + j.total, 0)) });
   const detail = [...CHARGES].sort((a, b) => a.date_charge.localeCompare(b.date_charge)).map(c => ({
     Date: fdC(c.date_charge), Jour: jourC(c.date_charge), 'Catégorie': c.categorie, Note: noteC(c), 'Montant (DA)': Number(c.montant || 0)
   }));

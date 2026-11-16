@@ -195,9 +195,8 @@
       const last = String(new Date(+mois.slice(0, 4), +mois.slice(5, 7), 0).getDate()).padStart(2, '0');
       const c = await sb.from('charges').select('*').gte('date_charge', mois + '-01').lte('date_charge', mois + '-' + last);
       chargesMois = c.error ? null : (c.data || []);
-      // acomptes donnés aux employés : comptés comme charges du jour (comme dans l'onglet Charges)
-      if (chargesMois) { const ac = await sb.from('acomptes').select('*').gte('date_acompte', mois + '-01').lte('date_acompte', mois + '-' + last);
-        if (!ac.error) chargesMois = chargesMois.concat((ac.data || []).map(x => ({ date_charge: x.date_acompte, categorie: 'Paie des employés', montant: x.montant }))); }
+      // la paie et les acomptes des employés ne sont pas des charges (déjà dans la main d'œuvre des produits)
+      if (chargesMois) chargesMois = chargesMois.filter(x => x.categorie !== 'Paie des employés');
       const p = await sb.from('pointages').select('*').eq('date_pointage', today);
       // stock et produits finis : rechargés au plus toutes les 20 s (ou à la demande) pour un tableau de bord fluide
       if (forcer || Date.now() - dernierStock > 20000) {

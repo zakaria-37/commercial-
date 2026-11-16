@@ -499,3 +499,4 @@ body[data-role="equipe"] #pr-btn-direct{display:none}
 .push-card .btn.p{min-height:44px;border-radius:12px}
 .push-card.on{background:#effaf2;border-color:#9fd9b0}
 .pr-regler{display:block;margin-top:8px;min-height:38px;border-radius:10px;width:100%}
+.ch-ben b{color:var(--g)}.ch-ben.neg b{color:var(--r)}
