@@ -41,6 +41,7 @@
   function periode() {
     const t = iso(), y = t.slice(0, 4);
     if (per === 'jour') return [t, t, 'Aujourd’hui (' + fd(t) + ')'];
+    if (per === 'tout') return ['0000-01-01', '9999-12-31', 'depuis le début'];
     if (per === 'annee') return [y + '-01-01', y + '-12-31', 'Année ' + y];
     if (per === 'perso') return [du || t.slice(0, 8) + '01', au || t, 'Du ' + fd(du || t.slice(0, 8) + '01') + ' au ' + fd(au || t)];
     return [t.slice(0, 8) + '01', t.slice(0, 8) + '31', MOIS[+t.slice(5, 7) - 1] + ' ' + y];
@@ -96,7 +97,7 @@
     const mag = L.filter(g => g.interne), aut = L.filter(g => !g.interne), s = (l, k) => r2(l.reduce((x, g) => x + g[k], 0));
     const bMag = s(mag, 'ben'), bAut = s(aut, 'ben'), bTot = r2(bMag + bAut), chg = ch ? ch.total : 0, net = r2(bTot - chg), sansCout = L.reduce((x, g) => x + g.sansCout, 0);
     const I = internes(), nomsMag = contacts().filter(c => I.has(String(c.id))).map(lbl);
-    let h = '<div class="bn-bar">' + [['jour', 'Aujourd’hui'], ['mois', 'Ce mois'], ['annee', 'Cette année'], ['perso', 'Choisir les dates']].map(x => '<button type="button" data-bnp="' + x[0] + '" class="' + (per === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
+    let h = '<div class="bn-bar">' + [['jour', 'Aujourd’hui'], ['mois', 'Ce mois'], ['annee', 'Cette année'], ['tout', 'Depuis le début'], ['perso', 'Choisir les dates']].map(x => '<button type="button" data-bnp="' + x[0] + '" class="' + (per === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
       (per === 'perso' ? '<div class="bn-dates"><label>Du <input type="date" id="bn-du" value="' + esc(d1) + '"></label><label>Au <input type="date" id="bn-au" value="' + esc(d2) + '"></label></div>' : '') +
       '<h3 class="bn-titre">Bénéfice — ' + esc(titre) + '</h3>' +
       '<div class="ct-kpis bn-kpis">' +
@@ -114,7 +115,7 @@
           return '<tr><td>' + MOIS[+m.slice(5, 7) - 1] + ' ' + m.slice(0, 4) + '</td><td class="n">' + money(a) + '</td><td class="n">' + money(b) + '</td><td class="n">' + money(c) + '</td><td class="n"><b class="' + (n < 0 ? 'py-due' : 'py-av') + '">' + money(n) + '</b></td></tr>'; }).join('') + '</tbody></table></div></div>';
     }
     // par client
-    h += '<div class="card"><h3 style="margin-top:0">Par client</h3>' + (L.length ? '<div class="tw"><table class="ct-tbl"><thead><tr><th>Client</th><th class="n">Pièces</th><th class="n">Ventes</th><th class="n">Bénéfice</th></tr></thead><tbody>' +
+    h += '<div class="card"><h3 style="margin-top:0">Par client — ' + esc(titre) + '</h3><p class="iv-help" style="margin-top:-6px">La fiche d’un client montre son bénéfice <b>depuis le début</b> : choisissez « Depuis le début » pour comparer.</p>' + (L.length ? '<div class="tw"><table class="ct-tbl"><thead><tr><th>Client</th><th class="n">Pièces</th><th class="n">Ventes</th><th class="n">Bénéfice (' + esc(titre) + ')</th></tr></thead><tbody>' +
       L.map(g => '<tr><td><b>' + esc(g.nom) + '</b>' + (g.interne ? ' <span class="ct-bdg b">🏬 magasin</span>' : '') + (g.remises ? '<small>remises ' + money(g.remises) + '</small>' : '') + '</td><td class="n">' + g.pieces.toLocaleString('fr-FR') + '</td><td class="n">' + money(g.ca) + '</td><td class="n"><b class="' + (g.ben < 0 ? 'py-due' : 'py-av') + '">' + money(g.ben) + '</b></td></tr>').join('') + '</tbody></table></div>' : '<p class="bs-vide">Aucune livraison sur cette période.</p>') + '</div>';
     // réglage : clients « magasin MARIA BAG »
     const cl = contacts().filter(c => /client/i.test(c.type || '') || I.has(String(c.id))).sort((a, b) => lbl(a).localeCompare(lbl(b), 'fr'));

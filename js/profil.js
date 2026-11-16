@@ -136,7 +136,7 @@
     if (P.four) h += '<div class="ct-kpi"><span>Achats</span><b>' + money(sum(P.achats)) + '</b><small>' + P.achats.length + ' opération(s)</small></div><div class="ct-kpi"><span>Versements faits</span><b>' + money(reg) + '</b><small>' + P.pays.filter(p => p.sens === 'reglement').length + ' versement(s)</small></div>' +
       diff(P.sf ? P.sf.solde : 0, 'nous lui devons encore', 'nous avons payé en plus (avance chez lui)', 'fournisseur');
     if (P.client && P.ben && P.ventes.length) { const b = P.ben;
-      h += '<div class="ct-kpi"><span>Bénéfice avec ce client</span><b class="' + (b.ben < 0 ? 'py-due' : 'py-av') + '">' + money(b.ben) + '</b><small>' + (b.ca > 0 ? Math.round(b.ben / b.ca * 100) + ' % des ventes' : '') + (b.remises ? ' · remises déduites : ' + money(b.remises) : '') + (b.sansCout ? ' · ⚠ ' + b.sansCout + ' vente(s) sans coût renseigné' : '') + '</small></div>'; }
+      h += '<div class="ct-kpi"><span>Bénéfice avec ce client <small style="display:inline;font-size:11px">(depuis le début)</small></span><b class="' + (b.ben < 0 ? 'py-due' : 'py-av') + '">' + money(b.ben) + '</b><small>' + (b.ca > 0 ? Math.round(b.ben / b.ca * 100) + ' % des ventes' : '') + (b.remises ? ' · remises déduites : ' + money(b.remises) : '') + (b.sansCout ? ' · ⚠ ' + b.sansCout + ' vente(s) sans coût renseigné' : '') + '</small></div>'; }
     h += '</div>';
     // Crédits : ce que nous lui avons prêté, ce qu'il nous a prêté, et la différence ; puis la position globale (crédits + compte commercial)
     if (CR.length) {
