@@ -162,13 +162,10 @@ function margeVentesMois(mois) {
 window.margeVentesMois = margeVentesMois;
 
 function renderStatsCharges() {
-  const mois = moisC(), vars = round2C(CHARGES.filter(c => c.categorie !== CAT_PAIE).reduce((s, c) => s + Number(c.montant || 0), 0));
-  const nj = joursDuMois().length || 1, mv = margeVentesMois(mois);
-  const ben = mv ? round2C(mv.marge - vars) : null;
+  const vars = round2C(CHARGES.filter(c => c.categorie !== CAT_PAIE).reduce((s, c) => s + Number(c.montant || 0), 0));
+  const jours = joursDuMois(), nj = jours.length || 1, nb = jours.reduce((s, j) => s + j.nb, 0);
   $c('#ch-stats').innerHTML =
-    '<div class="at-stat"><span>Charges du mois</span><b>' + moneyC(vars) + '</b><small style="color:var(--mut)">charges variables · moyenne ' + moneyC(vars / nj) + ' / jour</small></div>' +
-    '<div class="at-stat"><span>Marge des ventes du mois</span><b>' + (mv ? moneyC(mv.marge) : '—') + '</b><small style="color:var(--mut)">' + (mv ? 'ventes ' + moneyC(mv.ca) + ' − coût de revient ' + moneyC(mv.cout) + ' · ' + mv.pieces.toLocaleString('fr-FR') + ' pièces' + (mv.sansCout ? ' · ⚠ ' + mv.sansCout + ' vente(s) sans coût' : '') : 'stock des produits finis non chargé') + '</small></div>' +
-    '<div class="at-stat ch-ben' + (ben != null && ben < 0 ? ' neg' : '') + '"><span>Bénéfice du mois</span><b>' + (ben == null ? '—' : moneyC(ben)) + '</b><small style="color:var(--mut)">marge des ventes − charges · la paie des employés est déjà dans la main d’œuvre</small></div>';
+    '<div class="at-stat"><span>Charges variables du mois</span><b>' + moneyC(vars) + '</b><small style="color:var(--mut)">' + nb + ' charge(s) · moyenne ' + moneyC(vars / nj) + ' / jour</small></div>';
 }
 
 function renderFixes() {
