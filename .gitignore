@@ -10,3 +10,9 @@ desktop/node_modules/
 desktop/dist/
 desktop/app/
 desktop/build/
+
+# Application Android : fichiers générés (l'APK publié est /maria-bag.apk)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties

@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.mariabag.app",
+    "sha256_cert_fingerprints": ["E9:3D:AF:A7:17:79:19:78:DF:A4:63:9E:F3:37:D4:CD:AA:BF:47:EB:85:10:62:47:4B:97:C0:CC:A2:A8:C8:EF"]
+  }
+}]

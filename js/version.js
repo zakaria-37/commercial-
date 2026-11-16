@@ -20,6 +20,14 @@
       rs.addEventListener('click', async () => { if (!window.LocalDB || !LocalDB.resync) return; rs.textContent = 'Resynchronisation…'; const r = await LocalDB.resync();
         rs.textContent = '🔄 Resynchroniser toutes mes données'; if (typeof toast === 'function') toast(r.ok ? 'Toutes les données sont à jour avec la base commune.' + (r.attente ? ' (' + r.attente + ' changement(s) de cet appareil encore à envoyer)' : '') : 'Pas d’internet : réessayez quand la connexion revient.'); });
       f.appendChild(rs); }
+    // Android (dans le navigateur, pas dans l'application) : lien de téléchargement de l'APK MARIA BAG
+    let dansApp = false;
+    try { if (/^android-app:\/\/com\.mariabag\.app/.test(document.referrer)) sessionStorage.setItem('mb_twa', '1'); dansApp = sessionStorage.getItem('mb_twa') === '1'; } catch (e) {}
+    if (/Android/i.test(navigator.userAgent) && !dansApp && !document.getElementById('appapk')) {
+      const a = document.createElement('a'); a.id = 'appapk'; a.href = 'maria-bag.apk'; a.setAttribute('download', 'MARIA-BAG.apk');
+      a.style.cssText = 'display:block;color:#9b5d6b;font-size:12px;margin-top:6px;font-weight:600'; a.textContent = '📱 Télécharger l’application Android';
+      f.appendChild(a);
+    }
   }
   async function majMaintenant() {
     try { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); } catch (e) {}

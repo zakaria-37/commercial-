@@ -1,0 +1,33 @@
+plugins { id 'com.android.application' }
+
+// Application Android MARIA BAG : la plateforme web (https://commercial-tf07.onrender.com) en plein écran
+// via Chrome (Trusted Web Activity). Les mises à jour du site arrivent sans réinstaller l'application.
+def HOTE = 'commercial-tf07.onrender.com'
+
+android {
+    namespace 'com.mariabag.app'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.mariabag.app'
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+        manifestPlaceholders = [hote: HOTE, url: "https://${HOTE}/index.html"]
+        resValue 'string', 'app_name', 'MARIA BAG'
+    }
+    signingConfigs {
+        release {
+            storeFile file('../maria-bag.keystore')
+            storePassword project.findProperty('MB_PASS') ?: 'mariabag-android'
+            keyAlias 'mariabag'
+            keyPassword project.findProperty('MB_PASS') ?: 'mariabag-android'
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.release }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+
+dependencies { implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0' }
