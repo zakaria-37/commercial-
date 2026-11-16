@@ -201,25 +201,108 @@
     afficher();
   }
 
+  /* Crédits (prêts) : totaux + position globale (crédits + compte commercial) ; + = il nous doit */
+  function bilanCredits() {
+    const som = n => r2(CR.filter(o => o.nature === n).reduce((x, o) => x + Number(o.montant || 0), 0));
+    const donne = r2(som('pret_donne') - som('remb_recu')), recu = r2(som('pret_recu') - som('remb_fait')), dc = r2(donne - recu);
+    const com = P.four && !P.client ? -(P.sf ? P.sf.solde : 0) : (P.sc ? P.sc.solde : 0) - (P.sf ? P.sf.solde : 0);
+    return { som, donne, recu, dc, com: r2(com), net: r2(dc + com) };
+  }
+
+  /* RELEVÉ PDF COMPLET : coordonnées, résumé (compte, crédits, position globale), relevé du compte client
+     et/ou fournisseur, crédits (prêts) avec solde, documents. Le bénéfice (interne) n'y figure pas. */
   function relevePdf() {
     if (!(window.jspdf && window.jspdf.jsPDF)) { say('Bibliothèque PDF non chargée.'); return; }
-    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = doc.internal.pageSize.getWidth(), M = 14, c = P.c;
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 14, c = P.c;
+    const T = (t, x, y, o) => doc.text(pdfT(t), x, y, o);
+    const sg = v => (Math.abs(v) < 0.005 ? '0 DA' : (v > 0 ? '+ ' : '- ') + money(Math.abs(v)));
+    const tete = { fillColor: [0, 0, 0], textColor: 255 };
     if (typeof LOGO_PDF !== 'undefined' && LOGO_PDF) doc.addImage(LOGO_PDF, 'PNG', M, 9, 20, 20);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(pdfT('RELEVE DE COMPTE'), W - M, 16, { align: 'right' });
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.text(pdfT('Edite le ' + fd(new Date().toISOString())), W - M, 22, { align: 'right' });
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(pdfT(lbl(c)), M, 38); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(pdfT([c.type, c.ville, c.tel].filter(Boolean).join('  -  ')), M, 43);
-    let y = 50;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); T('RELEVE DE COMPTE', W - M, 16, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); T('Edite le ' + fd(new Date().toISOString()), W - M, 22, { align: 'right' });
+    // coordonnées
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); T(lbl(c), M, 38);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    const infos = [[c.type, c.statut].filter(Boolean).join(' - '), [c.societe && c.societe !== lbl(c) ? c.societe : '', c.poste].filter(Boolean).join(' - '), [c.tel && 'Tel : ' + c.tel, c.email].filter(Boolean).join('   '), c.ville].filter(Boolean);
+    infos.forEach((l, i) => T(l, M, 43 + i * 4.5));
+    let y = 43 + infos.length * 4.5 + 4;
+    const titre = t => { if (y > H - 40) { doc.addPage(); y = 20; } doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.setTextColor(0); T(t, M, y); y += 2; };
+    const suite = () => { y = doc.lastAutoTable.finalY + 8; };
+
+    // 1. résumé
+    const R = [];
+    const enc = P.pays.filter(p => p.sens === 'encaissement').reduce((x, p) => x + Number(p.montant), 0), reg = P.pays.filter(p => p.sens === 'reglement').reduce((x, p) => x + Number(p.montant), 0);
+    const sum = l => l.reduce((x, o) => x + o.montant, 0);
+    if (P.client) {
+      R.push(['Compte client', 'Ventes (livraisons)', money(sum(P.ventes)), P.ventes.length + ' operation(s)']);
+      if (P.sc && P.sc.report) R.push(['', 'Solde de depart', money(P.sc.report), '']);
+      R.push(['', 'Versements recus', money(enc), P.pays.filter(p => p.sens === 'encaissement').length + ' versement(s)']);
+      const v = P.sc ? P.sc.solde : 0; R.push(['', 'Difference', sg(v), Math.abs(v) < 0.005 ? 'compte solde' : v > 0 ? 'le client doit encore' : 'avance du client']);
+    }
+    if (P.four) {
+      R.push(['Compte fournisseur', 'Achats', money(sum(P.achats)), P.achats.length + ' operation(s)']);
+      if (P.sf && P.sf.report) R.push(['', 'Solde de depart', money(P.sf.report), '']);
+      R.push(['', 'Versements faits', money(reg), P.pays.filter(p => p.sens === 'reglement').length + ' versement(s)']);
+      const v = P.sf ? P.sf.solde : 0; R.push(['', 'Difference', sg(v), Math.abs(v) < 0.005 ? 'compte solde' : v > 0 ? 'reste a payer par MARIA BAG' : 'avance chez le fournisseur']);
+    }
+    const B = CR.length ? bilanCredits() : null;
+    if (B) {
+      R.push(['Credits (prets)', 'Prets donnes (nous lui avons prete)', money(B.donne), B.som('remb_recu') ? 'rembourses : ' + money(B.som('remb_recu')) : '']);
+      R.push(['', 'Prets recus (il nous a prete)', money(B.recu), B.som('remb_fait') ? 'rembourses : ' + money(B.som('remb_fait')) : '']);
+      R.push(['', 'Difference des credits', sg(B.dc), Math.abs(B.dc) < 0.005 ? 'credits soldes' : B.dc > 0 ? 'il nous doit (prets)' : 'nous lui devons (prets)']);
+      R.push(['POSITION GLOBALE', 'Credits + compte', sg(B.net), Math.abs(B.net) < 0.005 ? 'tout est solde' : B.net > 0 ? 'au total, il doit a MARIA BAG' : 'au total, MARIA BAG lui doit']);
+    }
+    titre('Resume');
+    doc.autoTable({ startY: y + 1, margin: { left: M, right: M }, theme: 'grid', styles: { fontSize: 9, cellPadding: 2 }, headStyles: tete,
+      head: [['', 'Rubrique', 'Montant', 'Detail'].map(pdfT)], body: R.map(r => r.map(pdfT)),
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 36 }, 2: { halign: 'right', fontStyle: 'bold', cellWidth: 36 } },
+      didParseCell: d => { if (d.section === 'body' && /^POSITION/.test(R[d.row.index][0])) { d.cell.styles.fillColor = [245, 236, 238]; d.cell.styles.fontStyle = 'bold'; } } });
+    suite();
+
+    // 2. relevé du compte client / fournisseur
     [P.client ? 'client' : null, P.four ? 'fournisseur' : null].filter(Boolean).forEach(s => {
       const L = releve(s), cl = s === 'client';
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(pdfT(cl ? 'Compte client' : 'Compte fournisseur'), M, y);
-      doc.autoTable({ startY: y + 3, margin: { left: M, right: M }, head: [['Date', 'Modele / operation', 'Qte', 'Prix unite', 'Prix total', cl ? 'Verse' : 'Paye', 'Solde'].map(pdfT)],
-        body: L.map(x => [fd(x.d), x.op, x.qte || '', x.pu != null ? money(x.pu) : '', x.debit ? money(x.debit) : x.qte && x.credit ? '- ' + money(x.credit) : '', x.credit && !x.qte ? money(x.credit) : '', money(x.solde)].map(pdfT)), theme: 'grid',
-        styles: { fontSize: 8.5, cellPadding: 2 }, headStyles: { fillColor: [0, 0, 0], textColor: 255 }, columnStyles: { 0: { cellWidth: 19 }, 2: { halign: 'right', cellWidth: 16 }, 3: { halign: 'right', cellWidth: 22 }, 4: { halign: 'right', cellWidth: 25 }, 5: { halign: 'right', cellWidth: 24 }, 6: { halign: 'right', cellWidth: 25 } } });
-      y = doc.lastAutoTable.finalY + 7;
+      titre(cl ? 'Compte client - detail' : 'Compte fournisseur - detail');
+      doc.autoTable({ startY: y + 1, margin: { left: M, right: M }, head: [['Date', 'Modele / operation', 'Qte', 'Prix unite', 'Prix total', cl ? 'Verse' : 'Paye', 'Solde'].map(pdfT)],
+        body: (L.length ? L.map(x => [fd(x.d), x.op + (x.ref && !/Versement/.test(x.op) ? ' (' + x.ref + ')' : ''), x.qte || '', x.pu != null ? money(x.pu) : '', x.debit ? money(x.debit) : x.qte && x.credit ? '- ' + money(x.credit) : '', x.credit && !x.qte ? money(x.credit) : '', money(x.solde)]) : [['', 'Aucune operation', '', '', '', '', '']]).map(r => r.map(pdfT)), theme: 'grid',
+        styles: { fontSize: 8.5, cellPadding: 2 }, headStyles: tete, columnStyles: { 0: { cellWidth: 19 }, 2: { halign: 'right', cellWidth: 16 }, 3: { halign: 'right', cellWidth: 22 }, 4: { halign: 'right', cellWidth: 25 }, 5: { halign: 'right', cellWidth: 24 }, 6: { halign: 'right', cellWidth: 25 } } });
+      suite();
       const fin = L.length ? L[L.length - 1].solde : 0;
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(pdfT((cl ? (fin >= 0 ? 'Reste du a MARIA BAG : ' : 'Avance du client : ') : (fin >= 0 ? 'Reste a payer par MARIA BAG : ' : 'Avance au fournisseur : ')) + money(Math.abs(fin))), W - M, y, { align: 'right' });
-      y += 12;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); T((cl ? (fin >= 0 ? 'Reste du a MARIA BAG : ' : 'Avance du client : ') : (fin >= 0 ? 'Reste a payer par MARIA BAG : ' : 'Avance au fournisseur : ')) + money(Math.abs(fin)), W - M, y - 2, { align: 'right' });
+      y += 6;
     });
+
+    // 3. crédits (prêts) avec solde
+    if (CR.length) {
+      titre('Credits (prets)');
+      let sc = 0;
+      const lignes = CR.slice().sort((a, b) => String(a.date_op).localeCompare(String(b.date_op)) || String(a.created_at).localeCompare(String(b.created_at))).map(o => {
+        const k = NAT[o.nature] || [o.nature, 0], m = Number(o.montant || 0); sc = r2(sc + k[1] * m);
+        return [fd(o.date_op), k[0], k[1] > 0 ? money(m) : '', k[1] < 0 ? money(m) : '', MODES[o.mode] || o.mode || '', [o.reference, o.echeance ? 'echeance ' + fd(o.echeance) : '', o.note].filter(Boolean).join(' - '), sg(sc)];
+      });
+      doc.autoTable({ startY: y + 1, margin: { left: M, right: M }, theme: 'grid', styles: { fontSize: 8.5, cellPadding: 2 }, headStyles: tete,
+        head: [['Date', 'Operation', 'Augmente (+)', 'Diminue (-)', 'Mode', 'Reference / note', 'Solde credits'].map(pdfT)], body: lignes.map(r => r.map(pdfT)),
+        columnStyles: { 0: { cellWidth: 19 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 6: { halign: 'right', fontStyle: 'bold' } } });
+      suite();
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); T('Difference des credits : ' + sg(B.dc) + (B.dc > 0 ? ' (il nous doit)' : B.dc < 0 ? ' (nous lui devons)' : ''), W - M, y - 2, { align: 'right' }); y += 6;
+    }
+
+    // 4. documents
+    if (P.docs.length && window.CommerceAPI) {
+      titre('Documents (factures, bons, devis)');
+      doc.autoTable({ startY: y + 1, margin: { left: M, right: M }, theme: 'grid', styles: { fontSize: 8.5, cellPadding: 2 }, headStyles: tete,
+        head: [['Date', 'Document', 'N°', 'Paiement', 'Total TTC', 'Etat'].map(pdfT)],
+        body: P.docs.slice().sort((a, b) => String(a.date_doc).localeCompare(String(b.date_doc))).map(d => {
+          const t = CommerceAPI.totaux(d, CommerceAPI.lignesDe(d.id)).ttc, e = ['facture', 'bon_livraison', 'bon_reception'].includes(d.type) && CommerceAPI.etatFacture ? CommerceAPI.etatFacture(d) : null;
+          return [fd(d.date_doc), TDOC[d.type] || d.type, d.numero || '', d.paiement === 'cash' ? 'Comptant' : d.paiement === 'terme' ? 'A terme' : (d.paiement || ''), money(t), d.statut === 'annulee' ? 'Annule' : e ? e.l : (d.statut || '')].map(pdfT);
+        }), columnStyles: { 4: { halign: 'right' } } });
+      suite();
+    }
+
+    // 5. position finale + pied de page
+    if (B) { if (y > H - 30) { doc.addPage(); y = 20; } doc.setFont('helvetica', 'bold'); doc.setFontSize(12); T('POSITION GLOBALE : ' + sg(B.net) + (B.net > 0 ? ' (du a MARIA BAG)' : B.net < 0 ? ' (du par MARIA BAG)' : ' (tout est solde)'), W - M, y + 2, { align: 'right' }); }
+    const n = doc.getNumberOfPages();
+    for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120); T('MARIA BAG - Releve de ' + lbl(c) + ' - page ' + i + ' / ' + n, W / 2, H - 8, { align: 'center' }); }
     doc.save('releve-' + String(lbl(c)).replace(/[^A-Za-z0-9]+/g, '-').slice(0, 40) + '.pdf');
   }
 
