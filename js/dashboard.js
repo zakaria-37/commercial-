@@ -101,7 +101,10 @@
   function hello() {
     const now = new Date(), h = now.getHours();
     const salut = h < 5 ? 'Bonsoir' : h < 18 ? 'Bonjour' : 'Bonsoir';
-    const t = $q('#d-hello'); if (t) t.textContent = salut + ' Khalida';
+    // prénom du compte connecté (ZAKOU, Oussama…) ; « Khalida » seulement sans compte
+    const u = window.APP_USER || {}, prenom = String(u.nom || '').trim().split(/\s+/)[0] || 'Khalida';
+    const joli = prenom.length > 1 && prenom === prenom.toUpperCase() && !document.body.classList.contains('theme-usma') ? prenom.charAt(0) + prenom.slice(1).toLowerCase() : prenom;
+    const t = $q('#d-hello'); if (t) t.textContent = salut + ' ' + joli;
     const d = $q('#d-date');
     if (d) d.textContent = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase());
     clock();
@@ -563,6 +566,7 @@
     });
     if (window.LocalDB) LocalDB.onChange(render);
     document.addEventListener('mariabag:authenticated', render);
+    document.addEventListener('mariabag:profil', () => render());          // le bonjour suit le compte connecté
     document.addEventListener('mariabag:charges', render);
     document.addEventListener('mariabag:sorties', () => { if ($q('#v-dash').classList.contains('on')) renderPulse(); });
     document.addEventListener('mariabag:pf', () => { if ($q('#v-dash').classList.contains('on')) { renderApercu(); renderPF(); } });
