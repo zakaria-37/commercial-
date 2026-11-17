@@ -144,3 +144,98 @@ body.theme-sombre .btn:not(.p):not(.d){background:#1d212a!important;color:var(--
 body.theme-sombre .btn.d{background:#1d212a!important}
 body.theme-sombre .who b,body.theme-femme .who b,body.theme-nature .who b{font:700 15px/1.1 "Segoe UI",system-ui,sans-serif}
 body.theme-sombre .pd-cat,body.theme-sombre .pr-unit-tag{background:#262b36!important;color:#cdd3df!important}
+
+/* ============================================================
+   THÈME « USMA » — rouge et noir, base sombre (repose les yeux), touches dynamiques
+   (même base que le thème Sombre, accents rouges)
+   ============================================================ */
+body.theme-usma{--bg:#0f0f11;--card:#18181c;--line:#2c2b31;--tx:#ebe7e7;--mut:#a7a0a2;--g:#34c27a;--gb:#123224;--o:#f0a640;--ob:#33270f;--r:#ff6b5e;--rb:#3a1c19;--n:#b7b2b4;--nb:#232227;--brass:#d7263d;color-scheme:dark;background:var(--bg);color:var(--tx)}
+body.theme-usma header{background:#0a0a0b;border-bottom-color:#d7263d}
+body.theme-usma nav button.on{background:#2a1418;box-shadow:inset 0 -2px 0 #d7263d}
+body.theme-usma .card,body.theme-usma .at-stat,body.theme-usma .at-form,body.theme-usma .hello,body.theme-usma .bs-card,body.theme-usma .bs-l,body.theme-usma .cp-box,body.theme-usma .cm-nv,
+body.theme-usma .kpi,body.theme-usma .dw.card,body.theme-usma table.m-cards tr,body.theme-usma #pr-steps,body.theme-usma #pd-steps,body.theme-usma .ch-list,body.theme-usma #themeMenu,
+body.theme-usma .cp-res>div,body.theme-usma .cp-k,body.theme-usma #m .box,body.theme-usma .modal,body.theme-usma #pr-qbar .pq-b,body.theme-usma #pr-qbar .pq-chips button,body.theme-usma .pr-bs,body.theme-usma #tabbar .tb.on{background:var(--card)!important;color:var(--tx);border-color:var(--line)!important}
+body.theme-usma #tabbar{background:#0c0c0e;border-color:var(--line)}
+body.theme-usma #tabbar .tb{background:#16161a;color:var(--mut);border-color:var(--line)}
+body.theme-usma input,body.theme-usma select,body.theme-usma textarea,body.theme-usma .ch-inp{background:#121215!important;color:var(--tx)!important;border-color:#38343a!important}
+body.theme-usma input::placeholder,body.theme-usma textarea::placeholder{color:#6f7787}
+body.theme-usma .btn{background:#1f1e23;color:var(--tx);border-color:#38343a}
+body.theme-usma .btn:hover{background:#29272d}
+body.theme-usma .btn.p{background:#d7263d;border-color:#d7263d;color:#fff}
+body.theme-usma .btn.p:hover{background:#b51c31}
+body.theme-usma .btn.d{color:#ff8a7e}
+body.theme-usma th,body.theme-usma thead th{background:#1f1e23!important;color:var(--mut)!important}
+body.theme-usma td{border-color:var(--line)!important}
+body.theme-usma tr:hover td{background:#1e1c21}
+body.theme-usma .ch-it.on,body.theme-usma #themeMenu button:hover,body.theme-usma #themeMenu button.on{background:#2e171b}
+body.theme-usma .hello:after{color:#d7263d;opacity:.25}
+body.theme-usma .hello{border-left-color:#d7263d}
+body.theme-usma .bs-l.on{background:#123224!important;border-color:#2c7a50!important}
+body.theme-usma .bs-valide{background:#123224;color:#8be0ae}
+body.theme-usma .pd-total,body.theme-usma #pr-resume,body.theme-usma .cp-res>div:first-child{background:#d7263d!important;color:#fff!important}
+body.theme-usma #pr-steps button.on,body.theme-usma #pd-steps button.on{background:#d7263d;color:#fff}
+body.theme-usma footer,body.theme-usma .pr-help,body.theme-usma .iv-help{color:var(--mut)}
+body.theme-usma footer img{filter:invert(1)}
+body.theme-usma .bd,body.theme-usma .pd-cat,body.theme-usma .pr-unit-tag{filter:brightness(.85) saturate(1.1)}
+body.theme-usma .btn:not(.p):not(.d){background:#1f1e23!important;color:var(--tx)!important}
+body.theme-usma .btn.d{background:#1f1e23!important}
+body.theme-usma .who b,body.theme-femme .who b,body.theme-nature .who b{font:700 15px/1.1 "Segoe UI",system-ui,sans-serif}
+body.theme-usma .pd-cat,body.theme-usma .pr-unit-tag{background:#262b36!important;color:#cdd3df!important}
+body.theme-usma{--usma-r:#d7263d;--usma-r2:#9e1528;--usma-rose:#ff6b7a}
+/* fond : léger dégradé rouge dans les coins + écusson en filigrane */
+body.theme-usma::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:url("../icons/theme/usma.svg?v=184") no-repeat center 58%/min(58vmin,480px) auto;opacity:.045}
+body.theme-usma::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(900px 420px at 0% 0%,rgba(215,38,61,.10),transparent 60%),radial-gradient(900px 420px at 100% 100%,rgba(215,38,61,.07),transparent 60%)}
+/* en-tête : noir avec bandes rouges en diagonale */
+body.theme-usma header{background:linear-gradient(115deg,#0a0a0b 0 58%,var(--usma-r2) 58% 61%,#0a0a0b 61% 64%,var(--usma-r) 64% 100%);border-bottom:3px solid var(--usma-r)}
+body.theme-usma header .logo{position:relative}
+body.theme-usma header .logo::after{content:"";position:absolute;right:calc(50% - 118px);top:50%;width:34px;height:42px;transform:translateY(-50%);background:url("../icons/theme/usma.svg?v=184") no-repeat center/contain;filter:drop-shadow(0 2px 5px rgba(0,0,0,.5))}
+body.theme-usma nav button{color:rgba(255,255,255,.78)}
+body.theme-usma nav button.on{background:rgba(215,38,61,.22);color:#fff;box-shadow:inset 0 -3px 0 var(--usma-r)}
+@media (min-width:701px){body.theme-usma nav{background:rgba(0,0,0,.35);border-color:rgba(215,38,61,.35)}}
+/* le nom (ZAKOU) : lettres espacées, dégradé blanc → rouge, léger reflet animé */
+body.theme-usma .who{border-color:var(--usma-r);background:rgba(0,0,0,.45);box-shadow:0 0 0 1px rgba(215,38,61,.25),0 4px 14px rgba(215,38,61,.18)}
+body.theme-usma .who .av{background:linear-gradient(135deg,var(--usma-r),var(--usma-r2));color:#fff;font-weight:800;box-shadow:0 0 0 2px #0a0a0b,0 0 0 3px var(--usma-r)}
+body.theme-usma .who b{font:800 17px/1.1 "Segoe UI",system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase;
+  background:linear-gradient(90deg,#ffffff 0%,#ffd5da 35%,var(--usma-rose) 50%,#ffffff 65%,#ffffff 100%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:usmaNom 6s ease-in-out infinite}
+body.theme-usma .who small{color:var(--usma-rose);letter-spacing:.1em}
+body.theme-usma #footNom{font:800 15px "Segoe UI",system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--usma-rose)}
+@keyframes usmaNom{0%,100%{background-position:100% 0}50%{background-position:0 0}}
+/* cartes et titres : liseré rouge, coins plus vivants */
+body.theme-usma .hello{border-left:0!important;background:linear-gradient(90deg,var(--usma-r) 0 5px,#0a0a0b 5px 9px,var(--usma-r2) 9px 12px,var(--card) 12px)!important;padding-left:28px}
+body.theme-usma .hello h2{color:#fff}
+body.theme-usma .hello:after{content:"★";color:var(--usma-r);opacity:.35}
+body.theme-usma .at-stat,body.theme-usma .kpi{border-top:3px solid var(--usma-r)!important}
+body.theme-usma .at-stat:nth-child(even){border-top-color:#3a3a40!important}
+body.theme-usma .at-tabs button.on,body.theme-usma .bs-tabs button.on,body.theme-usma .bn-bar button.on,body.theme-usma .mg-chips button.on{background:var(--usma-r)!important;border-color:var(--usma-r)!important;color:#fff!important}
+body.theme-usma .btn.p{box-shadow:0 4px 14px rgba(215,38,61,.28)}
+body.theme-usma a{color:var(--usma-rose)}
+body.theme-usma .py-av{color:#5fd39a}body.theme-usma .py-due{color:#ff7b88}
+/* petit mot de bienvenue */
+body.theme-usma .th-salut.th-usma{display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:10px 14px;border-radius:14px;color:#fff;
+  background:linear-gradient(115deg,#0a0a0b 0 55%,var(--usma-r2) 55% 58%,#0a0a0b 58% 61%,var(--usma-r) 61%);border:1px solid rgba(215,38,61,.45);box-shadow:0 6px 20px rgba(215,38,61,.18)}
+body.theme-usma .th-salut.th-usma img{width:34px;height:42px;flex:none}
+body.theme-usma .th-salut.th-usma b{display:block;font-size:15px;letter-spacing:.04em}
+body.theme-usma .th-salut.th-usma small{display:block;font-size:12px;color:#ffd5da;letter-spacing:.06em}
+body.theme-usma .th-salut.th-usma button{margin-left:auto;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:999px;padding:5px 10px;font:600 12px inherit;font-family:inherit;cursor:pointer}
+@media (max-width:700px){
+  body.theme-usma nav{background:linear-gradient(100deg,#0a0a0b 0 55%,var(--usma-r2) 55% 58%,#0a0a0b 58% 61%,var(--usma-r) 61%)!important;border-top-color:var(--usma-r)!important}
+  body.theme-usma nav button.on{background:rgba(0,0,0,.4)!important}
+  body.theme-usma header .logo::after{right:16px;width:28px;height:34px}
+  body.theme-usma::before{background-size:76vw auto}
+}
+@media (prefers-reduced-motion:reduce){body.theme-usma .who b{animation:none}}
+@media print{body.theme-usma::before,body.theme-usma::after,.th-salut.th-usma{display:none!important}}
+/* USMA : boutons rapides lisibles, rouge plus doux pour les yeux */
+body.theme-usma .dq{background:var(--card);color:var(--tx);border-color:var(--line)}
+body.theme-usma .dq b{background:var(--usma-r);color:#fff}
+body.theme-usma .dq:hover{background:#232228;border-color:var(--usma-r)}
+body.theme-usma .dq.dq-edit.on{background:var(--usma-r);border-color:var(--usma-r)}
+body.theme-usma header{background:linear-gradient(115deg,#0a0a0b 0 66%,#7d1020 66% 68%,#0a0a0b 68% 70%,#a3172b 70% 100%)}
+body.theme-usma .th-salut.th-usma{background:linear-gradient(115deg,#0d0d10 0 62%,#7d1020 62% 64%,#0d0d10 64% 66%,#a3172b 66%)}
+@media (max-width:700px){
+  body.theme-usma nav{background:#0c0c0e!important;border-top:2px solid var(--usma-r)!important;box-shadow:0 -6px 18px rgba(215,38,61,.15)}
+  body.theme-usma nav button{color:#cfc8ca!important}
+  body.theme-usma nav button.on{background:rgba(215,38,61,.2)!important;color:#fff!important;box-shadow:inset 0 3px 0 var(--usma-r)!important}
+  body.theme-usma header{background:linear-gradient(115deg,#0a0a0b 0 70%,#7d1020 70% 72%,#0a0a0b 72% 74%,#a3172b 74% 100%)}
+}

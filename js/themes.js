@@ -10,6 +10,7 @@
   const THEMES = [
     ['', 'Classique MARIA BAG', '#000', '#d9a8b2'],
     ['mca', 'Mouloudia', '#00853f', '#d21034'],
+    ['usma', 'USMA (rouge et noir)', '#0e0e10', '#d7263d'],
     ['sombre', 'Sombre', '#14161b', '#3b82f6'],
     ['homme', 'Homme', '#1e2a3a', '#c8a15a'],
     ['femme', 'Femme', '#b4547a', '#f3c4d6'],
@@ -114,6 +115,7 @@
     const salut = h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
     const txt = {
       mca: ['<img src="icons/theme/mca.svg?v=151" alt="">', (h < 12 ? 'Sbah el khir' : h < 18 ? 'Salam' : 'Masa el khir') + (nom ? ' ' + esc(nom) : '') + ' 💚❤️', 'DIMA MOULOUDIA · ★ Le Doyen'],
+      usma: ['<img src="icons/theme/usma.svg?v=184" alt="">', (h < 12 ? 'Sbah el khir' : h < 18 ? 'Salam' : 'Masa el khir') + (nom ? ' ' + esc(nom.toUpperCase()) : '') + ' 🔴⚫', 'USMA · Rouge et Noir · Bon travail !'],
       homme: ['<span class="th-ico">⌚</span>', salut + (nom ? ' ' + esc(nom) : ''), 'Concentration, précision, efficacité.'],
       femme: ['<span class="th-ico">🌸</span>', salut + (nom ? ' ' + esc(nom) : '') + ' ✨', 'Belle journée, et bon travail !'],
       nature: ['<span class="th-ico">🌿</span>', salut + (nom ? ' ' + esc(nom) : ''), 'Respirez : chaque pièce bien faite compte.']
