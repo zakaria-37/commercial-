@@ -115,7 +115,7 @@
     const salut = h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
     const txt = {
       mca: ['<img src="icons/theme/mca.svg?v=151" alt="">', (h < 12 ? 'Sbah el khir' : h < 18 ? 'Salam' : 'Masa el khir') + (nom ? ' ' + esc(nom) : '') + ' 💚❤️', 'DIMA MOULOUDIA · ★ Le Doyen'],
-      usma: ['<img src="icons/theme/usma.svg?v=184" alt="">', (h < 12 ? 'Sbah el khir' : h < 18 ? 'Salam' : 'Masa el khir') + (nom ? ' ' + esc(nom.toUpperCase()) : '') + ' 🔴⚫', 'USMA · Rouge et Noir · Bon travail !'],
+      usma: ['<img src="icons/theme/usma.png?v=185" alt="">', (h < 12 ? 'Sbah el khir' : h < 18 ? 'Salam' : 'Masa el khir') + (nom ? ' ' + esc(nom.toUpperCase()) : '') + ' 🔴⚫', 'USMA · Rouge et Noir · Bon travail !'],
       homme: ['<span class="th-ico">⌚</span>', salut + (nom ? ' ' + esc(nom) : ''), 'Concentration, précision, efficacité.'],
       femme: ['<span class="th-ico">🌸</span>', salut + (nom ? ' ' + esc(nom) : '') + ' ✨', 'Belle journée, et bon travail !'],
       nature: ['<span class="th-ico">🌿</span>', salut + (nom ? ' ' + esc(nom) : ''), 'Respirez : chaque pièce bien faite compte.']
