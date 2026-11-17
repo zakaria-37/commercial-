@@ -75,7 +75,10 @@
     const W = res.W, pl = plan(res, W), rl = a && window.StockAPI && StockAPI.aCond(a) ? StockAPI.condQte(a) : 0;
     const mN = res.total * N, mReel = pl.total / 100;
     let h = '<div class="card gb-card"><div class="gb-ttl"><h3>📐 ' + esc(nomL(l)) + '</h3><span class="gb-tag">rouleau ' + nf(W, 0) + ' cm' + (res.marge ? ' · espace ' + nf(res.marge, 1) + ' cm' : '') + '</span>' + btnModif(l, 'surface') + '</div>';
+    // Dans 1 m de cette matière : produits complets, et pièces (tous gabarits) = pièces d'un produit ÷ mètres d'un produit
+    const pcsProd = res.lignes.reduce((x, l) => x + (Number(l.g.n) || 0), 0), parM = res.total > 0 ? 1 / res.total : 0;
     h += '<div class="gb-kpis"><div><span>Pour 1 produit</span><b>' + nf(res.total, 4) + ' m</b><small>' + (pu ? nf(res.total * pu, 2) + ' DA' : '') + '</small></div>' +
+      '<div class="gb-k1m"><span>Dans 1 m de tissu</span><b>' + nf(parM * pcsProd, 2) + ' pièces</b><small>= ' + nf(parM, 2) + ' produit' + (parM >= 2 ? 's' : '') + ' complet' + (parM >= 2 ? 's' : '') + ' (' + nf(pcsProd, 2) + ' pièces ÷ ' + nf(res.total, 4) + ' m)</small></div>' +
       '<div><span>Pour ' + nf(N, 0) + ' produits (calcul du coût)</span><b>' + nf(mN, 2) + ' m</b><small>' + (pu ? nf(mN * pu, 0) + ' DA' : '') + '</small></div>' +
       '<div><span>Plan de coupe réel</span><b>' + nf(mReel, 2) + ' m</b><small>rangées entières' + (mReel > mN ? ' · +' + nf(mReel - mN, 2) + ' m' : '') + '</small></div>' +
       (rl ? '<div><span>' + esc(StockAPI.plur ? StockAPI.plur(a.cond_nom, 2) : a.cond_nom) + ' de ' + nf(rl, 2) + ' m</span><b>' + nf(mReel / rl, 2) + '</b><small>en stock : ' + nf(StockAPI.qty(a.id) / rl, 2) + '</small></div>' : '') + '</div>';

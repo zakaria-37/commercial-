@@ -328,3 +328,4 @@ body.theme-sombre .gb-c{fill:#aab}
 .gb-td b{display:block;font-size:14px}.gb-td small{font-size:12px;color:var(--mut)}
 #gb-libcard h2{font-size:16px}
 @media (max-width:700px){ .gb-ttl .gb-mod{width:100%;min-height:42px;margin-left:0} .gb-td .btn{min-height:40px;flex:none} }
+.gb-kpis>div.gb-k1m{background:#effaf2;border-color:#9fd9b0}.gb-k1m b{color:#17632a}
