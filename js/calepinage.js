@@ -60,8 +60,8 @@
     if (!items.length) return null;
     const lignes = items.map(g => {
       const court = Math.min(g.l, g.h) + marge, long = Math.max(g.l, g.h) + marge;      // grand côté dans le sens du 1 m
-      // seulement les pièces ENTIÈRES côte à côte : la chute de largeur n'est pas utilisée en production, elle est perdue
-      const parRang = court <= W ? Math.floor(W / court + 1e-9) : 0, pieces = parRang ? parRang * H / long : 0;
+      // pièces côte à côte AVEC décimales : la bande restante sur le côté (chute) est utilisée en production, donc comptée
+      const parRang = court <= W ? W / court : 0, pieces = parRang ? parRang * H / long : 0;
       return { g, pieces, parRang, long, court, blocs: parRang ? [{ x: 0, y: 0, w: court, h: long, nx: Math.ceil(parRang), ny: Math.ceil(H / long) }] : [], metres: parRang ? g.n / pieces * H / 100 : null };
     });
     const ko = lignes.filter(x => !x.pieces);
@@ -229,7 +229,7 @@
       const pm = prixM();
       bg.querySelectorAll('#cp-g tr[data-i]').forEach(tr => {
         const x = res && res.lignes.find(y => y.g.t === +tr.dataset.i);
-        tr.querySelector('.cp-pc').innerHTML = x ? (x.pieces ? '<b>' + nf(x.pieces, 2) + '</b><small>' + x.parRang + ' entières × (100 ÷ ' + nf(x.long, 2) + ')' + (res.W - x.parRang * x.court > .01 ? ' · chute ' + nf(res.W - x.parRang * x.court, 1) + ' cm perdue' : '') + '</small>' : '<span class="cp-err">trop grand</span>') : '—';
+        tr.querySelector('.cp-pc').innerHTML = x ? (x.pieces ? '<b>' + nf(x.pieces, 2) + '</b><small>(' + nf(res.W, 2) + ' ÷ ' + nf(x.court, 2) + ') × (100 ÷ ' + nf(x.long, 2) + ')</small>' : '<span class="cp-err">trop grand</span>') : '—';
         tr.querySelector('.cp-m').innerHTML = x && x.metres ? '<b>' + nf(x.metres, 4) + ' m</b><small>' + nf(x.g.n, 2) + ' ÷ ' + nf(x.pieces, 2) + (pm ? ' · ' + nf(x.metres * pm, 2) + ' DA' : '') + '</small>' : '—';
       });
       const ctl = controler(cfg, { gabarits: { items: L } }, 'surface');
@@ -431,13 +431,13 @@
      « pièces entières en largeur » (la chute de côté n'est plus comptée comme utilisable). */
   let toutFait = false;
   async function recalculerTout() {
-    const K = 'mariabag_gab_entieres_v1';
+    const K = 'mariabag_gab_chute_utilisee_v2';
     try { if (toutFait || localStorage.getItem(K)) return 0; } catch (e) {}
     toutFait = true;
     const P = typeof PRODUITS !== 'undefined' ? PRODUITS : []; let n = 0;
     for (const p of P) { try { n += await recalculerProduit(p); } catch (e) {} }
     try { localStorage.setItem(K, new Date().toISOString()); } catch (e) {}
-    if (n) { if (typeof renderProduits === 'function') renderProduits(); prevenir(); dire(n + ' ligne(s) recalculée(s) : seules les pièces entières en largeur comptent (chute de côté exclue).'); }
+    if (n) { if (typeof renderProduits === 'function') renderProduits(); prevenir(); dire(n + ' ligne(s) recalculée(s) : la chute de côté est maintenant comptée comme utilisée.'); }
     return n;
   }
   window.Calepinage = { recalculerTout, calculer, calculerLongueur, maxPieces: null, ouvrir, ouvrirLongueur, carte, recalculerProduit, estSurface, etatLigne, verifierProduit, controler };

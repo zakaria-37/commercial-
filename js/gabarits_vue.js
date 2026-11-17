@@ -80,23 +80,23 @@
     // tissu utile (surface des pièces) et CHUTE (largeur perdue + espaces) : comptés tous les deux dans les mètres d'un produit
     const utile = l => (Number(l.g.n) || 0) * (Number(l.g.l) || 0) * (Number(l.g.h) || 0) / (W * 100);
     const mUtile = res.lignes.reduce((x, l) => x + utile(l), 0), mChute = Math.max(0, res.total - mUtile), pcChute = res.total > 0 ? mChute / res.total * 100 : 0;
-    h += '<div class="gb-kpis"><div><span>Pour 1 produit (chutes comprises)</span><b>' + nf(res.total, 4) + ' m</b><small>' + (pu ? nf(res.total * pu, 2) + ' DA · ' : '') + 'tissu ' + nf(mUtile, 4) + ' m + chute ' + nf(mChute, 4) + ' m (' + nf(pcChute, 1) + ' %)</small></div>' +
+    h += '<div class="gb-kpis"><div><span>Pour 1 produit</span><b>' + nf(res.total, 4) + ' m</b><small>' + (pu ? nf(res.total * pu, 2) + ' DA' : '') + (mChute >= 0.00005 ? ' · dont espaces ' + nf(mChute, 4) + ' m (' + nf(pcChute, 1) + ' %)' : ' · chutes de côté utilisées') + '</small></div>' +
       '<div class="gb-k1m"><span>Dans 1 m de tissu</span><b>' + nf(parM * pcsProd, 2) + ' pièces</b><small>= ' + nf(parM, 2) + ' produit' + (parM >= 2 ? 's' : '') + ' complet' + (parM >= 2 ? 's' : '') + ' (' + nf(pcsProd, 2) + ' pièces ÷ ' + nf(res.total, 4) + ' m)</small></div>' +
       '<div><span>Pour ' + nf(N, 0) + ' produits (calcul du coût)</span><b>' + nf(mN, 2) + ' m</b><small>' + (pu ? nf(mN * pu, 0) + ' DA' : '') + '</small></div>' +
       '<div><span>Plan de coupe réel</span><b>' + nf(mReel, 2) + ' m</b><small>rangées entières' + (mReel > mN ? ' · +' + nf(mReel - mN, 2) + ' m' : '') + '</small></div>' +
       (rl ? '<div><span>' + esc(StockAPI.plur ? StockAPI.plur(a.cond_nom, 2) : a.cond_nom) + ' de ' + nf(rl, 2) + ' m</span><b>' + nf(mReel / rl, 2) + '</b><small>en stock : ' + nf(StockAPI.qty(a.id) / rl, 2) + '</small></div>' : '') + '</div>';
     h += '<div class="gb-list">' + res.lignes.map((x, i) => {
-      const n = x.parRang, reste = W - n * x.court, besoin = x.g.n * N, rangs = Math.ceil(besoin / Math.max(1, n));
+      const n = Math.floor(W / x.court + 1e-9), reste = W - n * x.court, besoin = x.g.n * N, rangs = Math.ceil(besoin / Math.max(1, n));
       return '<div class="gb-item"><div class="gb-ih"><i class="cp-c" style="background:' + COUL[i % COUL.length] + '"></i><b>' + esc(x.g.nom || 'Gabarit') + '</b><span>' + nf(Math.min(x.g.l, x.g.h), 1) + ' × ' + nf(Math.max(x.g.l, x.g.h), 1) + ' cm · ' + nf(x.g.n, 2) + ' par produit</span></div>' +
         rangee(x, W, COUL[i % COUL.length]) +
-        '<div class="gb-det"><div><span>Côte à côte (largeur)</span><b>' + n + ' pièces</b><small>' + (reste > .01 ? 'chute ' + nf(reste, 1) + ' cm perdue (hors calcul)' : 'sans chute') + '</small></div>' +
-        '<div><span>Pièces dans 1 m</span><b>' + nf(x.pieces, 2) + '</b><small>' + n + ' × (100 ÷ ' + nf(x.long, 1) + ')</small></div>' +
+        '<div class="gb-det"><div><span>Côte à côte (largeur)</span><b>' + nf(x.parRang, 2) + '</b><small>' + n + ' pièces entières' + (reste > .01 ? ' + chute ' + nf(reste, 1) + ' cm utilisée (comptée)' : '') + '</small></div>' +
+        '<div><span>Pièces dans 1 m</span><b>' + nf(x.pieces, 2) + '</b><small>(' + nf(W, 0) + ' ÷ ' + nf(x.court, 1) + ') × (100 ÷ ' + nf(x.long, 1) + ')</small></div>' +
         '<div><span>Mètres / produit (chute comprise)</span><b>' + nf(x.metres, 4) + ' m</b><small>' + nf(x.g.n, 2) + ' ÷ ' + nf(x.pieces, 2) + (pu ? ' · ' + nf(x.metres * pu, 2) + ' DA' : '') + '</small></div>' +
-        (function () { const u = utile(x), c = Math.max(0, x.metres - u); return '<div class="gb-chute"><span>Dont chute</span><b>' + nf(c, 4) + ' m</b><small>tissu de la pièce ' + nf(u, 4) + ' m · chute ' + nf(x.metres > 0 ? c / x.metres * 100 : 0, 1) + ' %' + (pu ? ' · ' + nf(c * pu, 2) + ' DA' : '') + '</small></div>'; })() +
+        (function () { const u = utile(x), c = Math.max(0, x.metres - u); if (c < 0.00005) return ''; return '<div class="gb-chute"><span>Dont chute</span><b>' + nf(c, 4) + ' m</b><small>tissu de la pièce ' + nf(u, 4) + ' m · chute ' + nf(x.metres > 0 ? c / x.metres * 100 : 0, 1) + ' %' + (pu ? ' · ' + nf(c * pu, 2) + ' DA' : '') + '</small></div>'; })() +
         '<div><span>Pour ' + nf(N, 0) + ' produits</span><b>' + nf(besoin, 0) + ' pièces</b><small>' + rangs + ' rangée(s) de ' + n + ' → ' + nf(rangs * x.long / 100, 2) + ' m</small></div></div></div>';
     }).join('') + '</div>';
     h += '<h4 class="gb-h4">Plan de coupe — ' + nf(N, 0) + ' produits, rouleau déroulé (' + nf(mReel, 2) + ' m)</h4>' + pl.html +
-      '<p class="gb-help">Chaque bloc = un gabarit, coupé rangée après rangée (traits fins). Les zones hachurées sont la chute de largeur : elle n’est pas utilisée, donc le calcul ne compte que les pièces entières côte à côte. Le grand côté de chaque gabarit est dans le sens de la longueur du rouleau.</p></div>';
+      '<p class="gb-help">Chaque bloc = un gabarit, coupé rangée après rangée (traits fins). Les zones hachurées sont la bande restante sur le côté : elle est utilisée en production, donc comptée dans le calcul (pièces côte à côte avec décimales). Le grand côté de chaque gabarit est dans le sens de la longueur du rouleau.</p></div>';
     return h;
   }
 
