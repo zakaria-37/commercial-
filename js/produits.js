@@ -959,6 +959,10 @@ function creerFicheMatieres(p, N) {
   let aAcheter = 0;
   const LM = lignesMatieres(p), matU = LM.reduce((x, l) => x + coutLigne(l), 0);      // matières d'une pièce (packs dépliés)
   const pack = lignesDe(p.id).filter(l => l.sous_produit_id).map(l => numD(l.quantite, 2) + ' x ' + nomLigne(l));
+  // Production déjà lancée : les sorties de stock déjà faites pour CE produit (bon de sortie / sortie production,
+  // note « … <nom du produit> … ») ne sont pas comptées une 2ᵉ fois. Stock −726 après une sortie de 726 → à acheter 726 (retour à 0).
+  const nomP = normD(p.nom), MV = typeof STOCK_MVTS !== 'undefined' ? STOCK_MVTS : [];
+  const dejaSorti = artId => MV.filter(m => String(m.article_id) === String(artId) && Number(m.quantite) < 0 && normD(m.note || '').includes(nomP + ' ×')).reduce((x, m) => x - Number(m.quantite), 0);
   const lignes = LM.map(l => {
     const tot = Number(l.quantite || 0) * N;
     const a = l.article_id && window.StockAPI ? StockAPI.byId(l.article_id) : null;
@@ -968,7 +972,9 @@ function creerFicheMatieres(p, N) {
       if (base != null) {
         if (StockAPI.aCond(a)) { const nb = base / StockAPI.condQte(a); condTxt = numD(nb, 2) + ' ' + StockAPI.plur(a.cond_nom, nb) + ' (' + numD(Math.ceil(nb - 1e-9), 0) + ' à prévoir)'; }
         const f = StockAPI.fmtQty(a, st); stockTxt = f.main + (f.sub ? ' (' + f.sub + ')' : '');
-        const manque = base - st;
+        const sorti = Math.min(base, dejaSorti(a.id));
+        if (sorti > 1e-6) stockTxt += ' — déjà sorti pour cette production : ' + StockAPI.fmtQty(a, sorti).main;
+        const manque = (base - sorti) - st;
         if (manque > 1e-6) { const fm = StockAPI.fmtQty(a, manque); achatTxt = fm.main + (fm.sub ? ' (' + fm.sub + ')' : ''); aAcheter++; } else achatTxt = 'OK';
       }
     }
