@@ -68,6 +68,7 @@
   function appliquer() {
     const t = choisi();
     THEMES.forEach(x => { if (x[0]) document.body.classList.toggle('theme-' + x[0], x[0] === t); });
+    document.body.classList.toggle('theme-dark', t === 'sombre' || t === 'usma');      // thèmes sombres : couleurs claires converties (css/sombre_auto.css)
     document.body.dataset.theme = t || 'classique';
     const mc = document.querySelector('meta[name="theme-color"]'); if (mc) mc.setAttribute('content', (THEMES.find(x => x[0] === t) || THEMES[0])[2]);
     bouton(); banniere(t);
