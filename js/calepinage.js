@@ -374,7 +374,7 @@
     box.innerHTML = '<div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">📐 Gabarits du produit</h2>' +
       '<button type="button" class="btn s" data-gc="add">+ Ajouter un gabarit</button>' +
       '<button type="button" class="btn s p" data-gc="save"' + (modifie ? '' : ' disabled') + '>Enregistrer' + (modifie ? ' et recalculer' : '') + '</button></div>' +
-      '<p class="pr-help">Saisis <b>une seule fois</b> : face, dos, soufflet, fond, poche… Ils servent au métrage du tissu, de la doublure, du PVC (📐) et aux longueurs de fermeture, curseur, tafta, liseré (📏). Le <b>périmètre</b> est calculé (2 × (L + H)) ; corrigez-le pour une forme arrondie.</p>' +
+      '<p class="pr-help">Saisis <b>une seule fois</b> : face, dos, soufflet, fond, poche… Ils servent au métrage du tissu, de la doublure, du PVC (📐) et aux longueurs de fermeture, curseur, tafta, liseré (📏). Le <b>périmètre</b> est calculé (2 × (L + H)) ; corrigez-le pour une forme arrondie. <b>Touche Entrée</b> : case suivante, puis nouveau gabarit.</p>' +
       (carteItems.length ? '<div class="tw"><table class="iv-tbl cp-tbl cp-gc no-cards"><thead><tr><th>Gabarit</th><th>Largeur (cm)</th><th>Hauteur (cm)</th><th>Périmètre (cm)</th><th>Utilisé dans</th><th></th></tr></thead><tbody>' +
         carteItems.map((g, i) => { const u = utilisations(g.id); return '<tr data-gi="' + i + '"><td data-cap="Gabarit"><span class="cp-nm"><i class="cp-c" style="background:' + COUL[i % COUL.length] + '"></i><input data-gk="nom" value="' + esc(g.nom) + '" maxlength="40" placeholder="Face, dos, soufflet…"></span></td>' +
           '<td data-cap="Largeur (cm)"><input data-gk="l" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(g.l || '') + '"></td>' +
@@ -385,6 +385,15 @@
         : '<p class="cp-help">Aucun gabarit pour ce produit. Cliquez sur « + Ajouter un gabarit ».</p>');
   }
   function brancher(box) {
+    // Touche Entrée : case suivante (nom → largeur → hauteur → périmètre) ; à la fin de la dernière ligne, un nouveau gabarit est ajouté
+    box.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' || e.shiftKey || !e.target.dataset || !e.target.dataset.gk) return;
+      e.preventDefault();
+      const ins = [...box.querySelectorAll('tr[data-gi] input[data-gk]')], k = ins.indexOf(e.target);
+      if (k >= 0 && k < ins.length - 1) { ins[k + 1].focus(); if (ins[k + 1].select) ins[k + 1].select(); return; }
+      carteItems.push({ id: nid(), nom: '', l: '', h: '', p: null }); modifie = true; rendreCarte(box);
+      const noms = box.querySelectorAll('[data-gk=nom]'); const n = noms[noms.length - 1]; if (n) { n.focus(); n.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    });
     box.addEventListener('input', e => {
       const tr = e.target.closest('tr[data-gi]'); if (!tr || !e.target.dataset.gk) return;
       const g = carteItems[+tr.dataset.gi]; g[e.target.dataset.gk] = e.target.value;
