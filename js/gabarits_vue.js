@@ -41,30 +41,39 @@
     return s + '</svg>';
   }
 
-  /* ---------- plan de coupe pour N produits (rouleau déroulé de gauche à droite) ---------- */
+  /* ---------- plan de coupe pour N produits — dessiné COMME le gabarit : largeur du rouleau à l'horizontale,
+     longueur du rouleau vers le bas, MÊME échelle dans les deux sens (pas de déformation) ---------- */
+  const HACH = id => '<defs><pattern id="' + id + '" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#fde7e3"/><line x1="0" y1="0" x2="0" y2="5" stroke="#e08a7c" stroke-width="1.6"/></pattern></defs>';
+  function cadre(total, W, corps, id) {
+    const S = 300 / W, L = 46, w = W * S, hT = total * S;
+    let s = '<div class="gb-plan gb-planv"><svg width="' + (w + L + 70) + '" height="' + Math.ceil(hT + 34) + '" viewBox="' + (-L) + ' -22 ' + (w + L + 70) + ' ' + Math.ceil(hT + 34) + '">';
+    s += '<text x="' + (w / 2) + '" y="-8" text-anchor="middle" class="gb-c">largeur du rouleau ' + nf(W, 0) + ' cm</text>';
+    s += corps(S);
+    const pas = total > 3000 ? 100 : 50;
+    for (let m = 0; m <= total + 1; m += pas) s += '<line x1="-8" y1="' + (m * S) + '" x2="0" y2="' + (m * S) + '" stroke="#b00020" stroke-width="1"/><text x="-10" y="' + (m * S + 4) + '" text-anchor="end" class="gb-c gb-k">' + nf(m / 100, 1) + ' m</text>';
+    return s + HACH(id) + '</svg></div>';
+  }
   function plan(res, W) {
     const blocs = res.lignes.map((x, i) => {
-      const n = Math.max(1, Math.floor(W / x.court)), besoin = x.g.n * N, rangs = Math.ceil(besoin / n);
+      const n = Math.max(1, Math.floor(W / x.court + 1e-9)), besoin = x.g.n * N, rangs = Math.ceil(besoin / n);
       return { x, i, n, besoin, rangs, lg: rangs * x.long };
     });
     const total = blocs.reduce((s, b) => s + b.lg, 0);
-    const PX = Math.min(2.4, Math.max(0.12, 1200 / Math.max(total, 1)));      // pixels par cm
-    const H = 120, Sv = H / W;
-    let s = '<div class="gb-plan"><svg width="' + Math.ceil(total * PX + 20) + '" height="' + (H + 44) + '" viewBox="0 -18 ' + Math.ceil(total * PX + 20) + ' ' + (H + 44) + '">', x0 = 0;
-    blocs.forEach(b => {
-      const w = b.lg * PX;
-      s += '<rect x="' + x0 + '" y="0" width="' + w + '" height="' + H + '" fill="' + COUL[b.i % COUL.length] + '" stroke="#555" stroke-width=".6"/>';
-      // rangées et colonnes (seulement si lisibles)
-      if (b.x.long * PX >= 5) for (let k = 1; k < b.rangs; k++) s += '<line x1="' + (x0 + k * b.x.long * PX) + '" y1="0" x2="' + (x0 + k * b.x.long * PX) + '" y2="' + H + '" stroke="rgba(0,0,0,.25)" stroke-width=".5"/>';
-      for (let k = 1; k < b.n; k++) s += '<line x1="' + x0 + '" y1="' + (k * b.x.court * Sv) + '" x2="' + (x0 + w) + '" y2="' + (k * b.x.court * Sv) + '" stroke="rgba(0,0,0,.25)" stroke-width=".5"/>';
-      const reste = W - b.n * b.x.court; if (reste > .01) s += '<rect x="' + x0 + '" y="' + (b.n * b.x.court * Sv) + '" width="' + w + '" height="' + (reste * Sv) + '" fill="url(#gbHach2)"/>';
-      if (w > 46) s += '<text x="' + (x0 + w / 2) + '" y="' + (H / 2 + 4) + '" text-anchor="middle" class="gb-pl">' + esc(b.x.g.nom || 'Gabarit') + '</text>';
-      s += '<text x="' + (x0 + 2) + '" y="' + (H + 14) + '" class="gb-c">' + nf(b.lg / 100, 2) + ' m</text>';
-      x0 += w;
-    });
-    for (let m = 100; m < total; m += 100) s += '<line x1="' + (m * PX) + '" y1="-6" x2="' + (m * PX) + '" y2="0" stroke="#b00020" stroke-width="1"/>' + ((m / 100) % Math.max(1, Math.ceil(total / 100 / 12)) === 0 ? '<text x="' + (m * PX) + '" y="-8" text-anchor="middle" class="gb-c gb-k">' + (m / 100) + ' m</text>' : '');
-    s += '<defs><pattern id="gbHach2" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#fde7e3"/><line x1="0" y1="0" x2="0" y2="5" stroke="#e08a7c" stroke-width="1.6"/></pattern></defs></svg></div>';
-    return { html: s, total, blocs };
+    const html = cadre(total, W, S => {
+      let s = '', y0 = 0;
+      blocs.forEach(b => {
+        const h = b.lg * S, cw = b.x.court * S, rh = b.x.long * S, reste = W - b.n * b.x.court;
+        s += '<rect x="0" y="' + y0 + '" width="' + (b.n * cw) + '" height="' + h + '" fill="' + COUL[b.i % COUL.length] + '" stroke="#555" stroke-width=".6"/>';
+        for (let k = 1; k < b.n; k++) s += '<line x1="' + (k * cw) + '" y1="' + y0 + '" x2="' + (k * cw) + '" y2="' + (y0 + h) + '" stroke="rgba(0,0,0,.3)" stroke-width=".5"/>';
+        for (let k = 1; k < b.rangs; k++) s += '<line x1="0" y1="' + (y0 + k * rh) + '" x2="' + (b.n * cw) + '" y2="' + (y0 + k * rh) + '" stroke="rgba(0,0,0,.3)" stroke-width=".5"/>';
+        if (reste > .01) s += '<rect x="' + (b.n * cw) + '" y="' + y0 + '" width="' + (reste * S) + '" height="' + h + '" fill="url(#gbHach2)"/>';
+        s += '<line x1="0" y1="' + (y0 + h) + '" x2="' + (W * S) + '" y2="' + (y0 + h) + '" stroke="#333" stroke-width="1"/>';
+        s += '<text x="' + (W * S + 6) + '" y="' + (y0 + Math.min(h / 2, 14) + 4) + '" class="gb-c"><tspan font-weight="700">' + esc(b.x.g.nom || 'Gabarit') + '</tspan></text><text x="' + (W * S + 6) + '" y="' + (y0 + Math.min(h / 2, 14) + 16) + '" class="gb-c">' + nf(b.lg / 100, 2) + ' m</text>';
+        y0 += h;
+      });
+      return s;
+    }, 'gbHach2');
+    return { html, total, blocs };
   }
 
   /* ---------- SUPPLÉMENT : réutilisation des chutes de côté (n'influence PAS le prix de revient) ----------
@@ -100,22 +109,24 @@
   }
 
   function planReutil(R, W) {
-    const PX = Math.min(2.4, Math.max(0.12, 1200 / Math.max(R.total, 1))), H = 120, Sv = H / W;
-    let s = '<div class="gb-plan"><svg width="' + Math.ceil(R.total * PX + 20) + '" height="' + (H + 44) + '" viewBox="0 -18 ' + Math.ceil(R.total * PX + 20) + ' ' + (H + 44) + '">', x0 = 0;
-    R.hotes.forEach(b => {
-      const w = b.lg * PX, x = b.h.x, coul = COUL[b.h.i % COUL.length];
-      s += '<rect x="' + x0 + '" y="0" width="' + w + '" height="' + (b.h.n * x.court * Sv) + '" fill="' + coul + '" stroke="#555" stroke-width=".6"/>';
-      if (b.bande > .01) s += '<rect x="' + x0 + '" y="' + (b.h.n * x.court * Sv) + '" width="' + w + '" height="' + (b.bande * Sv) + '" fill="url(#gbHach3)"/>';
-      b.poses.forEach(p => {
-        const c = COUL[p.c.i % COUL.length];
-        for (let k = 0; k < p.col; k++) s += '<rect x="' + (x0 + p.debut * PX) + '" y="' + ((b.h.n * x.court + k * p.tr) * Sv) + '" width="' + (p.rg * p.le * PX) + '" height="' + Math.max(1, p.tr * Sv - .6) + '" fill="' + c + '" stroke="#555" stroke-width=".5"/>';
+    return cadre(R.total, W, S => {
+      let s = '', y0 = 0;
+      R.hotes.forEach(b => {
+        const x = b.h.x, h = b.lg * S, cw = x.court * S, larg = b.h.n * cw;
+        s += '<rect x="0" y="' + y0 + '" width="' + larg + '" height="' + h + '" fill="' + COUL[b.h.i % COUL.length] + '" stroke="#555" stroke-width=".6"/>';
+        for (let k = 1; k < b.h.n; k++) s += '<line x1="' + (k * cw) + '" y1="' + y0 + '" x2="' + (k * cw) + '" y2="' + (y0 + h) + '" stroke="rgba(0,0,0,.3)" stroke-width=".5"/>';
+        for (let k = 1; k < b.rangs; k++) s += '<line x1="0" y1="' + (y0 + k * x.long * S) + '" x2="' + larg + '" y2="' + (y0 + k * x.long * S) + '" stroke="rgba(0,0,0,.3)" stroke-width=".5"/>';
+        if (b.bande > .01) s += '<rect x="' + larg + '" y="' + y0 + '" width="' + (b.bande * S) + '" height="' + h + '" fill="url(#gbHach3)"/>';
+        b.poses.forEach(p => {
+          const c = COUL[p.c.i % COUL.length];
+          for (let k = 0; k < p.col; k++) for (let r = 0; r < p.rg; r++) s += '<rect x="' + (larg + k * p.tr * S) + '" y="' + (y0 + (p.debut + r * p.le) * S) + '" width="' + Math.max(.8, p.tr * S - .4) + '" height="' + Math.max(.8, p.le * S - .4) + '" fill="' + c + '" stroke="#555" stroke-width=".4"/>';
+        });
+        s += '<line x1="0" y1="' + (y0 + h) + '" x2="' + (W * S) + '" y2="' + (y0 + h) + '" stroke="#333" stroke-width="1"/>';
+        s += '<text x="' + (W * S + 6) + '" y="' + (y0 + Math.min(h / 2, 14) + 4) + '" class="gb-c"><tspan font-weight="700">' + esc(x.g.nom || 'Gabarit') + '</tspan></text><text x="' + (W * S + 6) + '" y="' + (y0 + Math.min(h / 2, 14) + 16) + '" class="gb-c">' + nf(b.lg / 100, 2) + ' m</text>';
+        y0 += h;
       });
-      if (w > 46) s += '<text x="' + (x0 + w / 2) + '" y="' + (b.h.n * x.court * Sv / 2 + 4) + '" text-anchor="middle" class="gb-pl">' + esc(x.g.nom || 'Gabarit') + '</text>';
-      s += '<text x="' + (x0 + 2) + '" y="' + (H + 14) + '" class="gb-c">' + nf(b.lg / 100, 2) + ' m</text>';
-      x0 += w;
-    });
-    s += '<defs><pattern id="gbHach3" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#fde7e3"/><line x1="0" y1="0" x2="0" y2="5" stroke="#e08a7c" stroke-width="1.6"/></pattern></defs></svg></div>';
-    return s;
+      return s;
+    }, 'gbHach3');
   }
 
   function carteReutil(res, W, mReel, pu) {
@@ -160,7 +171,7 @@
         '<div><span>Pour ' + nf(N, 0) + ' produits</span><b>' + nf(besoin, 0) + ' pièces</b><small>' + rangs + ' rangée(s) de ' + n + ' → ' + nf(rangs * x.long / 100, 2) + ' m</small></div></div></div>';
     }).join('') + '</div>';
     h += '<h4 class="gb-h4">Plan de coupe — ' + nf(N, 0) + ' produits, rouleau déroulé (' + nf(mReel, 2) + ' m)</h4>' + pl.html +
-      '<p class="gb-help">Chaque bloc = un gabarit, coupé rangée après rangée (traits fins). Les zones hachurées sont la bande restante sur le côté : elle est utilisée en production, donc comptée dans le calcul (pièces côte à côte avec décimales). Le grand côté de chaque gabarit est dans le sens de la longueur du rouleau.</p>';
+      '<p class="gb-help">Dessiné comme le gabarit ci-dessus et à la même échelle : la largeur du rouleau (' + nf(W, 0) + ' cm) à l’horizontale, la longueur du rouleau vers le bas. Chaque bloc = un gabarit coupé rangée après rangée ; la largeur du gabarit est en travers du rouleau, sa hauteur dans le sens de la longueur. Les zones hachurées sont la bande restante sur le côté : elle est comptée dans le calcul du prix (pièces côte à côte avec décimales).</p>';
     h += carteReutil(res, W, mReel, pu) + '</div>';
     return h;
   }
