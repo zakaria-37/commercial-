@@ -67,6 +67,70 @@
     return { html: s, total, blocs };
   }
 
+  /* ---------- SUPPLÉMENT : réutilisation des chutes de côté (n'influence PAS le prix de revient) ----------
+     Plan réel à rangées entières : chaque grand gabarit laisse une bande sur le côté (largeur W − n × petit côté)
+     sur toute la longueur de son bloc. On y place des pièces plus petites (dans un sens ou l'autre) → moins de rangées
+     pour ces petits gabarits → moins de mètres. Les grands gabarits sont traités en premier. */
+  function reutiliser(res, W) {
+    const G = res.lignes.map((x, i) => ({ x, i, besoin: x.g.n * N, place: 0, aire: x.court * x.long, n: Math.max(1, Math.floor(W / x.court + 1e-9)) }));
+    const ordre = G.slice().sort((a, b) => b.aire - a.aire);
+    const hotes = [];
+    ordre.forEach(h => {
+      const reste = h.besoin - h.place; if (reste <= 0) return;
+      const rangs = Math.ceil(reste / h.n), lg = rangs * h.x.long, bande = W - h.n * h.x.court;
+      const hote = { h, rangs, lg, bande, poses: [] };
+      hotes.push(hote);
+      if (bande < 0.5) return;
+      let libre = lg;
+      G.filter(c => c !== h && c.aire < h.aire && c.besoin - c.place > 0).sort((a, b) => b.aire - a.aire).forEach(c => {
+        if (libre <= 0) return;
+        // meilleur sens dans la bande : le plus de pièces par cm de longueur
+        const sens = [[c.x.court, c.x.long], [c.x.long, c.x.court]].map(([tr, le]) => ({ tr, le, col: Math.floor(bande / tr + 1e-9) })).filter(o => o.col > 0 && o.le <= libre + 1e-9);
+        if (!sens.length) return;
+        const o = sens.sort((a, b) => b.col / b.le - a.col / a.le)[0];
+        const manque = c.besoin - c.place, rg = Math.min(Math.ceil(manque / o.col), Math.floor(libre / o.le + 1e-9));
+        const nb = Math.min(manque, rg * o.col); if (nb <= 0) return;
+        hote.poses.push({ c, nb, rg, col: o.col, tr: o.tr, le: o.le, debut: lg - libre });
+        c.place += nb; libre -= rg * o.le;
+      });
+    });
+    hotes.sort((a, b) => a.h.i - b.h.i);
+    const total = hotes.reduce((s, b) => s + b.lg, 0);
+    return { G, hotes, total };
+  }
+
+  function planReutil(R, W) {
+    const PX = Math.min(2.4, Math.max(0.12, 1200 / Math.max(R.total, 1))), H = 120, Sv = H / W;
+    let s = '<div class="gb-plan"><svg width="' + Math.ceil(R.total * PX + 20) + '" height="' + (H + 44) + '" viewBox="0 -18 ' + Math.ceil(R.total * PX + 20) + ' ' + (H + 44) + '">', x0 = 0;
+    R.hotes.forEach(b => {
+      const w = b.lg * PX, x = b.h.x, coul = COUL[b.h.i % COUL.length];
+      s += '<rect x="' + x0 + '" y="0" width="' + w + '" height="' + (b.h.n * x.court * Sv) + '" fill="' + coul + '" stroke="#555" stroke-width=".6"/>';
+      if (b.bande > .01) s += '<rect x="' + x0 + '" y="' + (b.h.n * x.court * Sv) + '" width="' + w + '" height="' + (b.bande * Sv) + '" fill="url(#gbHach3)"/>';
+      b.poses.forEach(p => {
+        const c = COUL[p.c.i % COUL.length];
+        for (let k = 0; k < p.col; k++) s += '<rect x="' + (x0 + p.debut * PX) + '" y="' + ((b.h.n * x.court + k * p.tr) * Sv) + '" width="' + (p.rg * p.le * PX) + '" height="' + Math.max(1, p.tr * Sv - .6) + '" fill="' + c + '" stroke="#555" stroke-width=".5"/>';
+      });
+      if (w > 46) s += '<text x="' + (x0 + w / 2) + '" y="' + (b.h.n * x.court * Sv / 2 + 4) + '" text-anchor="middle" class="gb-pl">' + esc(x.g.nom || 'Gabarit') + '</text>';
+      s += '<text x="' + (x0 + 2) + '" y="' + (H + 14) + '" class="gb-c">' + nf(b.lg / 100, 2) + ' m</text>';
+      x0 += w;
+    });
+    s += '<defs><pattern id="gbHach3" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#fde7e3"/><line x1="0" y1="0" x2="0" y2="5" stroke="#e08a7c" stroke-width="1.6"/></pattern></defs></svg></div>';
+    return s;
+  }
+
+  function carteReutil(res, W, mReel, pu) {
+    const R = reutiliser(res, W), m = R.total / 100, gain = Math.max(0, mReel - m);
+    const poses = R.hotes.reduce((a, b) => a.concat(b.poses.map(p => ({ ...p, hote: b }))), []);
+    let h = '<div class="gb-reu"><h4 class="gb-h4">♻️ Réutilisation des chutes — supplément (' + nf(N, 0) + ' produits)</h4>';
+    if (!poses.length) return h + '<p class="gb-help">Aucune pièce plus petite ne rentre dans les bandes restantes sur le côté : rien à récupérer pour cette matière.</p></div>';
+    h += '<div class="gb-kpis"><div><span>Plan réel (rangées entières)</span><b>' + nf(mReel, 2) + ' m</b><small>' + (pu ? nf(mReel * pu, 0) + ' DA' : '') + '</small></div>' +
+      '<div><span>Avec les chutes réutilisées</span><b>' + nf(m, 2) + ' m</b><small>' + (pu ? nf(m * pu, 0) + ' DA' : '') + '</small></div>' +
+      '<div class="gb-k1m"><span>Tissu économisé</span><b>' + nf(gain, 2) + ' m</b><small>' + (pu ? nf(gain * pu, 0) + ' DA · ' : '') + nf(gain / N, 4) + ' m par produit' + (mReel > 0 ? ' · ' + nf(gain / mReel * 100, 1) + ' %' : '') + '</small></div></div>';
+    h += '<div class="gb-reul">' + poses.map(p => '<div><i class="cp-c" style="background:' + COUL[p.c.i % COUL.length] + '"></i><b>' + nf(p.nb, 0) + ' × ' + esc(p.c.x.g.nom || 'Gabarit') + '</b><span>dans la chute de <b>' + esc(p.hote.h.x.g.nom || 'Gabarit') + '</b> (bande ' + nf(p.hote.bande, 1) + ' cm) · ' + p.col + ' en travers × ' + p.rg + ' rangée(s), pièce ' + nf(p.tr, 1) + ' × ' + nf(p.le, 1) + ' cm</span></div>').join('') + '</div>';
+    h += planReutil(R, W) + '<p class="gb-help">Supplément d’information pour la coupe : le prix de revient reste calculé avec la méthode principale (chute de côté comptée), il ne change pas. Ici, les petites pièces sont coupées dans les bandes restantes des grands gabarits, ce qui réduit les rangées et les mètres à couper.</p></div>';
+    return h;
+  }
+
   /* ---------- une matière (ligne 📐) ---------- */
   function carteSurface(l, p) {
     const g = l.gabarits, res = window.Calepinage ? Calepinage.calculer(g, p) : null;
@@ -96,7 +160,8 @@
         '<div><span>Pour ' + nf(N, 0) + ' produits</span><b>' + nf(besoin, 0) + ' pièces</b><small>' + rangs + ' rangée(s) de ' + n + ' → ' + nf(rangs * x.long / 100, 2) + ' m</small></div></div></div>';
     }).join('') + '</div>';
     h += '<h4 class="gb-h4">Plan de coupe — ' + nf(N, 0) + ' produits, rouleau déroulé (' + nf(mReel, 2) + ' m)</h4>' + pl.html +
-      '<p class="gb-help">Chaque bloc = un gabarit, coupé rangée après rangée (traits fins). Les zones hachurées sont la bande restante sur le côté : elle est utilisée en production, donc comptée dans le calcul (pièces côte à côte avec décimales). Le grand côté de chaque gabarit est dans le sens de la longueur du rouleau.</p></div>';
+      '<p class="gb-help">Chaque bloc = un gabarit, coupé rangée après rangée (traits fins). Les zones hachurées sont la bande restante sur le côté : elle est utilisée en production, donc comptée dans le calcul (pièces côte à côte avec décimales). Le grand côté de chaque gabarit est dans le sens de la longueur du rouleau.</p>';
+    h += carteReutil(res, W, mReel, pu) + '</div>';
     return h;
   }
 

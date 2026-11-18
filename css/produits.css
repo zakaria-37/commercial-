@@ -330,3 +330,8 @@ body.theme-sombre .gb-c{fill:#aab}
 @media (max-width:700px){ .gb-ttl .gb-mod{width:100%;min-height:42px;margin-left:0} .gb-td .btn{min-height:40px;flex:none} }
 .gb-kpis>div.gb-k1m{background:#effaf2;border-color:#9fd9b0}.gb-k1m b{color:#17632a}
 .gb-det>div.gb-chute{background:#fff4f1}.gb-chute b{color:#b3261e}
+.gb-reu{margin-top:14px;border-top:1px dashed var(--line,#e3d9dc);padding-top:6px}
+.gb-reul{display:grid;gap:6px;margin:10px 0}
+.gb-reul>div{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 10px;border-radius:10px;background:#f4faf6;border:1px solid #cfe9d7;font-size:.86rem}
+.gb-reul>div>span{color:#555;flex-basis:100%;font-size:.8rem}
+.theme-dark .gb-reul>div{background:#1d2a22;border-color:#2f4a38}.theme-dark .gb-reul>div>span{color:#b9c4bd}
