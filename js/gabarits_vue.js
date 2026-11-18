@@ -14,8 +14,22 @@
   const num = v => { const x = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(x) ? x : 0; };
   const COUL = ['#e8a6b4', '#9cc5e8', '#b9dfa6', '#f2d38a', '#c8b3e6', '#f4b183', '#9fd8cf', '#e3b5d0', '#c9c9c9', '#a8c3a0'];
   const MES = { p: 'Périmètre', gc: 'Grand côté', pc: 'Petit côté', l: 'Largeur', h: 'Hauteur' };
-  let sel = null, N = 100;
-  try { sel = sessionStorage.getItem('mariabag_gb_produit'); N = Number(sessionStorage.getItem('mariabag_gb_n')) || 100; } catch (e) {}
+  let sel = null, N = 100, manuel = {};
+  try { sel = sessionStorage.getItem('mariabag_gb_produit'); manuel = JSON.parse(sessionStorage.getItem('mariabag_gb_nmanuel') || '{}') || {}; } catch (e) {}
+  /* Quantité suivie : celle de la DERNIÈRE production lancée (bon de sortie) du modèle de ce produit.
+     Si l'utilisateur tape une autre quantité, elle est gardée pour ce produit jusqu'au bouton « Production ». */
+  const derniereProd = p => {
+    if (!p || !p.modele_id || !window.BonsSortie) return null;
+    return (BonsSortie.liste() || []).filter(b => b.statut !== 'annule' && String(b.modele_id) === String(p.modele_id) && Number(b.quantite) > 0)
+      .sort((a, b) => String(b.date_bon || '').localeCompare(String(a.date_bon || '')) || String(b.created_at || '').localeCompare(String(a.created_at || '')))[0] || null;
+  };
+  const qteProd = () => { const q = parseInt(document.getElementById('pr-qte') && document.getElementById('pr-qte').value, 10); return q > 0 ? q : 0; };
+  function fixerN(p) {
+    const m = p && manuel[p.id], b = derniereProd(p);
+    N = m > 0 ? m : b ? Math.round(Number(b.quantite)) : (qteProd() || 100);
+    return { m: m > 0, b };
+  }
+  const garderManuel = () => { try { sessionStorage.setItem('mariabag_gb_nmanuel', JSON.stringify(manuel)); } catch (x) {} };
 
   const produits = () => (typeof PRODUITS !== 'undefined' ? PRODUITS : []);
   const lignes = id => (typeof LIGNES !== 'undefined' ? LIGNES : []).filter(l => String(l.produit_id) === String(id) && !l.sous_produit_id);
@@ -197,11 +211,15 @@
     if (!P.length) { el.innerHTML = '<div class="card">Chargement des produits…</div>'; return; }
     if (!P.some(p => String(p.id) === String(sel))) sel = (P.find(p => lib(p).length) || P[0]).id;
     const p = P.find(x => String(x.id) === String(sel)), L = lib(p), lg = lignes(p.id);
+    const src = fixerN(p);
+    const srcTxt = src.m ? '✎ quantité saisie' + (src.b || qteProd() ? ' · <button type="button" class="gb-src" data-gbprod>↺ revenir à la production</button>' : '')
+      : src.b ? '🏭 production ' + esc(src.b.numero || '') + (src.b.date_bon ? ' du ' + esc(String(src.b.date_bon).split('-').reverse().join('/')) : '') + (src.b.atelier ? ' · ' + esc(src.b.atelier) : '')
+      : qteProd() ? '🏭 quantité de la section Production' : 'aucune production lancée pour ce modèle';
     const surf = lg.filter(l => l.gabarits && l.gabarits.type !== 'longueur' && (l.gabarits.items || []).length);
     const lon = lg.filter(l => l.gabarits && l.gabarits.type === 'longueur');
     let h = '<div class="hello"><span class="fl"></span><div><h2>Gabarits</h2><p>Où et comment chaque gabarit se place dans le rouleau, avec les mêmes calculs que le coût de revient.</p></div></div>' +
       '<div class="gb-top"><label>Produit<select id="gb-prod">' + P.slice().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map(x => '<option value="' + esc(x.id) + '"' + (String(x.id) === String(sel) ? ' selected' : '') + '>' + esc(x.nom) + (lib(x).length ? ' · 📐 ' + lib(x).length : '') + '</option>').join('') + '</select></label>' +
-      '<label>Produits à fabriquer<span class="gb-n"><button type="button" data-n="-">−</button><input id="gb-n" type="number" min="1" step="1" inputmode="numeric" value="' + N + '"><button type="button" data-n="+">+</button></span></label>' +
+      '<label>Produits à fabriquer<span class="gb-n"><button type="button" data-n="-">−</button><input id="gb-n" type="number" min="1" step="1" inputmode="numeric" value="' + N + '"><button type="button" data-n="+">+</button></span><small class="gb-nsrc">' + srcTxt + '</small></label>' +
       '<button type="button" class="btn" id="gb-edit">✎ Modifier dans Produits</button></div>';
     // gabarits du produit : modifiables ici (même carte que dans Produits, avec recalcul automatique)
     h += '<div class="card gb-card" id="gb-libcard"></div>';
@@ -219,6 +237,7 @@
   async function load() {
     if (!produits().length && typeof loadProduits === 'function') { try { await loadProduits(); } catch (e) {} }
     if (window.StockAPI && !StockAPI.list().length) { try { await StockAPI.load(); } catch (e) {} }
+    if (window.BonsSortie && !BonsSortie.liste().length) { try { await BonsSortie.load(); } catch (e) {} }
     render();
   }
   document.addEventListener('change', e => {
@@ -226,12 +245,13 @@
   });
   document.addEventListener('input', e => {
     if (e.target.id !== 'gb-n') return;
-    N = Math.max(1, Math.round(num(e.target.value)) || 1); try { sessionStorage.setItem('mariabag_gb_n', N); } catch (x) {}
+    N = Math.max(1, Math.round(num(e.target.value)) || 1); manuel[sel] = N; garderManuel();
     clearTimeout(window.__gbT); window.__gbT = setTimeout(() => { const pos = e.target.selectionStart; render(); const i = document.getElementById('gb-n'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (x) {} } }, 350);
   });
   document.addEventListener('click', e => {
     const el = root(); if (!el || !el.contains(e.target)) return;
-    const b = e.target.closest('[data-n]'); if (b) { const pas = N >= 1000 ? 100 : N >= 200 ? 50 : N >= 50 ? 10 : 1; N = Math.max(1, b.dataset.n === '+' ? N + pas : N - pas); try { sessionStorage.setItem('mariabag_gb_n', N); } catch (x) {} render(); return; }
+    const b = e.target.closest('[data-n]'); if (b) { const pas = N >= 1000 ? 100 : N >= 200 ? 50 : N >= 50 ? 10 : 1; N = Math.max(1, b.dataset.n === '+' ? N + pas : N - pas); manuel[sel] = N; garderManuel(); render(); return; }
+    if (e.target.closest('[data-gbprod]')) { delete manuel[sel]; garderManuel(); render(); return; }
     if (e.target.closest('#gb-edit')) { if (typeof window.selProduitDepuis === 'function') window.selProduitDepuis(sel); return; }
     const m = e.target.closest('[data-gbmod]');
     if (m && window.Calepinage) { (m.dataset.type === 'longueur' ? Calepinage.ouvrirLongueur : Calepinage.ouvrir)(m.dataset.gbmod); }

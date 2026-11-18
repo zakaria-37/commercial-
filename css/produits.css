@@ -336,3 +336,4 @@ body.theme-sombre .gb-c{fill:#aab}
 .gb-reul>div>span{color:#555;flex-basis:100%;font-size:.8rem}
 .theme-dark .gb-reul>div{background:#1d2a22;border-color:#2f4a38}.theme-dark .gb-reul>div>span{color:#b9c4bd}
 .gb-planh{overflow-x:auto;padding:8px}
+.gb-nsrc{display:block;margin-top:4px;font-size:.78rem;color:var(--muted,#777);font-weight:500}.gb-src{border:0;background:none;color:#b3261e;font-weight:700;cursor:pointer;padding:0;font-size:inherit;text-decoration:underline}
