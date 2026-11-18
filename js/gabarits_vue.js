@@ -45,12 +45,14 @@
      longueur du rouleau vers le bas, MÊME échelle dans les deux sens (pas de déformation) ---------- */
   const HACH = id => '<defs><pattern id="' + id + '" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#fde7e3"/><line x1="0" y1="0" x2="0" y2="5" stroke="#e08a7c" stroke-width="1.6"/></pattern></defs>';
   function cadre(total, W, corps, id) {
-    const S = 300 / W, L = 46, w = W * S, hT = total * S;
-    let s = '<div class="gb-plan gb-planv"><svg width="' + (w + L + 70) + '" height="' + Math.ceil(hT + 34) + '" viewBox="' + (-L) + ' -22 ' + (w + L + 70) + ' ' + Math.ceil(hT + 34) + '">';
-    s += '<text x="' + (w / 2) + '" y="-8" text-anchor="middle" class="gb-c">largeur du rouleau ' + nf(W, 0) + ' cm</text>';
-    s += corps(S);
+    // dessin calculé « vertical » (x = travers, y = longueur) puis transposé : la longueur du rouleau défile à l'HORIZONTALE
+    const S = Math.min(1.6, 180 / W), lab = [], geo = corps(S, lab), hR = W * S, lT = total * S, G = 22;
+    let s = '<div class="gb-plan gb-planh"><svg width="' + Math.ceil(lT + G + 20) + '" height="' + Math.ceil(hR + 66) + '" viewBox="' + (-G) + ' -22 ' + Math.ceil(lT + G + 20) + ' ' + Math.ceil(hR + 66) + '">';
+    s += '<g transform="matrix(0 1 1 0 0 0)">' + geo + '</g>';
+    s += '<text transform="translate(-8 ' + (hR / 2) + ') rotate(-90)" text-anchor="middle" class="gb-c">' + nf(W, 0) + ' cm</text>';
     const pas = total > 3000 ? 100 : 50;
-    for (let m = 0; m <= total + 1; m += pas) s += '<line x1="-8" y1="' + (m * S) + '" x2="0" y2="' + (m * S) + '" stroke="#b00020" stroke-width="1"/><text x="-10" y="' + (m * S + 4) + '" text-anchor="end" class="gb-c gb-k">' + nf(m / 100, 1) + ' m</text>';
+    for (let m = 0; m <= total + 1; m += pas) s += '<line x1="' + (m * S) + '" y1="-6" x2="' + (m * S) + '" y2="0" stroke="#b00020" stroke-width="1"/>' + (m % 100 === 0 || total <= 3000 ? '<text x="' + (m * S) + '" y="-9" text-anchor="middle" class="gb-c gb-k">' + nf(m / 100, 1) + ' m</text>' : '');
+    lab.forEach(l => { s += '<text x="' + (l.y0 + 2) + '" y="' + (hR + 15) + '" class="gb-c"><tspan font-weight="700">' + esc(l.nom) + '</tspan></text><text x="' + (l.y0 + 2) + '" y="' + (hR + 29) + '" class="gb-c">' + nf(l.m, 2) + ' m</text><line x1="' + l.y0 + '" y1="' + hR + '" x2="' + l.y0 + '" y2="' + (hR + 32) + '" stroke="#999" stroke-width=".6"/>'; });
     return s + HACH(id) + '</svg></div>';
   }
   function plan(res, W) {
@@ -59,7 +61,7 @@
       return { x, i, n, besoin, rangs, lg: rangs * x.long };
     });
     const total = blocs.reduce((s, b) => s + b.lg, 0);
-    const html = cadre(total, W, S => {
+    const html = cadre(total, W, (S, lab) => {
       let s = '', y0 = 0;
       blocs.forEach(b => {
         const h = b.lg * S, cw = b.x.court * S, rh = b.x.long * S, reste = W - b.n * b.x.court;
@@ -68,7 +70,7 @@
         for (let k = 1; k < b.rangs; k++) s += '<line x1="0" y1="' + (y0 + k * rh) + '" x2="' + (b.n * cw) + '" y2="' + (y0 + k * rh) + '" stroke="rgba(0,0,0,.3)" stroke-width=".5"/>';
         if (reste > .01) s += '<rect x="' + (b.n * cw) + '" y="' + y0 + '" width="' + (reste * S) + '" height="' + h + '" fill="url(#gbHach2)"/>';
         s += '<line x1="0" y1="' + (y0 + h) + '" x2="' + (W * S) + '" y2="' + (y0 + h) + '" stroke="#333" stroke-width="1"/>';
-        s += '<text x="' + (W * S + 6) + '" y="' + (y0 + Math.min(h / 2, 14) + 4) + '" class="gb-c"><tspan font-weight="700">' + esc(b.x.g.nom || 'Gabarit') + '</tspan></text><text x="' + (W * S + 6) + '" y="' + (y0 + Math.min(h / 2, 14) + 16) + '" class="gb-c">' + nf(b.lg / 100, 2) + ' m</text>';
+        lab.push({ y0, nom: b.x.g.nom || 'Gabarit', m: b.lg / 100 });
         y0 += h;
       });
       return s;
@@ -109,7 +111,7 @@
   }
 
   function planReutil(R, W) {
-    return cadre(R.total, W, S => {
+    return cadre(R.total, W, (S, lab) => {
       let s = '', y0 = 0;
       R.hotes.forEach(b => {
         const x = b.h.x, h = b.lg * S, cw = x.court * S, larg = b.h.n * cw;
@@ -122,7 +124,7 @@
           for (let k = 0; k < p.col; k++) for (let r = 0; r < p.rg; r++) s += '<rect x="' + (larg + k * p.tr * S) + '" y="' + (y0 + (p.debut + r * p.le) * S) + '" width="' + Math.max(.8, p.tr * S - .4) + '" height="' + Math.max(.8, p.le * S - .4) + '" fill="' + c + '" stroke="#555" stroke-width=".4"/>';
         });
         s += '<line x1="0" y1="' + (y0 + h) + '" x2="' + (W * S) + '" y2="' + (y0 + h) + '" stroke="#333" stroke-width="1"/>';
-        s += '<text x="' + (W * S + 6) + '" y="' + (y0 + Math.min(h / 2, 14) + 4) + '" class="gb-c"><tspan font-weight="700">' + esc(x.g.nom || 'Gabarit') + '</tspan></text><text x="' + (W * S + 6) + '" y="' + (y0 + Math.min(h / 2, 14) + 16) + '" class="gb-c">' + nf(b.lg / 100, 2) + ' m</text>';
+        lab.push({ y0, nom: x.g.nom || 'Gabarit', m: b.lg / 100 });
         y0 += h;
       });
       return s;
@@ -171,7 +173,7 @@
         '<div><span>Pour ' + nf(N, 0) + ' produits</span><b>' + nf(besoin, 0) + ' pièces</b><small>' + rangs + ' rangée(s) de ' + n + ' → ' + nf(rangs * x.long / 100, 2) + ' m</small></div></div></div>';
     }).join('') + '</div>';
     h += '<h4 class="gb-h4">Plan de coupe — ' + nf(N, 0) + ' produits, rouleau déroulé (' + nf(mReel, 2) + ' m)</h4>' + pl.html +
-      '<p class="gb-help">Dessiné comme le gabarit ci-dessus et à la même échelle : la largeur du rouleau (' + nf(W, 0) + ' cm) à l’horizontale, la longueur du rouleau vers le bas. Chaque bloc = un gabarit coupé rangée après rangée ; la largeur du gabarit est en travers du rouleau, sa hauteur dans le sens de la longueur. Les zones hachurées sont la bande restante sur le côté : elle est comptée dans le calcul du prix (pièces côte à côte avec décimales).</p>';
+      '<p class="gb-help">Rouleau déroulé de gauche à droite, à la même échelle dans les deux sens : la largeur du rouleau (' + nf(W, 0) + ' cm) en hauteur, la longueur à l’horizontale (faites défiler). Chaque bloc = un gabarit coupé rangée après rangée ; la largeur du gabarit est en travers du rouleau, sa hauteur dans le sens de la longueur. Les zones hachurées sont la bande restante sur le côté : elle est comptée dans le calcul du prix (pièces côte à côte avec décimales).</p>';
     h += carteReutil(res, W, mReel, pu) + '</div>';
     return h;
   }

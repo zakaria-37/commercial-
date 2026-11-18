@@ -335,4 +335,4 @@ body.theme-sombre .gb-c{fill:#aab}
 .gb-reul>div{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 10px;border-radius:10px;background:#f4faf6;border:1px solid #cfe9d7;font-size:.86rem}
 .gb-reul>div>span{color:#555;flex-basis:100%;font-size:.8rem}
 .theme-dark .gb-reul>div{background:#1d2a22;border-color:#2f4a38}.theme-dark .gb-reul>div>span{color:#b9c4bd}
-.gb-planv{max-height:560px;overflow:auto;padding:8px}
+.gb-planh{overflow-x:auto;padding:8px}
