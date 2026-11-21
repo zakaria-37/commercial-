@@ -191,3 +191,4 @@ body.bp-fs-on #zs-btn{display:none!important}
   #cm-root.bp-fs .bp-opts label{flex-direction:row;align-items:center;gap:6px}
   #cm-root.bp-fs .bp-tot .cm-tt tr.cm-ttc td:last-child{font-size:21px}
 }
+.bp-in.bp-sansprix{border-color:#e0a33a!important;background:#fff8ea!important}.bp-in.bp-sansprix::placeholder{color:#b86e00;font-weight:700}

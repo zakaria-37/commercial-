@@ -258,7 +258,7 @@
       ed.lignes.map((l, i) => '<tr data-i="' + i + '"><td class="bp-n">' + (i + 1) + '</td><td class="bp-pr"><select data-f="ref" data-cherche="1"' + (br ? ' data-creer="br" data-creer-txt="Nouveau produit fini ou élément…"' : '') + '>' + optsRef(doc.type, l) + '</select></td>' +
         '<td data-l="Réf."><input class="bp-in bp-ref" data-f="code" maxlength="40" value="' + esc(l.ref || '') + '" placeholder="Réf."></td><td data-l="Désignation" class="bp-des"><input class="bp-in" data-f="des" maxlength="200" value="' + esc(l.designation) + '" placeholder="Désignation"></td>' +
         (br ? '<td data-l="Unité"><input class="bp-in bp-uni" data-f="uni" maxlength="20" value="' + esc(l.unite) + '"></td>' : '') +
-        '<td data-l="Qté"><input class="bp-in bp-q" data-f="qte" type="number" min="0" step="any" inputmode="decimal" value="' + (l.quantite || '') + '"></td><td data-l="Prix U."><input class="bp-in bp-p" data-f="pu" type="number" min="0" step="any" inputmode="decimal" value="' + (l.prix_unitaire || '') + '"></td>' +
+        '<td data-l="Qté"><input class="bp-in bp-q" data-f="qte" type="number" min="0" step="any" inputmode="decimal" value="' + (l.quantite || '') + '"></td><td data-l="Prix U."><input class="bp-in bp-p' + ((l.produit_id || l.article_id) && !num(l.prix_unitaire) ? ' bp-sansprix' : '') + '" data-f="pu" type="number" min="0" step="any" inputmode="decimal" placeholder="' + ((l.produit_id || l.article_id) && !num(l.prix_unitaire) ? 'Prix ?' : '') + '" value="' + (l.prix_unitaire || '') + '"></td>' +
         (br ? '' : '<td class="bp-r bp-mg" data-l="Coût · marge"><span class="cm-mg">' + margeTxt(l) + '</span><small class="cm-ct">' + (coutLigne(l) != null ? 'coût ' + money(coutLigne(l)) : '') + '</small></td>') +
         '<td class="bp-r cm-st" data-l="Stock">' + stockTxt(doc.type, l) + '</td><td class="bp-r cm-mt bp-mt" data-l="Montant">' + money(r2(num(l.quantite) * num(l.prix_unitaire))) + '</td><td class="bp-r"><button class="bp-x" type="button" data-rm="' + i + '" title="Supprimer la ligne">✕</button></td></tr>').join('') +
       '</tbody></table></div>';
@@ -272,6 +272,18 @@
     return h + '</div>';
   }
 
+  /* Prix de vente proposé pour un produit : dernier prix vendu À CE CLIENT, sinon prix de la fiche produit,
+     sinon dernier prix vendu (tous clients) */
+  function prixPropose(p, clientId, sansDoc) {
+    const ventes = LIGS.filter(l => String(l.produit_id) === String(p.id) && num(l.prix_unitaire) > 0).map(l => ({ l, d: docById(l.document_id) }))
+      .filter(x => x.d && (x.d.type === 'bon_livraison' || x.d.type === 'facture') && x.d.statut !== 'annulee' && String(x.d.id) !== String(sansDoc || ''))
+      .sort((a, b) => String(b.d.date_doc || '').localeCompare(String(a.d.date_doc || '')) || String(b.d.created_at || '').localeCompare(String(a.d.created_at || '')));
+    const c = clientId ? ventes.find(x => String(x.d.contact_id) === String(clientId)) : null;
+    if (c) return { prix: num(c.l.prix_unitaire), src: 'Dernier prix pour ce client (' + c.d.numero + ')' };
+    if (Number(p.prix_vente) > 0) return { prix: Number(p.prix_vente), src: 'Prix de vente de la fiche produit' };
+    if (ventes[0]) return { prix: num(ventes[0].l.prix_unitaire), src: 'Dernier prix vendu (' + ventes[0].d.numero + ')' };
+    return { prix: 0, src: 'Aucun prix : tapez-le, il sera gardé dans la fiche produit' };
+  }
   function editeur() {
     const doc = ed.doc, T = TYPES[doc.type], t = totaux(doc, ed.lignes), nouveau = !doc.id, bc = doc.type === 'bon_commande', fac = doc.type === 'facture', bon = isBon(doc.type), br = doc.type === 'bon_reception';
     const cs = contacts().filter(c => c.type === T.cible).sort((a, b) => lbl(a).localeCompare(lbl(b), 'fr'));
@@ -468,6 +480,9 @@
       else { lr.quantite_recue = r4(num(l.quantite_recue)); const i = await sb.from('document_lignes').insert([lr]).select(); if (i.error || !i.data) { say('Erreur ligne : ' + ((i.error && i.error.message) || '')); return false; } l.id = i.data[0].id; }
     }
     ed.lignes = ls;
+    if (d.type === 'bon_livraison' && window.PFAPI) {          // produit sans prix de vente dans sa fiche : on garde le prix tapé
+      for (const l of ls) { const p = l.produit_id && PFAPI.produits().find(x => String(x.id) === String(l.produit_id)); if (p && !(Number(p.prix_vente) > 0) && num(l.prix_unitaire) > 0) { const u = await sb.from('produits').update({ prix_vente: r2(num(l.prix_unitaire)) }).eq('id', p.id); if (!u.error) p.prix_vente = r2(num(l.prix_unitaire)); } }
+    }
     const sb0 = isBon(d.type) && (!avant || sigBon(d, ls) !== sig0) ? await synchroniserBon(avant ? avant.numero : d.numero) : null;
     const st = await synchroniserStock(infoSuppr);
     await synchroniserCash();
@@ -505,12 +520,12 @@
         if (a) { const c = StockAPI.aCond(a); l.designation = a.nom; l.unite = c ? a.cond_nom : a.unite; l.prix_unitaire = Number(a.prix_achat) || 0; tr.querySelector('[data-f=des]').value = l.designation; tr.querySelector('[data-f=uni]').value = l.unite; tr.querySelector('[data-f=pu]').value = l.prix_unitaire || ''; }
       } else {
         l.produit_id = el.value || null; const p = l.produit_id && window.PFAPI ? PFAPI.produits().find(x => String(x.id) === String(l.produit_id)) : null;
-        if (p) { l.designation = p.nom; l.prix_unitaire = Number(p.prix_vente) || 0; tr.querySelector('[data-f=des]').value = l.designation; tr.querySelector('[data-f=pu]').value = l.prix_unitaire || ''; }
+        if (p) { lireEntete(); const pp = prixPropose(p, ed.doc.contact_id, ed.doc.id); l.designation = p.nom; l.prix_unitaire = pp.prix; const ip = tr.querySelector('[data-f=pu]'); tr.querySelector('[data-f=des]').value = l.designation; ip.value = l.prix_unitaire || ''; ip.title = pp.src; ip.classList.toggle('bp-sansprix', !pp.prix); ip.placeholder = pp.prix ? '' : 'Prix ?'; }
       }
     } else if (f === 'des') l.designation = el.value;
     else if (f === 'uni') l.unite = el.value;
     else if (f === 'qte') l.quantite = Math.max(0, num(el.value));
-    else if (f === 'pu') l.prix_unitaire = Math.max(0, num(el.value));
+    else if (f === 'pu') { l.prix_unitaire = Math.max(0, num(el.value)); el.classList.toggle('bp-sansprix', !l.prix_unitaire && !!(l.produit_id || l.article_id)); }
     tr.querySelector('.cm-mt').textContent = money(r2(num(l.quantite) * num(l.prix_unitaire)));
     const ct = tr.querySelector('.cm-ct'), mg = tr.querySelector('.cm-mg'), mgt = $('#cm-mgt');
     if (ct) ct.innerHTML = ct.tagName === 'SMALL' ? (coutLigne(l) != null ? 'coût ' + money(coutLigne(l)) : '') : (coutLigne(l) != null ? money(coutLigne(l)) : '<small>—</small>');
