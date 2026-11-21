@@ -124,10 +124,13 @@
   }
 
   /* ---------- Affichage : listes ---------- */
+  /* Bon en (presque) plein écran : tout visible sans faire défiler la page — les lignes défilent dans la case, le total reste affiché */
+  const pleinEcran = () => { let v = null; try { v = localStorage.getItem('mariabag_bon_plein'); } catch (x) {} return v === null ? window.innerWidth >= 900 : v === '1'; };
   function render() {
     const root = $('#cm-root'); if (!root) return;
     if (err) { root.innerHTML = '<div class="card"><div class="iv-err">' + esc(err) + '</div></div>'; return; }
-    if (ed) { root.innerHTML = editeur(); return; }
+    if (ed) { root.innerHTML = editeur(); const fs = isBon(ed.doc.type) && pleinEcran(); root.classList.toggle('bp-fs', fs); document.body.classList.toggle('bp-fs-on', fs); return; }
+    root.classList.remove('bp-fs'); document.body.classList.remove('bp-fs-on');
     let h = '<div class="hello"><span class="fl">&#10047;</span><div><h2>Commerce</h2><p>Bons de livraison (avec facture) et bons de réception, paiements, versements, crédits, journal des opérations et caisse.</p></div></div>';
     h += '<div class="at-tabs" id="cm-tabs">' + ['bon_livraison', 'bon_reception', 'facture', 'devis', 'bon_commande'].filter(t => isBon(t) || DOCS.some(d => d.type === t) || tab === t).map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + TYPES[t].lp + '</button>').join('') +
       ['versements', 'credits', 'journal'].map(t => '<button type="button" data-t="' + t + '" class="' + (tab === t ? 'on' : '') + '">' + ({ versements: 'Versements', credits: 'Crédits', journal: 'Journal & caisse' })[t] + '</button>').join('') + '<button type="button" data-t="benefices" class="' + (tab === 'benefices' ? 'on' : '') + '">💰 Bénéfices</button><button type="button" data-t="entreprise" class="' + (tab === 'entreprise' ? 'on' : '') + '">Mon entreprise</button></div>';
@@ -273,7 +276,7 @@
     const doc = ed.doc, T = TYPES[doc.type], t = totaux(doc, ed.lignes), nouveau = !doc.id, bc = doc.type === 'bon_commande', fac = doc.type === 'facture', bon = isBon(doc.type), br = doc.type === 'bon_reception';
     const cs = contacts().filter(c => c.type === T.cible).sort((a, b) => lbl(a).localeCompare(lbl(b), 'fr'));
     const verrou = fac && !nouveau && etatFacture(doc).l === 'Annulée';
-    let h = '<div class="at-actions" style="margin:0 0 10px"><button class="btn" type="button" id="cm-back">← Retour à la liste</button><span style="margin-left:auto" class="iv-save" id="cm-msg"></span></div>';
+    let h = '<div class="at-actions bp-top" style="margin:0 0 10px"><button class="btn" type="button" id="cm-back">← Retour à la liste</button><span style="margin-left:auto" class="iv-save" id="cm-msg"></span>' + (bon ? '<button class="btn s" type="button" id="cm-plein" title="Afficher le bon en plein écran ou dans la page">' + (pleinEcran() ? '🗗 Réduire' : '⛶ Plein écran') + '</button>' : '') + '</div>';
     if (bon) h += bonPro(doc, T, t, nouveau, br, cs);
     else {
     h += '<div class="card"><div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">' + T.l + ' ' + esc(doc.numero) + (nouveau ? ' <span class="cm-bdg o">nouveau</span>' : fac ? ' <span class="cm-bdg ' + etatFacture(doc).c + '">' + etatFacture(doc).l + '</span>' : bc ? ' <span class="cm-bdg ' + etatBC(doc).c + '">' + etatBC(doc).l + '</span>' : bon ? ' <span class="cm-bdg ' + etatBon(doc).c + '">' + etatBon(doc).l + '</span>' : '') + '</h2></div>';
@@ -766,6 +769,7 @@
     if (t.closest('#cm-liv')) { fromLiv = true; render(); return; }
     if (t.closest('#cm-livno')) { fromLiv = false; render(); return; }
     const op = t.closest('tr[data-open]'); if (op) { ouvrir(op.dataset.open); return; }
+    if (t.closest('#cm-plein')) { try { localStorage.setItem('mariabag_bon_plein', pleinEcran() ? '0' : '1'); } catch (x) {} lireEntete(); render(); return; }
     if (t.closest('#cm-back')) { ed = null; payForm = recForm = null; await load(true); return; }
     if (t.closest('#cm-save')) { await enregistrer(); return; }
     if (t.closest('#cm-addl')) { if (isBon(ed.doc.type)) ajouterLigne(); else { lireEntete(); ed.lignes.push(ligneVide()); render(); } return; }
