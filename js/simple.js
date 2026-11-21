@@ -39,41 +39,58 @@
     const out = [];
     if (window.PFAPI) PFAPI.list().forEach(p => {
       const q = PFAPI.qty(p.id);
-      out.push({ kind: 'pf', id: p.id, nom: p.nom, sub: 'Modèle fini' + (Number(p.prix_vente) > 0 ? ' · vente ' + money(p.prix_vente) : ''), q, etat: PFAPI.etat(p), main: num(q, 0) + ' pcs', sec: '' });
+      out.push({ kind: 'pf', id: p.id, nom: p.nom, sub: 'Modèle fini' + (Number(p.prix_vente) > 0 ? ' · vente ' + money(p.prix_vente) : ''), q, etat: PFAPI.etat(p), main: num(q, 0) + ' pcs', sec: '', val: Math.max(0, q) * (Number(PFAPI.coutProduit(p)) || 0) });
     });
     if (window.StockAPI) StockAPI.list().forEach(a => {
       const q = StockAPI.qty(a.id), f = StockAPI.fmtQty(a, q);
-      out.push({ kind: 'mat', id: a.id, nom: a.nom, sub: a.categorie, q, etat: StockAPI.etat(a), main: f.main, sec: f.sub });
+      out.push({ kind: 'mat', id: a.id, nom: a.nom, sub: a.categorie, q, etat: StockAPI.etat(a), main: f.main, sec: f.sub, val: Math.max(0, q) * (Number(StockAPI.unitPrice(a)) || 0) });
     });
     return out.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'pf' ? -1 : 1) || (a.kind === 'mat' ? a.sub.localeCompare(b.sub, 'fr') : 0) || a.nom.localeCompare(b.nom, 'fr'));
   }
 
-  /* ---------- Liste ---------- */
+  /* ---------- Liste : une seule case (en-tête, chiffres clés, recherche, tableau) ---------- */
+  const alerte = i => i.etat && (i.etat.c === 'r' || i.etat.c === 'o');
   function render() {
     const all = items(), q = norm($('#sp-q').value || '');
-    const nPf = all.filter(i => i.kind === 'pf').length, nMat = all.length - nPf;
+    const pf = all.filter(i => i.kind === 'pf'), mat = all.filter(i => i.kind === 'mat');
+    const nAl = all.filter(alerte).length, nRup = all.filter(i => i.etat && i.etat.c === 'r').length;
+    const vPf = pf.reduce((s, i) => s + i.val, 0), vMat = mat.reduce((s, i) => s + i.val, 0);
+    const k = $('#sk-kpis');
+    if (k) k.innerHTML =
+      '<button type="button" class="sk-k" data-f="pf"><span>Modèles finis</span><b>' + num(pf.reduce((s, i) => s + Math.max(0, i.q), 0), 0) + ' pcs</b><small>' + pf.length + ' modèle(s) · ' + money(Math.round(vPf)) + '</small></button>' +
+      '<button type="button" class="sk-k" data-f="mat"><span>Éléments de production</span><b>' + money(Math.round(vMat)) + '</b><small>' + mat.length + ' élément(s)</small></button>' +
+      '<button type="button" class="sk-k sk-kr" data-f="alerte"><span>À surveiller</span><b>' + nAl + '</b><small>' + nRup + ' en rupture · ' + (nAl - nRup) + ' stock bas</small></button>' +
+      '<div class="sk-k sk-kt"><span>Valeur totale du stock</span><b>' + money(Math.round(vPf + vMat)) + '</b><small>au coût de revient / prix d’achat</small></div>';
     $('#sp-chips').innerHTML =
       '<button type="button" class="chip' + (filtre === 'all' ? ' on' : '') + '" data-f="all">Tout <b>' + all.length + '</b></button>' +
-      '<button type="button" class="chip' + (filtre === 'pf' ? ' on' : '') + '" data-f="pf">Modèles finis <b>' + nPf + '</b></button>' +
-      '<button type="button" class="chip' + (filtre === 'mat' ? ' on' : '') + '" data-f="mat">Éléments <b>' + nMat + '</b></button>';
+      '<button type="button" class="chip' + (filtre === 'pf' ? ' on' : '') + '" data-f="pf">Modèles finis <b>' + pf.length + '</b></button>' +
+      '<button type="button" class="chip' + (filtre === 'mat' ? ' on' : '') + '" data-f="mat">Éléments <b>' + mat.length + '</b></button>' +
+      '<button type="button" class="chip sk-cal' + (filtre === 'alerte' ? ' on' : '') + '" data-f="alerte">⚠ À surveiller <b>' + nAl + '</b></button>';
+    $$('#sk-kpis [data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === filtre));
     $('#sp-empty').style.display = all.length ? 'none' : '';
     $('#sp-card').style.display = all.length ? '' : 'none';
     if (!all.length) {
-      $('#sp-empty').innerHTML = '<h2>Commençons</h2><p>Ajoutez un premier <b>modèle fini</b> (ce que vous vendez) ou un premier <b>élément de production</b> (tissu, doublure, sangle…). Ensuite, entrez les quantités.</p>' +
-        '<button class="btn p" type="button" onclick="spNouveau(\'pf\')">+ Nouveau modèle fini</button> <button class="btn p" type="button" onclick="spNouveau(\'mat\')">+ Nouvel élément</button>';
+      $('#sp-empty').innerHTML = '<div class="sk-vide"><h2>Commençons</h2><p>Ajoutez un premier <b>modèle fini</b> (ce que vous vendez) ou un premier <b>élément de production</b> (tissu, doublure, sangle…). Ensuite, entrez les quantités.</p>' +
+        '<button class="btn p" type="button" onclick="spNouveau(\'pf\')">+ Nouveau modèle fini</button> <button class="btn p" type="button" onclick="spNouveau(\'mat\')">+ Nouvel élément</button></div>';
       return;
     }
-    const list = all.filter(i => (filtre === 'all' || i.kind === filtre) && (!q || norm(i.nom + ' ' + i.sub).includes(q)));
-    $('#sp-tbody').innerHTML = list.length ? list.map(i =>
-      '<tr><td><b>' + esc(i.nom) + '</b><small>' + esc(i.sub) + '</small></td>' +
-      '<td><b>' + esc(i.main) + '</b>' + (i.sec ? '<small>' + esc(i.sec) + '</small>' : '') + '</td>' +
-      '<td><span class="bd ' + i.etat.c + '">' + esc(i.etat.l) + '</span></td>' +
-      '<td class="emp-act"><button class="btn s p" type="button" onclick="spQ(\'' + i.kind + '\',\'' + esc(i.id) + '\',\'entree\')">+ Entrer</button> ' +
-      '<button class="btn s" type="button" onclick="spQ(\'' + i.kind + '\',\'' + esc(i.id) + '\',\'sortie\')">− Sortir</button> ' +
-      (i.kind === 'pf' ? '<button class="btn s" type="button" onclick="spCompo(\'' + esc(i.id) + '\')">Composition</button> ' : '') +
-      '<button class="btn s" type="button" onclick="spDetail(\'' + i.kind + '\',\'' + esc(i.id) + '\')">Détails</button> ' +
-      '<button class="btn s d" type="button" onclick="spSuppr(\'' + i.kind + '\',\'' + esc(i.id) + '\')">Supprimer</button></td></tr>'
-    ).join('') : '<tr><td colspan="4" class="at-empty">Aucun résultat.</td></tr>';
+    const list = all.filter(i => (filtre === 'all' || (filtre === 'alerte' ? alerte(i) : i.kind === filtre)) && (!q || norm(i.nom + ' ' + i.sub).includes(q)));
+    let prevCat = null;
+    $('#sp-tbody').innerHTML = list.length ? list.map((i, n) => {
+      const cat = i.kind === 'pf' ? 'Modèles finis' : (i.sub || 'Autres');
+      const sep = cat !== prevCat ? '<tr class="sk-sep"><td colspan="6">' + esc(cat) + '</td></tr>' : ''; prevCat = cat;
+      return sep + '<tr class="sk-row' + (alerte(i) ? ' sk-al' : '') + '"><td class="sk-n">' + (n + 1) + '</td>' +
+        '<td class="sk-nom"><i class="sk-ic">' + (i.kind === 'pf' ? '👜' : '🧵') + '</i><div><b>' + esc(i.nom) + '</b><small>' + esc(i.sub) + '</small></div></td>' +
+        '<td class="sk-r sk-q' + (i.q < 0 ? ' sk-neg' : '') + '"><b>' + esc(i.main) + '</b>' + (i.sec ? '<small>' + esc(i.sec) + '</small>' : '') + '</td>' +
+        '<td><span class="bd ' + i.etat.c + '">' + esc(i.etat.l) + '</span></td>' +
+        '<td class="sk-r sk-v">' + (i.val > 0 ? money(Math.round(i.val)) : '<small>—</small>') + '</td>' +
+        '<td class="sk-r sk-act"><button class="sk-a sk-in" type="button" title="Entrer en stock" onclick="spQ(\'' + i.kind + '\',\'' + esc(i.id) + '\',\'entree\')">＋ Entrer</button>' +
+        '<button class="sk-a sk-out" type="button" title="Sortir du stock" onclick="spQ(\'' + i.kind + '\',\'' + esc(i.id) + '\',\'sortie\')">− Sortir</button>' +
+        (i.kind === 'pf' ? '<button class="sk-a" type="button" title="Composition (éléments pour 1 pièce)" onclick="spCompo(\'' + esc(i.id) + '\')">🧩</button>' : '') +
+        '<button class="sk-a" type="button" title="Détails et historique" onclick="spDetail(\'' + i.kind + '\',\'' + esc(i.id) + '\')">📋</button>' +
+        '<button class="sk-a sk-del" type="button" title="Supprimer" onclick="spSuppr(\'' + i.kind + '\',\'' + esc(i.id) + '\')">🗑</button></td></tr>';
+    }).join('') : '<tr><td colspan="6" class="at-empty">Aucun résultat' + (q ? ' pour « ' + esc($('#sp-q').value) + ' »' : '') + '.</td></tr>';
+    const c = $('#sk-cnt'); if (c) c.textContent = list.length + ' ligne(s) affichée(s) sur ' + all.length;
   }
   /* Supprimer un modèle fini ou un élément du stock (avec son historique de mouvements) */
   async function supprimer(kind, id) {
@@ -105,9 +122,9 @@
   /* ---------- Un seul formulaire ouvert à la fois ---------- */
   function ouvrir(sel) {
     ['#sp-nform', '#sp-qform', '#sp-cform'].forEach(s => { $(s).style.display = s === sel ? 'block' : 'none'; });
-    if (sel) $(sel).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.body.classList.toggle('sk-modal', !!sel);
   }
-  function fermer() { cur = null; comp = null; ['#sp-nform', '#sp-qform', '#sp-cform'].forEach(s => { $(s).style.display = 'none'; }); }
+  function fermer() { cur = null; comp = null; ['#sp-nform', '#sp-qform', '#sp-cform'].forEach(s => { $(s).style.display = 'none'; }); document.body.classList.remove('sk-modal'); }
 
   /* ============================================================
      1) AJOUTER UN NOM
@@ -479,6 +496,10 @@
   });
   $('#sp-q').addEventListener('input', render);
   $('#sp-chips').addEventListener('click', ev => { const b = ev.target.closest('[data-f]'); if (b) { filtre = b.dataset.f; render(); } });
+  { const k = $('#sk-kpis'); if (k) k.addEventListener('click', ev => { const b = ev.target.closest('[data-f]'); if (b) { filtre = filtre === b.dataset.f ? 'all' : b.dataset.f; render(); } }); }
+  // fenêtres (ajouter un nom, entrer / sortir, composition) : Échap ou clic à côté pour fermer
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && document.body.classList.contains('sk-modal') && !document.querySelector('.ch-list:not([hidden])')) fermer(); });
+  { const bg = document.createElement('div'); bg.id = 'sk-bg'; document.body.appendChild(bg); bg.addEventListener('mousedown', fermer); }
   $('#st-pane-simple').addEventListener('click', ev => {
     const g = ev.target.closest('[data-go-v]');
     if (g) { ev.preventDefault(); const b = document.querySelector('nav button[data-v="' + g.dataset.goV + '"]'); if (b) b.click(); return; }

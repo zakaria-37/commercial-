@@ -13,27 +13,27 @@
 <meta name="format-detection" content="telephone=yes">
 <title>MARIA BAG – Suivi commercial</title>
 <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png">
-<link rel="stylesheet" href="css/styles.css?v=194">
-<link rel="stylesheet" href="css/login.css?v=194">
-<link rel="stylesheet" href="css/production.css?v=194">
-<link rel="stylesheet" href="css/produits.css?v=194">
-<link rel="stylesheet" href="css/stock.css?v=194">
-<link rel="stylesheet" href="css/pf.css?v=194">
-<link rel="stylesheet" href="css/simple.css?v=194">
-<link rel="stylesheet" href="css/theme_mca.css?v=194">
-<link rel="stylesheet" href="css/sombre_auto.css?v=194">
-<link rel="stylesheet" href="css/themes.css?v=194">
-<link rel="stylesheet" href="css/partenaires.css?v=194">
-<link rel="stylesheet" href="css/inventaire.css?v=194">
-<link rel="stylesheet" href="css/paiements.css?v=194">
-<link rel="stylesheet" href="css/commerce.css?v=194">
-<link rel="stylesheet" href="css/employes.css?v=194">
-<link rel="stylesheet" href="css/notes.css?v=194">
-<link rel="stylesheet" href="css/profil.css?v=194">
-<link rel="stylesheet" href="css/zacksmart.css?v=194">
-<link rel="stylesheet" href="css/ateliers_paiements.css?v=194">
-<link rel="stylesheet" href="css/dashboard.css?v=194">
-<link rel="stylesheet" href="css/mobile.css?v=194">
+<link rel="stylesheet" href="css/styles.css?v=195">
+<link rel="stylesheet" href="css/login.css?v=195">
+<link rel="stylesheet" href="css/production.css?v=195">
+<link rel="stylesheet" href="css/produits.css?v=195">
+<link rel="stylesheet" href="css/stock.css?v=195">
+<link rel="stylesheet" href="css/pf.css?v=195">
+<link rel="stylesheet" href="css/simple.css?v=195">
+<link rel="stylesheet" href="css/theme_mca.css?v=195">
+<link rel="stylesheet" href="css/sombre_auto.css?v=195">
+<link rel="stylesheet" href="css/themes.css?v=195">
+<link rel="stylesheet" href="css/partenaires.css?v=195">
+<link rel="stylesheet" href="css/inventaire.css?v=195">
+<link rel="stylesheet" href="css/paiements.css?v=195">
+<link rel="stylesheet" href="css/commerce.css?v=195">
+<link rel="stylesheet" href="css/employes.css?v=195">
+<link rel="stylesheet" href="css/notes.css?v=195">
+<link rel="stylesheet" href="css/profil.css?v=195">
+<link rel="stylesheet" href="css/zacksmart.css?v=195">
+<link rel="stylesheet" href="css/ateliers_paiements.css?v=195">
+<link rel="stylesheet" href="css/dashboard.css?v=195">
+<link rel="stylesheet" href="css/mobile.css?v=195">
 <style>
 /* Module Ateliers MARIA BAG */
 .at-wrap{display:grid;gap:16px}.at-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 16px}.at-tabs button{border:1px solid var(--line,#ddd);background:var(--card,#fff);padding:10px 14px;border-radius:9px;cursor:pointer}.at-tabs button.on{background:var(--ink,#171717);color:#fff}.at-pane{display:none}.at-pane.on{display:block}.at-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:12px;margin:12px 0}.at-stat{padding:16px;border:1px solid var(--line,#e5e5e5);border-radius:12px;background:var(--card,#fff)}.at-stat span{display:block;color:var(--mut,#777);font-size:13px}.at-stat b{font-size:25px;display:block;margin-top:6px}.at-form{display:none;margin:14px 0;padding:16px;border:1px solid var(--line,#ddd);border-radius:12px;background:var(--card,#fff)}.at-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));gap:12px}.at-fields label{display:grid;gap:5px;font-size:13px;color:var(--mut,#555)}.at-fields input,.at-fields select,.at-fields textarea{width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit;color:inherit;background:transparent}.at-fields textarea{min-height:70px}.at-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.at-scroll{overflow:auto}.at-scroll table{min-width:850px;width:100%;border-collapse:collapse}.at-scroll th,.at-scroll td{padding:10px;text-align:left;border-bottom:1px solid var(--line,#eee);font-size:13px}.at-empty{padding:20px;text-align:center;color:var(--mut,#777)}#toastA{display:none;position:fixed;right:20px;bottom:20px;z-index:1000;background:#222;color:#fff;padding:12px 16px;border-radius:10px;max-width:80vw}@media(max-width:700px){.at-fields{grid-template-columns:1fr}}
@@ -334,15 +334,6 @@
 
   <!-- ======================= STOCK SIMPLE : noms puis quantités ======================= -->
   <div id="st-pane-simple">
-    <div class="card sp-hero">
-      <div class="sp-steps"><span><b>1</b> Ajoutez les noms, un par un</span><span><b>2</b> Entrez les quantités : elles vont directement dans le bon stock</span></div>
-      <div class="sp-big">
-        <button class="btn p" type="button" onclick="spNouveau('pf')">+ Nouveau modèle fini</button>
-        <button class="btn p" type="button" onclick="spNouveau('mat')">+ Nouvel élément de production</button>
-      </div>
-      <p class="pr-help" style="margin:10px 0 0"><b>Modèle fini</b> = ce que vous vendez (sac à dos, cabas…). <b>Élément de production</b> = ce qui sert à le fabriquer (tissu Kawi, doublure, sangle, curseur…).</p>
-    </div>
-
     <form id="sp-nform" class="at-form">
       <h2 id="sp-ntitle" style="margin-top:0">Nouveau nom</h2>
       <div class="pr-type" id="sp-ntype">
@@ -391,12 +382,23 @@
       <div class="at-actions"><button class="btn p" type="submit">Enregistrer la composition</button><button class="btn" type="button" onclick="spFermer()">Fermer</button></div>
     </form>
 
-    <div class="tools">
-      <input id="sp-q" type="search" placeholder="Rechercher un nom…">
-      <span class="sp-chips" id="sp-chips"></span>
+    <div class="card sk">
+      <div class="sk-head">
+        <div class="sk-id"><span class="sk-kind">Stock de l’atelier</span><h2>Tout le stock</h2></div>
+        <div class="sk-btns">
+          <button class="btn sk-b1" type="button" onclick="spNouveau('pf')">＋ Modèle fini</button>
+          <button class="btn sk-b2" type="button" onclick="spNouveau('mat')">＋ Élément de production</button>
+        </div>
+      </div>
+      <div class="sk-kpis" id="sk-kpis"></div>
+      <div class="sk-tools">
+        <input id="sp-q" type="search" placeholder="🔍 Rechercher un nom, une catégorie…" autocomplete="off">
+        <span class="sp-chips" id="sp-chips"></span>
+      </div>
+      <div id="sp-empty" style="display:none"></div>
+      <div class="sk-tw" id="sp-card"><table class="sk-tbl no-cards"><thead><tr><th class="sk-n">#</th><th>Nom</th><th class="sk-r">En stock</th><th>État</th><th class="sk-r">Valeur</th><th class="sk-r">Actions</th></tr></thead><tbody id="sp-tbody"></tbody></table></div>
+      <div class="sk-foot"><span><b>Modèle fini</b> = ce que vous vendez · <b>Élément</b> = ce qui sert à le fabriquer (tissu, doublure, sangle…)</span><span id="sk-cnt"></span></div>
     </div>
-    <div id="sp-empty" class="card" style="display:none"></div>
-    <div class="card" id="sp-card"><div class="at-scroll"><table style="min-width:640px"><thead><tr><th>Nom</th><th>En stock</th><th>État</th><th>Actions</th></tr></thead><tbody id="sp-tbody"></tbody></table></div></div>
     <p class="pr-help sp-links">Plus de détails : <a href="#" data-go-v="produits">coût de revient des produits</a> · <a href="#" data-go-v="production">fiche matières et bon de sortie</a> · onglets « Détail » ci-dessus (prix d’achat, seuils d’alerte, livraisons, historique).</p>
   </div>
 
@@ -780,49 +782,49 @@
 <script src="lib/xlsx.full.min.js"></script>
 <script src="lib/jspdf.umd.min.js"></script>
 <script src="lib/jspdf.plugin.autotable.min.js"></script>
-<script src="js/pdf_partage.js?v=194"></script>
-<script src="js/config.js?v=194"></script>
-<script src="js/local-db.js?v=194"></script>
-<script src="js/auth.js?v=194"></script>
-<script src="js/app.js?v=194"></script>
-<script src="js/recherche_select.js?v=194"></script>
-<script src="js/ateliers.js?v=194"></script>
-<script src="js/employes.js?v=194"></script>
-<script src="js/hs_cumul.js?v=194"></script>
-<script src="js/fiche_paie.js?v=194"></script>
-<script src="js/charges.js?v=194"></script>
-<script src="js/stock.js?v=194"></script>
-<script src="js/pf.js?v=194"></script>
-<script src="js/partenaires.js?v=194"></script>
-<script src="js/paiements.js?v=194"></script>
-<script src="js/benefices.js?v=194"></script>
-<script src="js/commerce.js?v=194"></script>
-<script src="js/commerce_fin.js?v=194"></script>
-<script src="js/profil.js?v=194"></script>
-<script src="js/onglets.js?v=194"></script>
-<script src="js/equipe.js?v=194"></script>
-<script src="js/notes.js?v=194"></script>
-<script src="js/zacksmart_data.js?v=194"></script>
-<script src="js/zacksmart.js?v=194"></script>
-<script src="js/inventaire.js?v=194"></script>
-<script src="js/simple.js?v=194"></script>
-<script src="js/acces.js?v=194"></script>
-<script src="js/themes.js?v=194"></script>
-<script src="js/sorties.js?v=194"></script>
-<script src="js/push.js?v=194"></script>
-<script src="js/magasins.js?v=194"></script>
-<script src="js/yards.js?v=194"></script>
-<script src="js/ateliers_paiements.js?v=194"></script>
-<script src="js/production.js?v=194"></script>
-<script src="js/production_mobile.js?v=194"></script>
-<script src="js/produits.js?v=194"></script>
-<script src="js/calepinage.js?v=194"></script>
-<script src="js/produits_mobile.js?v=194"></script>
-<script src="js/gabarits_vue.js?v=194"></script>
-<script src="js/dashboard.js?v=194"></script>
-<script src="js/mobile.js?v=194"></script>
-<script src="js/sauvegarde.js?v=194"></script>
-<script src="js/install.js?v=194"></script>
-<script src="js/version.js?v=194"></script>
+<script src="js/pdf_partage.js?v=195"></script>
+<script src="js/config.js?v=195"></script>
+<script src="js/local-db.js?v=195"></script>
+<script src="js/auth.js?v=195"></script>
+<script src="js/app.js?v=195"></script>
+<script src="js/recherche_select.js?v=195"></script>
+<script src="js/ateliers.js?v=195"></script>
+<script src="js/employes.js?v=195"></script>
+<script src="js/hs_cumul.js?v=195"></script>
+<script src="js/fiche_paie.js?v=195"></script>
+<script src="js/charges.js?v=195"></script>
+<script src="js/stock.js?v=195"></script>
+<script src="js/pf.js?v=195"></script>
+<script src="js/partenaires.js?v=195"></script>
+<script src="js/paiements.js?v=195"></script>
+<script src="js/benefices.js?v=195"></script>
+<script src="js/commerce.js?v=195"></script>
+<script src="js/commerce_fin.js?v=195"></script>
+<script src="js/profil.js?v=195"></script>
+<script src="js/onglets.js?v=195"></script>
+<script src="js/equipe.js?v=195"></script>
+<script src="js/notes.js?v=195"></script>
+<script src="js/zacksmart_data.js?v=195"></script>
+<script src="js/zacksmart.js?v=195"></script>
+<script src="js/inventaire.js?v=195"></script>
+<script src="js/simple.js?v=195"></script>
+<script src="js/acces.js?v=195"></script>
+<script src="js/themes.js?v=195"></script>
+<script src="js/sorties.js?v=195"></script>
+<script src="js/push.js?v=195"></script>
+<script src="js/magasins.js?v=195"></script>
+<script src="js/yards.js?v=195"></script>
+<script src="js/ateliers_paiements.js?v=195"></script>
+<script src="js/production.js?v=195"></script>
+<script src="js/production_mobile.js?v=195"></script>
+<script src="js/produits.js?v=195"></script>
+<script src="js/calepinage.js?v=195"></script>
+<script src="js/produits_mobile.js?v=195"></script>
+<script src="js/gabarits_vue.js?v=195"></script>
+<script src="js/dashboard.js?v=195"></script>
+<script src="js/mobile.js?v=195"></script>
+<script src="js/sauvegarde.js?v=195"></script>
+<script src="js/install.js?v=195"></script>
+<script src="js/version.js?v=195"></script>
 </body>
 </html>
