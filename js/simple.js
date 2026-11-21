@@ -51,6 +51,7 @@
   /* ---------- Liste : une seule case (en-tête, chiffres clés, recherche, tableau) ---------- */
   const alerte = i => i.etat && (i.etat.c === 'r' || i.etat.c === 'o');
   function render() {
+    ajusterBientot();
     const all = items(), q = norm($('#sp-q').value || '');
     const pf = all.filter(i => i.kind === 'pf'), mat = all.filter(i => i.kind === 'mat');
     const nAl = all.filter(alerte).length, nRup = all.filter(i => i.etat && i.etat.c === 'r').length;
@@ -92,6 +93,19 @@
     }).join('') : '<tr><td colspan="6" class="at-empty">Aucun résultat' + (q ? ' pour « ' + esc($('#sp-q').value) + ' »' : '') + '.</td></tr>';
     const c = $('#sk-cnt'); if (c) c.textContent = list.length + ' ligne(s) affichée(s) sur ' + all.length;
   }
+  /* Une seule barre de défilement (celle de la page) : la liste n'a plus la sienne,
+     et les titres des colonnes restent collés sous le menu et les onglets pendant qu'on descend */
+  function ajuster() {
+    const sk = document.querySelector('.sk'), v = $('#v-stock');
+    const actif = !!(sk && v && v.classList.contains('on'));
+    document.body.classList.toggle('sk-plein', actif);
+    if (!actif) return;
+    const h = document.querySelector('header'), t = document.getElementById('tabbar');
+    let top = 0;
+    [h, t].forEach(e => { if (e && getComputedStyle(e).position === 'sticky' && e.offsetParent !== null) top = Math.max(top, e.getBoundingClientRect().bottom); });
+    sk.style.setProperty('--sk-top', Math.max(0, Math.round(top)) + 'px');
+  }
+  let ajT = null; const ajusterBientot = () => { clearTimeout(ajT); ajT = setTimeout(ajuster, 60); };
   /* Supprimer un modèle fini ou un élément du stock (avec son historique de mouvements) */
   async function supprimer(kind, id) {
     const pf = kind === 'pf';
@@ -512,9 +526,11 @@
   if (out && !$('#bMode')) { const b = document.createElement('button'); b.id = 'bMode'; b.type = 'button'; b.className = 'btn'; b.addEventListener('click', basculerMode); out.parentNode.insertBefore(b, out); }
   appliquerMode();
 
+  window.addEventListener('resize', ajusterBientot);
+  document.addEventListener('click', ev => { if (ev.target.closest('nav button, #st-tabs button, .tabbar, [data-go-v]')) ajusterBientot(); });
   document.addEventListener('mariabag:stock', render);
   document.addEventListener('mariabag:pf', render);
-  document.addEventListener('mariabag:stockpane', ev => { if (ev.detail === 'simple') chargerTout(); });
+  document.addEventListener('mariabag:stockpane', ev => { if (ev.detail === 'simple') chargerTout(); ajusterBientot(); });
   document.addEventListener('mariabag:authenticated', chargerTout);
   document.querySelector('nav button[data-v="stock"]').addEventListener('click', chargerTout);
   if (!document.getElementById('app').classList.contains('hide')) chargerTout();

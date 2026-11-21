@@ -118,3 +118,9 @@ body.theme-dark .sk-k{background:var(--card)}
   #st-pane-simple .sk-tbl tr.sk-row td.sk-act .sk-a{margin:0;flex:1 1 auto;padding:8px 6px}
   body.sk-modal #sp-nform,body.sk-modal #sp-qform,body.sk-modal #sp-cform{top:auto;bottom:0;left:0;transform:none;width:100%;max-height:92vh;border-radius:18px 18px 0 0;animation:none}
 }
+/* Une seule barre de défilement : celle de la page. Titres des colonnes collés sous le menu. */
+body.sk-plein #st-pane-simple .sk{overflow:visible}
+body.sk-plein #st-pane-simple .sk-head{border-radius:16px 16px 0 0}
+body.sk-plein #st-pane-simple .sk-tw{max-height:none;min-height:0;overflow:visible}
+body.sk-plein #st-pane-simple .sk-tbl thead th{top:var(--sk-top,0px);z-index:3;box-shadow:0 1px 0 #111}
+body.sk-plein #st-pane-simple .sk-foot{border-radius:0 0 16px 16px}
