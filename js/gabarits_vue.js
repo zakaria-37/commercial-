@@ -169,7 +169,8 @@
     // Dans 1 m de cette matière : produits complets, et pièces (tous gabarits) = pièces d'un produit ÷ mètres d'un produit
     const pcsProd = res.lignes.reduce((x, l) => x + (Number(l.g.n) || 0), 0), parM = res.total > 0 ? 1 / res.total : 0;
     // tissu utile (surface des pièces) et CHUTE (largeur perdue + espaces) : comptés tous les deux dans les mètres d'un produit
-    const utile = l => (Number(l.g.n) || 0) * (Number(l.g.l) || 0) * (Number(l.g.h) || 0) / (W * 100);
+    const aireG = g => g.forme && g.forme !== 'rect' && window.Formes ? Formes.aire(g) : (Number(g.l) || 0) * (Number(g.h) || 0);
+    const utile = l => (Number(l.g.n) || 0) * aireG(l.g) / (W * 100);
     const mUtile = res.lignes.reduce((x, l) => x + utile(l), 0), mChute = Math.max(0, res.total - mUtile), pcChute = res.total > 0 ? mChute / res.total * 100 : 0;
     h += '<div class="gb-kpis"><div><span>Pour 1 produit</span><b>' + nf(res.total, 4) + ' m</b><small>' + (pu ? nf(res.total * pu, 2) + ' DA' : '') + (mChute >= 0.00005 ? ' · dont espaces ' + nf(mChute, 4) + ' m (' + nf(pcChute, 1) + ' %)' : ' · chutes de côté utilisées') + '</small></div>' +
       '<div class="gb-k1m"><span>Dans 1 m de tissu</span><b>' + nf(parM * pcsProd, 2) + ' pièces</b><small>= ' + nf(parM, 2) + ' produit' + (parM >= 2 ? 's' : '') + ' complet' + (parM >= 2 ? 's' : '') + ' (' + nf(pcsProd, 2) + ' pièces ÷ ' + nf(res.total, 4) + ' m)</small></div>' +
@@ -178,7 +179,8 @@
       (rl ? '<div><span>' + esc(StockAPI.plur ? StockAPI.plur(a.cond_nom, 2) : a.cond_nom) + ' de ' + nf(rl, 2) + ' m</span><b>' + nf(mReel / rl, 2) + '</b><small>en stock : ' + nf(StockAPI.qty(a.id) / rl, 2) + '</small></div>' : '') + '</div>';
     h += '<div class="gb-list">' + res.lignes.map((x, i) => {
       const n = Math.floor(W / x.court + 1e-9), reste = W - n * x.court, besoin = x.g.n * N, rangs = Math.ceil(besoin / Math.max(1, n));
-      return '<div class="gb-item"><div class="gb-ih"><i class="cp-c" style="background:' + COUL[i % COUL.length] + '"></i><b>' + esc(x.g.nom || 'Gabarit') + '</b><span>' + nf(Math.min(x.g.l, x.g.h), 1) + ' × ' + nf(Math.max(x.g.l, x.g.h), 1) + ' cm · ' + nf(x.g.n, 2) + ' par produit</span></div>' +
+      return '<div class="gb-item"><div class="gb-ih"><i class="cp-c" style="background:' + COUL[i % COUL.length] + '"></i><b>' + esc(x.g.nom || 'Gabarit') + '</b><span>' + (x.emb && window.Formes ? Formes.apercu(x.g, 22, COUL[i % COUL.length]) + ' ' : '') + nf(Math.min(x.g.l, x.g.h), 1) + ' × ' + nf(Math.max(x.g.l, x.g.h), 1) + ' cm · ' + nf(x.g.n, 2) + ' par produit</span></div>' +
+        (x.emb && window.Formes ? '<div class="fm-vue">' + Formes.motif(x.g, COUL[i % COUL.length], 320) + '<p><b>' + esc((Formes.FORMES.find(f => f[0] === x.g.forme) || [, 'Forme'])[1]) + '</b> · ' + (x.emb.txt ? 'coupe ' + esc(x.emb.txt) : 'coupe à la suite') + ' : chaque pièce occupe <b>' + nf(x.emb.w, 1) + ' × ' + nf(x.emb.h, 1) + ' cm</b> au lieu de ' + nf(Formes.dims(x.g).l, 1) + ' × ' + nf(Formes.dims(x.g).h, 1) + ' cm (' + nf(Math.max(0, 100 - x.emb.w * x.emb.h / Math.max(1e-9, Formes.dims(x.g).l * Formes.dims(x.g).h) * 100), 0) + ' % de tissu en moins).</p></div>' : '') +
         rangee(x, W, COUL[i % COUL.length]) +
         '<div class="gb-det"><div><span>Côte à côte (largeur)</span><b>' + nf(x.parRang, 2) + '</b><small>' + n + ' pièces entières' + (reste > .01 ? ' + chute ' + nf(reste, 1) + ' cm utilisée (comptée)' : '') + '</small></div>' +
         '<div><span>Pièces dans 1 m</span><b>' + nf(x.pieces, 2) + '</b><small>(' + nf(W, 0) + ' ÷ ' + nf(x.court, 1) + ') × (100 ÷ ' + nf(x.long, 1) + ')</small></div>' +

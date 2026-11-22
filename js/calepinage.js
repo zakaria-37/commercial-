@@ -33,11 +33,17 @@
   /* ---------- Gabarits du produit ---------- */
   const produitDe = id => (typeof PRODUITS !== 'undefined' ? PRODUITS : []).find(p => String(p.id) === String(id)) || null;
   const lib = p => (p && p.gabarits && Array.isArray(p.gabarits.items) ? p.gabarits.items : []);
-  const perim = g => num(g.p) > 0 ? num(g.p) : 2 * (num(g.l) + num(g.h));
-  const mesure = (g, m) => !g ? 0 : m === 'p' ? perim(g) : m === 'gc' ? Math.max(num(g.l), num(g.h)) : m === 'pc' ? Math.min(num(g.l), num(g.h)) : m === 'l' ? num(g.l) : num(g.h);
+  const FM = () => window.Formes || null;
+  const estForme = g => !!(g && g.forme && g.forme !== 'rect' && FM());
+  const dimsG = g => estForme(g) ? FM().dims(g) : { l: num(g.l), h: num(g.h) };
+  const perimAuto = g => estForme(g) ? FM().perimetre(g) : 2 * (num(g.l) + num(g.h));
+  const perim = g => num(g.p) > 0 ? num(g.p) : perimAuto(g);
+  const mesure = (g, m) => { if (!g) return 0; const d = dimsG(g); return m === 'p' ? perim(g) : m === 'gc' ? Math.max(d.l, d.h) : m === 'pc' ? Math.min(d.l, d.h) : m === 'l' ? d.l : d.h; };
   const estSurface = l => SURFACE_RE.test(String(l.categorie || '') + ' ' + String(l.designation || ''));
   async function sauverLib(p, items) {
-    const gabarits = { items: items.map(g => ({ id: g.id || nid(), nom: String(g.nom || '').trim(), l: num(g.l), h: num(g.h), p: num(g.p) > 0 ? num(g.p) : null })) };
+    const gabarits = { items: items.map(g => { const o = { id: g.id || nid(), nom: String(g.nom || '').trim(), l: num(g.l), h: num(g.h), p: num(g.p) > 0 ? num(g.p) : null };
+      if (g.forme && g.forme !== 'rect') { o.forme = g.forme; if (g.forme === 'rond' || g.forme === 'carre') o.h = o.l; if (g.forme === 'libre' && Array.isArray(g.pts)) o.pts = g.pts; if (g.forme === 'triangle' && g.sommet != null && g.sommet !== '') o.sommet = num(g.sommet); }
+      return o; }) };
     const r = await sb.from('produits').update({ gabarits }).eq('id', p.id).select();
     if (r.error) throw r.error;
     p.gabarits = (r.data && r.data[0] && r.data[0].gabarits) || gabarits;
@@ -52,17 +58,20 @@
     const L = lib(p);
     const tous = (cfg.items || []).map((g, t) => {
       const ref = g.ref ? L.find(x => x.id === g.ref) : null;
-      return { ...g, t, perdu: !!g.ref && !ref, nom: ref ? ref.nom : g.nom, l: num(ref ? ref.l : g.l), h: num(ref ? ref.h : g.h), n: Math.max(0, num(g.n)) };
+      const src = ref || g;
+      return { ...g, t, perdu: !!g.ref && !ref, nom: ref ? ref.nom : g.nom, l: num(src.l), h: num(src.forme === 'rond' || src.forme === 'carre' ? src.l : src.h), n: Math.max(0, num(g.n)), forme: src.forme || 'rect', pts: src.pts, sommet: src.sommet };
     });
     const perdus = tous.filter(g => g.perdu);
     const items = tous.filter(g => !g.perdu && g.l > 0 && g.h > 0 && g.n > 0);
     if (perdus.length) return { lignes: [], W, marge, H, erreur: 'Gabarit supprimé des gabarits du produit : choisissez-en un autre ou retirez la ligne (' + perdus.length + ').' };
     if (!items.length) return null;
     const lignes = items.map(g => {
-      const court = Math.min(g.l, g.h) + marge, long = Math.max(g.l, g.h) + marge;      // grand côté dans le sens du 1 m
+      // forme ronde, triangle, libre : place réellement occupée par une pièce avec l'emboîtement optimisé (quinconce, tête-bêche…)
+      const e = estForme(g) ? FM().empreinte(g) : null, a = e ? e.w : g.l, b = e ? e.h : g.h;
+      const court = Math.min(a, b) + marge, long = Math.max(a, b) + marge;      // grand côté dans le sens du 1 m
       // pièces côte à côte AVEC décimales : la bande restante sur le côté (chute) est utilisée en production, donc comptée
       const parRang = court <= W ? W / court : 0, pieces = parRang ? parRang * H / long : 0;
-      return { g, pieces, parRang, long, court, blocs: parRang ? [{ x: 0, y: 0, w: court, h: long, nx: Math.ceil(parRang), ny: Math.ceil(H / long) }] : [], metres: parRang ? g.n / pieces * H / 100 : null };
+      return { g, emb: e, pieces, parRang, long, court, blocs: parRang ? [{ x: 0, y: 0, w: court, h: long, nx: Math.ceil(parRang), ny: Math.ceil(H / long) }] : [], metres: parRang ? g.n / pieces * H / 100 : null };
     });
     const ko = lignes.filter(x => !x.pieces);
     if (ko.length) return { lignes, W, marge, H, erreur: 'Gabarit plus large que le rouleau (' + nf(W, 0) + ' cm), même avec son petit côté en travers : ' + ko.map(x => x.g.nom || 'sans nom').join(', ') + '.' };
@@ -374,15 +383,27 @@
     box.innerHTML = '<div class="at-actions" style="margin-top:0"><h2 style="margin-right:auto">📐 Gabarits du produit</h2>' +
       '<button type="button" class="btn s" data-gc="add">+ Ajouter un gabarit</button>' +
       '<button type="button" class="btn s p" data-gc="save"' + (modifie ? '' : ' disabled') + '>Enregistrer' + (modifie ? ' et recalculer' : '') + '</button></div>' +
-      '<p class="pr-help">Saisis <b>une seule fois</b> : face, dos, soufflet, fond, poche… Ils servent au métrage du tissu, de la doublure, du PVC (📐) et aux longueurs de fermeture, curseur, tafta, liseré (📏). Le <b>périmètre</b> est calculé (2 × (L + H)) ; corrigez-le pour une forme arrondie. <b>Touche Entrée</b> : case suivante, puis nouveau gabarit.</p>' +
-      (carteItems.length ? '<div class="tw"><table class="iv-tbl cp-tbl cp-gc no-cards"><thead><tr><th>Gabarit</th><th>Largeur (cm)</th><th>Hauteur (cm)</th><th>Périmètre (cm)</th><th>Utilisé dans</th><th></th></tr></thead><tbody>' +
-        carteItems.map((g, i) => { const u = utilisations(g.id); return '<tr data-gi="' + i + '"><td data-cap="Gabarit"><span class="cp-nm"><i class="cp-c" style="background:' + COUL[i % COUL.length] + '"></i><input data-gk="nom" value="' + esc(g.nom) + '" maxlength="40" placeholder="Face, dos, soufflet…"></span></td>' +
-          '<td data-cap="Largeur (cm)"><input data-gk="l" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(g.l || '') + '"></td>' +
-          '<td data-cap="Hauteur (cm)"><input data-gk="h" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(g.h || '') + '"></td>' +
-          '<td data-cap="Périmètre (cm)"><input data-gk="p" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(num(g.p) > 0 ? g.p : '') + '" placeholder="' + nf(2 * (num(g.l) + num(g.h)), 1) + '"></td>' +
+      '<p class="pr-help">Saisis <b>une seule fois</b> : face, dos, soufflet, fond, poche… Ils servent au métrage du tissu, de la doublure, du PVC (📐) et aux longueurs de fermeture, curseur, tafta, liseré (📏). Choisissez la <b>forme</b> : rectangle, carré, rond, triangle ou <b>forme libre</b> (dessinée sur une grille) — le métrage compte alors l’emboîtement réel (ronds en quinconce, triangles tête-bêche…). Le <b>périmètre</b> est calculé selon la forme. <b>Touche Entrée</b> : case suivante, puis nouveau gabarit.</p>' +
+      (carteItems.length ? '<div class="tw"><table class="iv-tbl cp-tbl cp-gc no-cards"><thead><tr><th>Gabarit</th><th>Forme</th><th>Largeur / Ø (cm)</th><th>Hauteur (cm)</th><th>Périmètre (cm)</th><th>Utilisé dans</th><th></th></tr></thead><tbody>' +
+        carteItems.map((g, i) => { const u = utilisations(g.id), f = g.forme || 'rect', fm = FM(), lib1 = f === 'libre', egal = f === 'rond' || f === 'carre';
+          const ap = fm && f !== 'rect' && (num(g.l) > 0 || (lib1 && g.pts)) ? fm.apercu(g, 34, COUL[i % COUL.length]) : '';
+          return '<tr data-gi="' + i + '"><td data-cap="Gabarit"><span class="cp-nm"><i class="cp-c" style="background:' + COUL[i % COUL.length] + '"></i><input data-gk="nom" value="' + esc(g.nom) + '" maxlength="40" placeholder="Face, dos, soufflet…"></span></td>' +
+          '<td data-cap="Forme" class="fm-cell">' + (fm ? '<select data-gk="forme" data-nocherche="1">' + fm.FORMES.map(x => '<option value="' + x[0] + '"' + (x[0] === f ? ' selected' : '') + '>' + x[2] + ' ' + x[1] + '</option>').join('') + '</select>' : '') + ap +
+            (lib1 ? '<button type="button" class="btn s fm-dr" data-gdraw="' + i + '">✏️ ' + (g.pts && g.pts.length >= 3 ? 'Modifier' : 'Dessiner') + '</button>' : '') + '</td>' +
+          '<td data-cap="' + (f === 'rond' ? 'Diamètre (cm)' : f === 'carre' ? 'Côté (cm)' : f === 'triangle' ? 'Base (cm)' : 'Largeur (cm)') + '"><input data-gk="l" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(g.l || '') + '"' + (lib1 ? ' readonly title="Calculé depuis le dessin"' : '') + ' placeholder="' + (f === 'rond' ? 'Ø' : f === 'triangle' ? 'base' : '') + '"></td>' +
+          '<td data-cap="Hauteur (cm)"><input data-gk="h" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(egal ? (g.l || '') : (g.h || '')) + '"' + (egal || lib1 ? ' readonly tabindex="-1"' : '') + '></td>' +
+          '<td data-cap="Périmètre (cm)"><input data-gk="p" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(num(g.p) > 0 && !lib1 ? g.p : '') + '" placeholder="' + nf(perimAuto(g), 1) + '"></td>' +
           '<td data-cap="Utilisé dans" class="cp-use">' + (u.length ? esc(u.join(', ')) : '<small>—</small>') + '</td>' +
           '<td class="cp-del"><button type="button" class="btn s d" data-gdel="' + i + '" title="Supprimer">×</button></td></tr>'; }).join('') + '</tbody></table></div>'
         : '<p class="cp-help">Aucun gabarit pour ce produit. Cliquez sur « + Ajouter un gabarit ».</p>');
+  }
+  async function dessinerG(box, i) {
+    const g = carteItems[i]; if (!g || !FM()) return;
+    const r = await FM().editer(g);
+    if (!r) { if (!(g.pts && g.pts.length >= 3)) { g.forme = 'rect'; rendreCarte(box); } return; }
+    Object.assign(g, { forme: 'libre', pts: r.pts, l: r.l, h: r.h, p: null });
+    modifie = true; rendreCarte(box);
+    const b = box.querySelector('[data-gc=save]'); if (b) { b.disabled = false; b.textContent = 'Enregistrer et recalculer'; }
   }
   function brancher(box) {
     // Touche Entrée : case suivante (nom → largeur → hauteur → périmètre) ; à la fin de la dernière ligne, un nouveau gabarit est ajouté
@@ -397,12 +418,20 @@
     box.addEventListener('input', e => {
       const tr = e.target.closest('tr[data-gi]'); if (!tr || !e.target.dataset.gk) return;
       const g = carteItems[+tr.dataset.gi]; g[e.target.dataset.gk] = e.target.value;
-      if (e.target.dataset.gk !== 'p') { const pi = tr.querySelector('[data-gk=p]'); if (pi) pi.placeholder = nf(2 * (num(g.l) + num(g.h)), 1); }
+      if (e.target.dataset.gk === 'forme') {
+        if ((g.forme === 'rond' || g.forme === 'carre') && num(g.l) > 0) g.h = g.l;
+        g.p = null; modifie = true; rendreCarte(box);
+        if (g.forme === 'libre' && !(g.pts && g.pts.length >= 3)) dessinerG(box, +tr.dataset.gi);
+        return;
+      }
+      if ((g.forme === 'rond' || g.forme === 'carre') && e.target.dataset.gk === 'l') { g.h = g.l; const hi = tr.querySelector('[data-gk=h]'); if (hi) hi.value = g.l; }
+      if (e.target.dataset.gk !== 'p') { const pi = tr.querySelector('[data-gk=p]'); if (pi) pi.placeholder = nf(perimAuto(g), 1); }
       if (!modifie) { modifie = true; const b = box.querySelector('[data-gc=save]'); b.disabled = false; b.textContent = 'Enregistrer et recalculer'; }
     });
     box.addEventListener('click', async e => {
       const t = e.target;
       if (t.dataset.gc === 'add') { carteItems.push({ id: nid(), nom: '', l: '', h: '', p: null }); modifie = true; rendreCarte(box); const ins = box.querySelectorAll('[data-gk=nom]'); ins[ins.length - 1].focus(); return; }
+      const dr = t.closest('[data-gdraw]'); if (dr) { dessinerG(box, +dr.dataset.gdraw); return; }
       const d = t.closest('[data-gdel]');
       if (d) {
         const g = carteItems[+d.dataset.gdel], u = utilisations(g.id);
