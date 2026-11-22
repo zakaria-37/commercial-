@@ -177,6 +177,8 @@
       '<div><span>Pour ' + nf(N, 0) + ' produits (calcul du coût)</span><b>' + nf(mN, 2) + ' m</b><small>' + (pu ? nf(mN * pu, 0) + ' DA' : '') + '</small></div>' +
       '<div><span>Plan de coupe réel</span><b>' + nf(mReel, 2) + ' m</b><small>rangées entières' + (mReel > mN ? ' · +' + nf(mReel - mN, 2) + ' m' : '') + '</small></div>' +
       (rl ? '<div><span>' + esc(StockAPI.plur ? StockAPI.plur(a.cond_nom, 2) : a.cond_nom) + ' de ' + nf(rl, 2) + ' m</span><b>' + nf(mReel / rl, 2) + '</b><small>en stock : ' + nf(StockAPI.qty(a.id) / rl, 2) + '</small></div>' : '') + '</div>';
+    const manq = (lib(p) || []).filter(gb => !(g.items || []).some(it => it.ref === gb.id));
+    if (manq.length) h += '<div class="gb-manq">ℹ️ Gabarits du produit <b>pas encore dans le calcul de cette matière</b> : ' + manq.map(gb => esc(String(gb.nom || '').trim() || 'Gabarit sans nom') + ' (' + nf(gb.l, 1) + ' × ' + nf(gb.h, 1) + ')').join(', ') + ' <button type="button" class="btn s p" data-gbmod="' + esc(l.id) + '" data-type="surface">＋ Les ajouter</button></div>';
     h += '<div class="gb-list">' + res.lignes.map((x, i) => {
       const n = Math.floor(W / x.court + 1e-9), reste = W - n * x.court, besoin = x.g.n * N, rangs = Math.ceil(besoin / Math.max(1, n));
       return '<div class="gb-item"><div class="gb-ih"><i class="cp-c" style="background:' + COUL[i % COUL.length] + '"></i><b>' + esc(x.g.nom || 'Gabarit') + '</b><span>' + (x.emb && window.Formes ? Formes.apercu(x.g, 22, COUL[i % COUL.length]) + ' ' : '') + nf(Math.min(x.g.l, x.g.h), 1) + ' × ' + nf(Math.max(x.g.l, x.g.h), 1) + ' cm · ' + nf(x.g.n, 2) + ' par produit</span></div>' +

@@ -153,6 +153,7 @@
 
   /* ---------- Dessin (surface) ---------- */
   function dessin(x, W, H, coul) {
+    if (x.emb && FM()) return '<div class="cp-svg cp-fm">' + FM().motif(x.g, coul, 200) + '<small>' + esc(x.emb.txt || 'à la suite') + '</small></div>';
     const sc = 0.62 * Math.min(1, 140 / Math.max(W, H));
     let s = '<svg viewBox="0 0 ' + (W * sc) + ' ' + (H * sc) + '" width="' + Math.round(W * sc) + '" height="' + Math.round(H * sc) + '" class="cp-svg"><rect x="0" y="0" width="' + (W * sc) + '" height="' + (H * sc) + '" fill="#f6f2f3" stroke="#999" stroke-width="0.6"/>';
     (x.blocs || []).forEach(b => { for (let i = 0; i < b.nx; i++) for (let j = 0; j < b.ny; j++)
@@ -188,7 +189,9 @@
     prevenir();
     dire(appliquer ? 'Quantité appliquée : ' + nf(patch.quantite, 4) + ' m par produit.' : 'Gabarits enregistrés.');
   }
-  const optsLib = (L, sel, vide) => (vide ? '<option value="">' + vide + '</option>' : '') + L.map(g => '<option value="' + esc(g.id) + '"' + (g.id === sel ? ' selected' : '') + '>' + esc(g.nom || 'Gabarit') + ' (' + nf(g.l, 1) + ' × ' + nf(g.h, 1) + ')</option>').join('');
+  const iconeF = g => { const f = g && g.forme && FM() ? FM().FORMES.find(x => x[0] === g.forme) : null; return f && f[0] !== 'rect' ? f[2] + ' ' : ''; };
+  const nomG = g => String(g && g.nom || '').trim() || 'Gabarit sans nom';
+  const optsLib = (L, sel, vide) => (vide ? '<option value="">' + vide + '</option>' : '') + L.map(g => '<option value="' + esc(g.id) + '"' + (g.id === sel ? ' selected' : '') + '>' + iconeF(g) + esc(nomG(g)) + ' (' + nf(g.l, 1) + ' × ' + nf(g.h, 1) + ')</option>').join('');
 
   /* ---------- Fenêtre SURFACE ---------- */
   function ouvrir(ligneId, opts) {
@@ -208,13 +211,20 @@
       const ref = g.ref ? L.find(x => x.id === g.ref) : null, ro = ref ? ' readonly' : '';
       return '<tr data-i="' + i + '"><td><span class="cp-nm"><i class="cp-c" style="background:' + COUL[i % COUL.length] + '"></i>' +
         (L.length ? '<select data-k="ref" data-nocherche="1" title="Gabarit du produit">' + optsLib(L, g.ref, '✎ Nouveau / autre') + '</select>' : '') +
+        (ref && ref.forme && ref.forme !== 'rect' && FM() ? FM().apercu(ref, 28, COUL[i % COUL.length]) : '') +
+        (!ref && FM() ? '<select data-k="forme" data-nocherche="1" class="cp-fsel" title="Forme du nouveau gabarit">' + FM().FORMES.map(x => '<option value="' + x[0] + '"' + ((g.forme || 'rect') === x[0] ? ' selected' : '') + '>' + x[2] + ' ' + x[1] + '</option>').join('') + '</select>' + (g.forme === 'libre' ? '<button type="button" class="btn s" data-cpdraw="' + i + '">✏️ ' + (g.pts ? 'Modifier' : 'Dessiner') + '</button>' : '') : '') +
         '<input data-k="nom" value="' + esc(ref ? ref.nom : g.nom || '') + '" placeholder="Face, dos, soufflet…" maxlength="40"' + ro + (ref ? ' style="display:none"' : '') + '></span></td>' +
-        '<td data-cap="Largeur (cm)"><input data-k="l" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(ref ? ref.l : g.l) + '" placeholder="cm"' + ro + '></td>' +
-        '<td data-cap="Hauteur (cm)"><input data-k="h" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(ref ? ref.h : g.h) + '" placeholder="cm"' + ro + '></td>' +
+        '<td data-cap="Largeur (cm)"><input data-k="l" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(ref ? ref.l : g.l) + '" placeholder="' + (!ref && g.forme === 'rond' ? 'Ø cm' : 'cm') + '"' + (ro || (!ref && g.forme === 'libre') ? ' readonly' : '') + '></td>' +
+        '<td data-cap="Hauteur (cm)"><input data-k="h" type="number" min="0" step="0.1" inputmode="decimal" value="' + esc(ref ? ref.h : g.h) + '" placeholder="cm"' + (ro || (!ref && (g.forme === 'libre' || g.forme === 'rond' || g.forme === 'carre')) ? ' readonly' : '') + '></td>' +
         '<td data-cap="Nb / produit"><input data-k="n" type="number" min="0" step="1" inputmode="numeric" value="' + esc(g.n) + '"></td>' +
         '<td class="cp-pc n" data-cap="Pièces dans 1 m"></td><td class="cp-m n" data-cap="Mètres / produit"></td><td class="cp-del"><button type="button" class="btn s d" data-del="' + i + '" title="Retirer de cette ligne">×</button></td></tr>';
     };
-    const corps = () => { bg.querySelector('#cp-g').innerHTML = cfg.items.map(ligneG).join(''); };
+    const manquants = () => L.filter(g => !cfg.items.some(x => x.ref === g.id));
+    const corps = () => {
+      bg.querySelector('#cp-g').innerHTML = cfg.items.map(ligneG).join('');
+      const m = manquants(), box = bg.querySelector('#cp-manq');
+      if (box) box.innerHTML = m.length ? '<span>Gabarits du produit <b>pas encore dans ce calcul</b> :</span>' + m.map(g => '<button type="button" class="cp-chip" data-addref="' + esc(g.id) + '">＋ ' + (g.forme && g.forme !== 'rect' && FM() ? FM().apercu(g, 18, '#e8a6b4') + ' ' : '') + esc(nomG(g)) + ' <small>' + nf(g.l, 1) + ' × ' + nf(g.h, 1) + '</small></button>').join('') : '';
+    };
     bg.innerHTML = '<div class="cp-box"><div class="at-actions" style="margin-top:0"><h3 style="margin:0 auto 0 0">📐 Métrage par gabarits — ' + esc(typeof nomLigne === 'function' ? nomLigne(l) : l.designation) + '</h3><button type="button" class="btn s" id="cp-x">Fermer</button></div>' +
       '<ol class="cp-steps"><li>Choisissez les <b>gabarits du produit</b> coupés dans cette matière (ou saisissez-en un nouveau : il sera <b>enregistré dans le produit</b> pour les autres lignes) et le nombre pour <b>1 produit</b>.</li>' +
       '<li><b>Pièces dans 1 m = (largeur du rouleau ÷ petit côté) × (100 ÷ grand côté)</b>, avec virgule. Le côté le plus long est dans le sens de la longueur.</li>' +
@@ -223,6 +233,7 @@
       '<label>Espace entre pièces (cm)<input id="cp-marge" type="number" min="0" step="0.1" value="' + esc(cfg.marge) + '"></label></div>' +
       '<div class="tw"><table class="iv-tbl cp-tbl no-cards"><thead><tr><th>Gabarit</th><th>Largeur (cm)</th><th>Hauteur (cm)</th><th>Nb / produit</th><th class="n">Pièces dans 1 m</th><th class="n">Mètres / produit</th><th></th></tr></thead>' +
       '<tbody id="cp-g"></tbody><tfoot><tr class="cp-tot"><td colspan="5">Total pour 1 produit (assemblage de tous les éléments)</td><td class="n" id="cp-total" colspan="2">—</td></tr></tfoot></table></div>' +
+      '<div class="cp-manq" id="cp-manq"></div>' +
       '<div class="at-actions"><button type="button" class="btn s" id="cp-add">+ Ajouter un gabarit</button>' + (L.length ? '<button type="button" class="btn s" id="cp-all">+ Tous les gabarits du produit</button>' : '') + '</div>' +
       '<div id="cp-res"></div><div id="cp-plans" class="cp-plans"></div></div>';
     corps();
@@ -230,7 +241,8 @@
     function lire() {
       cfg.laize = num(bg.querySelector('#cp-laize').value) || 140; cfg.marge = Math.max(0, num(bg.querySelector('#cp-marge').value));
       bg.querySelectorAll('#cp-g tr[data-i]').forEach(tr => { const g = cfg.items[+tr.dataset.i]; if (!g) return;
-        tr.querySelectorAll('[data-k]').forEach(inp => { g[inp.dataset.k] = inp.value; }); if (!g.ref) delete g.ref; });
+        tr.querySelectorAll('[data-k]').forEach(inp => { g[inp.dataset.k] = inp.value; }); if (!g.ref) delete g.ref;
+        if (!g.ref && (g.forme === 'rond' || g.forme === 'carre')) { g.h = g.l; const hi = tr.querySelector('[data-k=h]'); if (hi) hi.value = g.l; } });
     }
     let res = null;
     function calc() {
@@ -257,6 +269,12 @@
       }
       plans.innerHTML = res ? res.lignes.filter(x => x.pieces).map(x => '<figure>' + dessin(x, res.W, res.H, COUL[x.g.t % COUL.length]) + '<figcaption><b>' + esc(x.g.nom || 'Gabarit') + '</b> : ' + nf(x.pieces, 2) + ' pièces dans 1 m</figcaption></figure>').join('') : '';
     }
+    async function dessinerCp(i) {
+      lire(); const g = cfg.items[i]; if (!g || !FM()) return;
+      const r = await FM().editer(Object.assign({}, g, { forme: 'libre' }));
+      if (r) Object.assign(g, { forme: 'libre', pts: r.pts, l: r.l, h: r.h }); else if (!g.pts) g.forme = 'rect';
+      corps(); calc();
+    }
     async function enregistrer(appliquer) {
       lire();
       // les gabarits saisis à la main sont ajoutés aux gabarits du produit (réutilisables partout)
@@ -265,27 +283,30 @@
         const items = L.slice();
         nouveaux.forEach((g, k) => {
           const nom = String(g.nom || '').trim() || 'Gabarit ' + (items.length + 1);
-          let ex = items.find(x => x.nom.toLowerCase() === nom.toLowerCase() && num(x.l) === num(g.l) && num(x.h) === num(g.h));
-          if (!ex) { ex = { id: nid(), nom, l: num(g.l), h: num(g.h), p: null }; items.push(ex); }
+          let ex = items.find(x => x.nom.toLowerCase() === nom.toLowerCase() && num(x.l) === num(g.l) && num(x.h) === num(g.h) && (x.forme || 'rect') === (g.forme || 'rect'));
+          if (!ex) { ex = { id: nid(), nom, l: num(g.l), h: num(g.h), p: null }; if (g.forme && g.forme !== 'rect') { ex.forme = g.forme; if (g.pts) ex.pts = g.pts; } items.push(ex); }
           g.ref = ex.id;
         });
         try { L = await sauverLib(p, items); } catch (e) { alert('Gabarits non enregistrés dans le produit : ' + (e.message || e)); }
       }
       const r = calculer(cfg, { gabarits: { items: L } }), ctl = controler(cfg, { gabarits: { items: L } }, 'surface');
       if (appliquer && (!r || r.erreur || ctl.err.length)) { alert(ctl.err.join('\n') || (r && r.erreur) || 'Calcul impossible.'); return; }
-      const gab = { laize: laizeCm(cfg.laize) || 140, marge: cfg.marge, items: cfg.items.filter(g => g.ref || num(g.l) > 0).map(g => g.ref ? { ref: g.ref, n: Math.max(0, num(g.n)) } : { nom: g.nom || '', l: num(g.l), h: num(g.h), n: Math.max(0, num(g.n)) }) };
+      const gab = { laize: laizeCm(cfg.laize) || 140, marge: cfg.marge, items: cfg.items.filter(g => g.ref || num(g.l) > 0).map(g => g.ref ? { ref: g.ref, n: Math.max(0, num(g.n)) } : Object.assign({ nom: g.nom || '', l: num(g.l), h: num(g.h), n: Math.max(0, num(g.n)) }, g.forme && g.forme !== 'rect' ? { forme: g.forme, pts: g.pts } : {})) };
       await terminer(ctx, gab, r ? r.total : 0, appliquer, bg);
     }
 
     calc();
     bg.addEventListener('input', e => { if (e.target.closest('.cp-box') && e.target.tagName !== 'SELECT') calc(); });
     bg.addEventListener('change', e => {
-      if (e.target.dataset.k === 'ref') { lire(); const tr = e.target.closest('tr'); const g = cfg.items[+tr.dataset.i]; if (g.ref) { delete g.nom; delete g.l; delete g.h; } corps(); calc(); }
+      if (e.target.dataset.k === 'ref') { lire(); const tr = e.target.closest('tr'); const g = cfg.items[+tr.dataset.i]; if (g.ref) { delete g.nom; delete g.l; delete g.h; delete g.forme; delete g.pts; } corps(); calc(); }
+      if (e.target.dataset.k === 'forme') { lire(); const i = +e.target.closest('tr').dataset.i, g = cfg.items[i]; if (g.forme !== 'libre') delete g.pts; corps(); calc(); if (g.forme === 'libre' && !g.pts) dessinerCp(i); }
     });
     bg.addEventListener('click', e => {
       const t = e.target;
       if (t.id === 'cp-x' || t === bg) { bg.remove(); return; }
       if (t.id === 'cp-add') { lire(); cfg.items.push({ nom: '', l: '', h: '', n: 1 }); corps(); calc(); const ins = bg.querySelectorAll('#cp-g [data-k=nom]'); ins[ins.length - 1].focus(); return; }
+      const dr = t.closest('[data-cpdraw]'); if (dr) { dessinerCp(+dr.dataset.cpdraw); return; }
+      const ad = t.closest('[data-addref]'); if (ad) { lire(); cfg.items = cfg.items.filter(x => x.ref || num(x.l) > 0 || String(x.nom || '').trim()); cfg.items.push({ ref: ad.dataset.addref, n: 1 }); corps(); calc(); return; }
       if (t.id === 'cp-all') { lire(); L.forEach(g => { if (!cfg.items.some(x => x.ref === g.id)) cfg.items.push({ ref: g.id, n: 1 }); }); corps(); calc(); return; }
       const d = t.closest('[data-del]'); if (d) { lire(); cfg.items.splice(+d.dataset.del, 1); corps(); calc(); return; }
       if (t.id === 'cp-apply') { enregistrer(true); return; }
