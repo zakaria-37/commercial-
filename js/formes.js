@@ -137,9 +137,29 @@
       function dessiner() {
         const k = 600 / S; let s = '';
         svg.setAttribute('viewBox', '0 0 600 600');
-        for (let i = 0; i <= S; i++) { const w = i % 10 === 0 ? 1.2 : i % 5 === 0 ? .7 : .3, c = i % 10 === 0 ? '#9c8f93' : '#d9d1d3'; s += '<line x1="' + i * k + '" y1="0" x2="' + i * k + '" y2="600" stroke="' + c + '" stroke-width="' + w + '"/><line x1="0" y1="' + (600 - i * k) + '" x2="600" y2="' + (600 - i * k) + '" stroke="' + c + '" stroke-width="' + w + '"/>'; if (i % 10 === 0 && i) s += '<text x="' + (i * k + 2) + '" y="596" class="fm-t">' + i + '</text><text x="2" y="' + (600 - i * k - 2) + '" class="fm-t">' + i + '</text>'; }
+        // grille : le 0 est au coin bas-gauche de la forme (O = 2 cm de marge pour pouvoir cliquer)
+        const O = 2;
+        for (let i = 0; i <= S; i++) { const j = i - O, maj = j % 10 === 0, mid = j % 5 === 0, w = maj ? 1.2 : mid ? .7 : .3, c = maj ? '#9c8f93' : '#d9d1d3'; s += '<line x1="' + i * k + '" y1="0" x2="' + i * k + '" y2="600" stroke="' + c + '" stroke-width="' + w + '"/><line x1="0" y1="' + (600 - i * k) + '" x2="600" y2="' + (600 - i * k) + '" stroke="' + c + '" stroke-width="' + w + '"/>'; if (maj && j >= 0) s += '<text x="' + (i * k + 2) + '" y="596" class="fm-t">' + j + '</text>' + (j ? '<text x="2" y="' + (600 - i * k - 2) + '" class="fm-t">' + j + '</text>' : ''); }
         if (pts.length >= 2) s += '<path d="M' + pts.map(p => p[0] * k + ' ' + (600 - p[1] * k)).join('L') + (pts.length >= 3 ? 'Z' : '') + '" fill="' + (pts.length >= 3 ? 'rgba(232,166,180,.55)' : 'none') + '" stroke="#b3261e" stroke-width="2"/>';
         if (pts.length >= 3) pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length], mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2; s += '<g class="fm-mid" data-mid="' + i + '"><circle cx="' + mx * k + '" cy="' + (600 - my * k) + '" r="7"/><text x="' + mx * k + '" y="' + (600 - my * k + 4) + '" text-anchor="middle">+</text></g>'; });
+        // cotes : longueur de chaque côté (à l'extérieur de la forme) + largeur et hauteur totales
+        if (pts.length >= 2) {
+          let sa = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; sa += a[0] * b[1] - b[0] * a[1]; }
+          const sens = sa >= 0 ? 1 : -1, nE = pts.length >= 3 ? pts.length : 1;
+          for (let i = 0; i < nE; i++) {
+            const a = pts[i], b = pts[(i + 1) % pts.length], dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy); if (L < 0.25) continue;
+            const nx = dy / L * sens, ny = -dx / L * sens, off = 15 / k, mx = (a[0] + b[0]) / 2 + nx * off, my = (a[1] + b[1]) / 2 + ny * off;
+            s += '<text class="fm-cote" x="' + (mx * k) + '" y="' + (600 - my * k + 4) + '" text-anchor="middle">' + nf(L) + '</text>';
+          }
+          if (pts.length >= 3) {
+            const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+            const yb = 600 - y1 * k - 26, xg = x1 * k + 26;
+            s += '<g class="fm-tot"><line x1="' + x0 * k + '" y1="' + yb + '" x2="' + x1 * k + '" y2="' + yb + '"/><line x1="' + x0 * k + '" y1="' + (yb - 6) + '" x2="' + x0 * k + '" y2="' + (yb + 6) + '"/><line x1="' + x1 * k + '" y1="' + (yb - 6) + '" x2="' + x1 * k + '" y2="' + (yb + 6) + '"/>' +
+              '<text x="' + ((x0 + x1) / 2 * k) + '" y="' + (yb - 6) + '" text-anchor="middle">largeur ' + nf(x1 - x0) + ' cm</text>' +
+              '<line x1="' + xg + '" y1="' + (600 - y0 * k) + '" x2="' + xg + '" y2="' + (600 - y1 * k) + '"/><line x1="' + (xg - 6) + '" y1="' + (600 - y0 * k) + '" x2="' + (xg + 6) + '" y2="' + (600 - y0 * k) + '"/><line x1="' + (xg - 6) + '" y1="' + (600 - y1 * k) + '" x2="' + (xg + 6) + '" y2="' + (600 - y1 * k) + '"/>' +
+              '<text transform="translate(' + (xg + 16) + ' ' + (600 - (y0 + y1) / 2 * k) + ') rotate(90)" text-anchor="middle">hauteur ' + nf(y1 - y0) + ' cm</text></g>';
+          }
+        }
         pts.forEach((p, i) => { s += '<circle class="fm-pt' + (i === 0 ? ' fm-p0' : '') + '" data-pt="' + i + '" cx="' + p[0] * k + '" cy="' + (600 - p[1] * k) + '" r="8"/>'; });
         svg.innerHTML = s;
         const ok = pts.length >= 3, b = ok ? bbox(pts) : { w: 0, h: 0 };
