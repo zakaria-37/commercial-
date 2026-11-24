@@ -250,7 +250,7 @@
       const pm = prixM();
       bg.querySelectorAll('#cp-g tr[data-i]').forEach(tr => {
         const x = res && res.lignes.find(y => y.g.t === +tr.dataset.i);
-        tr.querySelector('.cp-pc').innerHTML = x ? (x.pieces ? '<b>' + nf(x.pieces, 2) + '</b><small>(' + nf(res.W, 2) + ' ÷ ' + nf(x.court, 2) + ') × (100 ÷ ' + nf(x.long, 2) + ')</small>' : '<span class="cp-err">trop grand</span>') : '—';
+        tr.querySelector('.cp-pc').innerHTML = x ? (x.pieces ? '<b>' + nf(x.pieces, 2) + '</b><small>' + (x.emb && x.emb.lat ? '(' + nf(res.W, 0) + ' × 100) ÷ ' + nf(x.court * x.long, 0) + ' cm² par pièce' : '(' + nf(res.W, 2) + ' ÷ ' + nf(x.court, 2) + ') × (100 ÷ ' + nf(x.long, 2) + ')') + '</small>' : '<span class="cp-err">trop grand</span>') : '—';
         tr.querySelector('.cp-m').innerHTML = x && x.metres ? '<b>' + nf(x.metres, 4) + ' m</b><small>' + nf(x.g.n, 2) + ' ÷ ' + nf(x.pieces, 2) + (pm ? ' · ' + nf(x.metres * pm, 2) + ' DA' : '') + '</small>' : '—';
       });
       const ctl = controler(cfg, { gabarits: { items: L } }, 'surface');

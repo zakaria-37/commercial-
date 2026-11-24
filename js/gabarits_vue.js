@@ -55,6 +55,27 @@
     return s + '</svg>';
   }
 
+  /* ---------- formes (libre, triangle, rond) : placement RÉEL des pièces, emboîtées sans chevauchement ---------- */
+  const estFm = x => !!(x && x.emb && x.emb.lat && window.Formes && Formes.placer);
+  const placerFm = (x, W, n) => estFm(x) ? Formes.placer(x.g, W, Math.max(1, Math.ceil(n - 1e-9))) : null;
+  // pièces dessinées en coordonnées « rouleau » (x en travers, y dans la longueur), décalées de y0
+  const piecesSvg = (pf, y0, S, coul) => pf.pieces.map(P => '<path d="M' + P.map(p => (p[0] * S).toFixed(1) + ' ' + (y0 + p[1] * S).toFixed(1)).join('L') + 'Z" fill="' + coul + '" stroke="#444" stroke-width=".5"/>').join('');
+  function rangeeForme(x, W, coul) {
+    const R = x.emb.lat; let Lm = Math.min(120, Math.max(40, R.uh * 2.5, R.uw * 1.2)); const pf = Formes.placer(x.g, W, null, Lm);
+    if (!pf || !pf.n) return rangee(x, W, coul);
+    Lm = pf.L;   // on montre exactement la longueur occupée par les pièces
+    const S = 300 / W, w = 300, h = Lm * S;
+    // dessin non transposé : la longueur vers le bas → on retourne y pour garder la forme dans le bon sens
+    const body = pf.pieces.map(P => '<path d="M' + P.map(p => (p[0] * S).toFixed(1) + ' ' + ((Lm - p[1]) * S).toFixed(1)).join('L') + 'Z"/>').join('');
+    let s = '<svg viewBox="-6 -14 ' + (w + 52) + ' ' + (h + 34) + '" class="gb-row" role="img" aria-label="' + pf.n + ' pièces dans ' + nf(Lm, 0) + ' cm">';
+    s += '<defs><pattern id="gbHachF" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#fde7e3"/><line x1="0" y1="0" x2="0" y2="6" stroke="#e08a7c" stroke-width="2"/></pattern></defs>';
+    s += '<rect x="0" y="0" width="' + w + '" height="' + h + '" fill="url(#gbHachF)" stroke="#8a8085" stroke-width="1"/><g fill="' + coul + '" stroke="#444" stroke-width=".6">' + body + '</g>';
+    s += '<text x="' + (w / 2) + '" y="-4" text-anchor="middle" class="gb-c">largeur du rouleau ' + nf(W, 0) + ' cm</text>';
+    s += '<text x="' + (w + 6) + '" y="' + (h / 2 + 4) + '" class="gb-c">' + nf(Lm, 0) + ' cm</text>';
+    s += '<text x="0" y="' + (h + 14) + '" class="gb-c">' + pf.n + ' pièces dans ' + nf(Lm, 0) + ' cm de rouleau · hachuré = chute</text>';
+    return s + '</svg>';
+  }
+
   /* ---------- plan de coupe pour N produits — dessiné COMME le gabarit : largeur du rouleau à l'horizontale,
      longueur du rouleau vers le bas, MÊME échelle dans les deux sens (pas de déformation) ---------- */
   const HACH = id => '<defs><pattern id="' + id + '" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#fde7e3"/><line x1="0" y1="0" x2="0" y2="5" stroke="#e08a7c" stroke-width="1.6"/></pattern></defs>';
@@ -71,6 +92,7 @@
   }
   function plan(res, W) {
     const blocs = res.lignes.map((x, i) => {
+      const pf = placerFm(x, W, x.g.n * N); if (pf) return { x, i, n: 0, besoin: x.g.n * N, rangs: 0, lg: pf.L, pf };
       const n = Math.max(1, Math.floor(W / x.court + 1e-9)), besoin = x.g.n * N, rangs = Math.ceil(besoin / n);
       return { x, i, n, besoin, rangs, lg: rangs * x.long };
     });
@@ -78,6 +100,11 @@
     const html = cadre(total, W, (S, lab) => {
       let s = '', y0 = 0;
       blocs.forEach(b => {
+        if (b.pf) {
+          s += '<rect x="0" y="' + y0 + '" width="' + (W * S) + '" height="' + (b.lg * S) + '" fill="url(#gbHach2)"/>' + piecesSvg(b.pf, y0, S, COUL[b.i % COUL.length]);
+          s += '<line x1="0" y1="' + (y0 + b.lg * S) + '" x2="' + (W * S) + '" y2="' + (y0 + b.lg * S) + '" stroke="#333" stroke-width="1"/>';
+          lab.push({ y0, nom: b.x.g.nom || 'Gabarit', m: b.lg / 100 }); y0 += b.lg * S; return;
+        }
         const h = b.lg * S, cw = b.x.court * S, rh = b.x.long * S, reste = W - b.n * b.x.court;
         s += '<rect x="0" y="' + y0 + '" width="' + (b.n * cw) + '" height="' + h + '" fill="' + COUL[b.i % COUL.length] + '" stroke="#555" stroke-width=".6"/>';
         for (let k = 1; k < b.n; k++) s += '<line x1="' + (k * cw) + '" y1="' + y0 + '" x2="' + (k * cw) + '" y2="' + (y0 + h) + '" stroke="rgba(0,0,0,.3)" stroke-width=".5"/>';
@@ -102,12 +129,14 @@
     const hotes = [];
     ordre.forEach(h => {
       const reste = h.besoin - h.place; if (reste <= 0) return;
+      // forme emboîtée : placée telle quelle (pas de bande de côté régulière à récupérer)
+      const pf = placerFm(h.x, W, reste); if (pf) { hotes.push({ h, rangs: 0, lg: pf.L, bande: 0, poses: [], pf }); return; }
       const rangs = Math.ceil(reste / h.n), lg = rangs * h.x.long, bande = W - h.n * h.x.court;
       const hote = { h, rangs, lg, bande, poses: [] };
       hotes.push(hote);
       if (bande < 0.5) return;
       let libre = lg;
-      G.filter(c => c !== h && c.aire < h.aire && c.besoin - c.place > 0).sort((a, b) => b.aire - a.aire).forEach(c => {
+      G.filter(c => c !== h && c.aire < h.aire && c.besoin - c.place > 0 && !estFm(c.x)).sort((a, b) => b.aire - a.aire).forEach(c => {
         if (libre <= 0) return;
         // meilleur sens dans la bande : le plus de pièces par cm de longueur
         const sens = [[c.x.court, c.x.long], [c.x.long, c.x.court]].map(([tr, le]) => ({ tr, le, col: Math.floor(bande / tr + 1e-9) })).filter(o => o.col > 0 && o.le <= libre + 1e-9);
@@ -128,6 +157,11 @@
     return cadre(R.total, W, (S, lab) => {
       let s = '', y0 = 0;
       R.hotes.forEach(b => {
+        if (b.pf) {
+          s += '<rect x="0" y="' + y0 + '" width="' + (W * S) + '" height="' + (b.lg * S) + '" fill="url(#gbHach3)"/>' + piecesSvg(b.pf, y0, S, COUL[b.h.i % COUL.length]);
+          s += '<line x1="0" y1="' + (y0 + b.lg * S) + '" x2="' + (W * S) + '" y2="' + (y0 + b.lg * S) + '" stroke="#333" stroke-width="1"/>';
+          lab.push({ y0, nom: b.h.x.g.nom || 'Gabarit', m: b.lg / 100 }); y0 += b.lg * S; return;
+        }
         const x = b.h.x, h = b.lg * S, cw = x.court * S, larg = b.h.n * cw;
         s += '<rect x="0" y="' + y0 + '" width="' + larg + '" height="' + h + '" fill="' + COUL[b.h.i % COUL.length] + '" stroke="#555" stroke-width=".6"/>';
         for (let k = 1; k < b.h.n; k++) s += '<line x1="' + (k * cw) + '" y1="' + y0 + '" x2="' + (k * cw) + '" y2="' + (y0 + h) + '" stroke="rgba(0,0,0,.3)" stroke-width=".5"/>';
@@ -158,6 +192,22 @@
     return h;
   }
 
+  /* ---------- un gabarit de forme (libre, triangle, rond) : emboîtement réel ---------- */
+  function itemForme(x, i, W, bl, pu, utile) {
+    const c = COUL[i % COUL.length], R = x.emb.lat, d = Formes.dims(x.g), bb = d.l * d.h, a = Formes.aire(x.g), besoin = x.g.n * N;
+    const nomF = (Formes.FORMES.find(f => f[0] === x.g.forme) || [, 'Forme'])[1];
+    let h = '<div class="gb-item"><div class="gb-ih"><i class="cp-c" style="background:' + c + '"></i><b>' + esc(x.g.nom || 'Gabarit') + '</b><span>' + Formes.apercu(x.g, 22, c) + ' ' + nf(d.l, 1) + ' × ' + nf(d.h, 1) + ' cm · ' + nf(x.g.n, 2) + ' par produit</span></div>';
+    h += '<div class="fm-vue">' + Formes.motif(x.g, c, 320) + '<p><b>' + esc(nomF) + '</b> · coupe ' + esc(R.txt || 'à la suite') + ', sans aucun chevauchement : chaque pièce consomme <b>' + nf(R.aireP, 0) + ' cm²</b> de tissu au lieu de ' + nf(d.l, 1) + ' × ' + nf(d.h, 1) + ' = ' + nf(bb, 0) + ' cm² (' + nf(Math.max(0, 100 - R.aireP / Math.max(1e-9, bb) * 100), 0) + ' % de tissu en moins).</p></div>';
+    h += rangeeForme(x, W, c);
+    const u = utile(x), ch = Math.max(0, x.metres - u);
+    h += '<div class="gb-det"><div><span>Place par pièce</span><b>' + nf(R.aireP, 0) + ' cm²</b><small>pièce ' + nf(a, 0) + ' cm² · ' + nf(Math.min(100, a / R.aireP * 100), 0) + ' % du tissu utilisé</small></div>' +
+      '<div><span>Pièces dans 1 m</span><b>' + nf(x.pieces, 2) + '</b><small>(' + nf(W, 0) + ' × 100) ÷ ' + nf(R.aireP, 0) + ' cm²</small></div>' +
+      '<div><span>Mètres / produit (chute comprise)</span><b>' + nf(x.metres, 4) + ' m</b><small>' + nf(x.g.n, 2) + ' ÷ ' + nf(x.pieces, 2) + (pu ? ' · ' + nf(x.metres * pu, 2) + ' DA' : '') + '</small></div>' +
+      (ch >= 0.00005 ? '<div class="gb-chute"><span>Dont chute</span><b>' + nf(ch, 4) + ' m</b><small>tissu de la pièce ' + nf(u, 4) + ' m · chute ' + nf(x.metres > 0 ? ch / x.metres * 100 : 0, 1) + ' %' + (pu ? ' · ' + nf(ch * pu, 2) + ' DA' : '') + '</small></div>' : '') +
+      '<div><span>Pour ' + nf(N, 0) + ' produits</span><b>' + nf(besoin, 0) + ' pièces</b><small>' + (bl && bl.pf ? 'plan réel : ' + nf(bl.lg / 100, 2) + ' m (bords du rouleau compris)' : '') + '</small></div></div></div>';
+    return h;
+  }
+
   /* ---------- une matière (ligne 📐) ---------- */
   function carteSurface(l, p) {
     const g = l.gabarits, res = window.Calepinage ? Calepinage.calculer(g, p) : null;
@@ -180,6 +230,7 @@
     const manq = (lib(p) || []).filter(gb => !(g.items || []).some(it => it.ref === gb.id));
     if (manq.length) h += '<div class="gb-manq">ℹ️ Gabarits du produit <b>pas encore dans le calcul de cette matière</b> : ' + manq.map(gb => esc(String(gb.nom || '').trim() || 'Gabarit sans nom') + ' (' + nf(gb.l, 1) + ' × ' + nf(gb.h, 1) + ')').join(', ') + ' <button type="button" class="btn s p" data-gbmod="' + esc(l.id) + '" data-type="surface">＋ Les ajouter</button></div>';
     h += '<div class="gb-list">' + res.lignes.map((x, i) => {
+      if (estFm(x)) return itemForme(x, i, W, pl.blocs[i], pu, utile);
       const n = Math.floor(W / x.court + 1e-9), reste = W - n * x.court, besoin = x.g.n * N, rangs = Math.ceil(besoin / Math.max(1, n));
       return '<div class="gb-item"><div class="gb-ih"><i class="cp-c" style="background:' + COUL[i % COUL.length] + '"></i><b>' + esc(x.g.nom || 'Gabarit') + '</b><span>' + (x.emb && window.Formes ? Formes.apercu(x.g, 22, COUL[i % COUL.length]) + ' ' : '') + nf(Math.min(x.g.l, x.g.h), 1) + ' × ' + nf(Math.max(x.g.l, x.g.h), 1) + ' cm · ' + nf(x.g.n, 2) + ' par produit</span></div>' +
         (x.emb && window.Formes ? '<div class="fm-vue">' + Formes.motif(x.g, COUL[i % COUL.length], 320) + '<p><b>' + esc((Formes.FORMES.find(f => f[0] === x.g.forme) || [, 'Forme'])[1]) + '</b> · ' + (x.emb.txt ? 'coupe ' + esc(x.emb.txt) : 'coupe à la suite') + ' : chaque pièce occupe <b>' + nf(x.emb.w, 1) + ' × ' + nf(x.emb.h, 1) + ' cm</b> au lieu de ' + nf(Formes.dims(x.g).l, 1) + ' × ' + nf(Formes.dims(x.g).h, 1) + ' cm (' + nf(Math.max(0, 100 - x.emb.w * x.emb.h / Math.max(1e-9, Formes.dims(x.g).l * Formes.dims(x.g).h) * 100), 0) + ' % de tissu en moins).</p></div>' : '') +

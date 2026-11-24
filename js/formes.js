@@ -57,25 +57,202 @@
   }
   const tourne180 = (P, w, h) => P.map(p => [w - p[0], h - p[1]]);
   const transpose = P => P.map(p => [p[1], p[0]]);
-  /* place occupée par une pièce : { w, h, mode, txt } (w × h = surface réellement consommée par pièce, hors marge) */
+  /* ============================================================
+     EMBOÎTEMENT INTELLIGENT (formes libres, triangles, ronds)
+     On cherche le meilleur « réseau » de coupe sur le vrai contour, sans aucun chevauchement :
+       - pièce seule, droite ou tournée d'un quart de tour
+       - ou PAIRE : une pièce + la même retournée à 180° (tête-bêche), placée au meilleur endroit
+         (ex. deux « L » qui forment un cadre, deux triangles qui forment un parallélogramme)
+       - puis les unités sont répétées en rangées, chaque rangée pouvant être DÉCALÉE pour s'imbriquer
+     Calcul sur une grille fine (0,25 à 1 cm) : une pièce n'en touche jamais une autre.
+     ============================================================ */
   const cacheE = new Map();
+  function dedans(P, x, y) {
+    let c = false;
+    for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const a = P[i], b = P[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; }
+    return c;
+  }
+  const ECH = [[.5, .5], [.1, .1], [.9, .1], [.1, .9], [.9, .9], [.5, .1], [.5, .9], [.1, .5], [.9, .5]];
+  /* grille : pour chaque rangée de cellules, les intervalles [début, fin) remplis */
+  function grille(polys, q) {
+    const all = polys.flat(), mxX = Math.max(...all.map(p => p[0])), mxY = Math.max(...all.map(p => p[1]));
+    const nx = Math.max(1, Math.ceil(mxX / q - 1e-6)), ny = Math.max(1, Math.ceil(mxY / q - 1e-6)), rows = []; let cells = 0;
+    for (let j = 0; j < ny; j++) {
+      const r = []; let deb = -1;
+      for (let i = 0; i <= nx; i++) {
+        const plein = i < nx && ECH.some(s => polys.some(P => dedans(P, (i + s[0]) * q, (j + s[1]) * q)));
+        if (plein) { cells++; if (deb < 0) deb = i; } else if (deb >= 0) { r.push([deb, i]); deb = -1; }
+      }
+      rows.push(r);
+    }
+    return { nx, ny, rows, cells };
+  }
+  /* translations interdites : B décalé de (dx,dy) chevauche A */
+  function interdits(A, B) {
+    const ox = B.nx, oy = B.ny, LW = A.nx + B.nx + 1, F = new Uint8Array(LW * (A.ny + B.ny + 1));
+    for (let dy = -B.ny + 1; dy < A.ny; dy++) {
+      for (let r = Math.max(0, dy); r < Math.min(A.ny, dy + B.ny); r++) {
+        const ra = A.rows[r], rb = B.rows[r - dy]; if (!ra.length || !rb.length) continue;
+        for (const a of ra) for (const b of rb) { const base = (dy + oy) * LW + ox; for (let dx = a[0] - b[1] + 1; dx <= a[1] - b[0] - 1; dx++) F[base + dx] = 1; }
+      }
+    }
+    return (dx, dy) => dx > -B.nx && dx < A.nx && dy > -B.ny && dy < A.ny && F[(dy + oy) * LW + dx + ox] === 1;
+  }
+  /* meilleur réseau (a,0) / (b,c) pour une unité : aucune copie ne touche une autre */
+  function reseauU(U) {
+    const bad = interdits(U, U); let best = null;
+    const valide = (a, b, c) => {
+      for (let k = 1; k * c < U.ny; k++) { const dy = k * c, m0 = Math.ceil((-U.nx + 1 - k * b) / a), m1 = Math.floor((U.nx - 1 - k * b) / a); for (let m = m0; m <= m1; m++) if (bad(m * a + k * b, dy)) return false; }
+      return true;
+    };
+    for (let a = 1; a <= 2 * U.nx + U.ny; a++) {
+      let ok = true; for (let m = 1; m * a < U.nx; m++) if (bad(m * a, 0)) { ok = false; break; }
+      if (!ok) continue;
+      for (let c = Math.max(1, Math.ceil(U.cells / a)); c <= U.ny; c++) {
+        if (best && a * c >= best.a * best.c) break;
+        let tr = -1; for (let b = 0; b < a; b++) if (valide(a, b, c)) { tr = b; break; }
+        if (tr >= 0) { best = { a, b: tr, c }; break; }
+      }
+    }
+    return best;
+  }
+  /* ---------- affinage EXACT sur le vrai contour (la grille laisse un petit jeu de sécurité) ---------- */
+  const EPS = 1e-6;
+  const orient = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  function distSeg(p, a, b) { const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy; let t = L ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy); }
+  function strict(P, p) { if (!dedans(P, p[0], p[1])) return false; for (let i = 0; i < P.length; i++) if (distSeg(p, P[i], P[(i + 1) % P.length]) < 1e-4) return false; return true; }
+  const echant = P => { const o = []; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; for (let f = 0; f < 8; f++) o.push([a[0] + (b[0] - a[0]) * f / 8, a[1] + (b[1] - a[1]) * f / 8]); } return o; };
+  function seCoupent(A, B) {
+    const ba = [Math.min(...A.map(p => p[0])), Math.max(...A.map(p => p[0])), Math.min(...A.map(p => p[1])), Math.max(...A.map(p => p[1]))];
+    const bb = [Math.min(...B.map(p => p[0])), Math.max(...B.map(p => p[0])), Math.min(...B.map(p => p[1])), Math.max(...B.map(p => p[1]))];
+    if (ba[1] <= bb[0] + EPS || bb[1] <= ba[0] + EPS || ba[3] <= bb[2] + EPS || bb[3] <= ba[2] + EPS) return false;
+    for (let i = 0; i < A.length; i++) { const a1 = A[i], a2 = A[(i + 1) % A.length];
+      for (let j = 0; j < B.length; j++) { const b1 = B[j], b2 = B[(j + 1) % B.length];
+        const o1 = orient(a1, a2, b1), o2 = orient(a1, a2, b2), o3 = orient(b1, b2, a1), o4 = orient(b1, b2, a2);
+        if (((o1 > EPS && o2 < -EPS) || (o1 < -EPS && o2 > EPS)) && ((o3 > EPS && o4 < -EPS) || (o3 < -EPS && o4 > EPS))) return true; } }
+    return echant(A).some(p => strict(B, p)) || echant(B).some(p => strict(A, p));
+  }
+  function valideExact(U, a, b, c) {
+    if (U.length > 1 && seCoupent(U[0], U[1])) return false;
+    const all = U.flat(), w = Math.max(...all.map(p => p[0])) - Math.min(...all.map(p => p[0])), h = Math.max(...all.map(p => p[1])) - Math.min(...all.map(p => p[1]));
+    for (let k = 0; k * c < h - EPS; k++) {
+      const m0 = Math.ceil((-w - k * b) / a) - 1, m1 = Math.floor((w - k * b) / a) + 1;
+      for (let m = m0; m <= m1; m++) {
+        if (k === 0 && m <= 0) continue;
+        const tx = m * a + k * b, ty = k * c; if (Math.abs(tx) >= w - EPS) continue;
+        for (const A of U) for (const B of U) if (seCoupent(A, B.map(p => [p[0] + tx, p[1] + ty]))) return false;
+      }
+    }
+    return true;
+  }
+  function affiner(o, q) {
+    let U = o.unit, a = o.v1[0], b = o.v2[0], c = o.v2[1];
+    if (!valideExact(U, a, b, c)) return o;
+    const bouge = (U, dx, dy) => [U[0], U[1].map(p => [p[0] + dx, p[1] + dy])];
+    for (const st of [q, q / 2, q / 4, q / 8]) {
+      for (let it = 0; it < 60; it++) {
+        const essais = [[U, a, b, c - st], [U, a - st, b, c], [U, a, b - st, c - st], [U, a, b + st, c - st], [U, a - st, b - st, c], [U, a - st, b + st, c]];
+        if (U.length === 2) [[-st, 0], [st, 0], [0, -st], [0, st]].forEach(([dx, dy]) => { const V = bouge(U, dx, dy); essais.push([V, a - st, b, c], [V, a, b, c - st], [V, a - st, b - st, c], [V, a - st, b + st, c]); });
+        const ok = essais.find(e => e[1] > EPS && e[3] > EPS && valideExact(e[0], e[1], e[2], e[3]));
+        if (!ok) break;
+        [U, a, b, c] = ok;
+      }
+    }
+    const all = U.flat(), mx = Math.min(...all.map(p => p[0])), my = Math.min(...all.map(p => p[1]));
+    U = U.map(P => P.map(p => [Math.round((p[0] - mx) * 1e4) / 1e4, Math.round((p[1] - my) * 1e4) / 1e4]));
+    const r = Object.assign({}, o, { unit: U, v1: [a, 0], v2: [b, c], aireP: a * c / o.k }), bu = bbox(U.flat()); r.uw = bu.w; r.uh = bu.h;
+    return r;
+  }
+  const rot90 = P => { const b = bbox(P); return P.map(p => [b.h - p[1], p[0]]); };
+  const decale = (P, dx, dy) => P.map(p => [p[0] + dx, p[1] + dy]);
+  function reseau(P) {
+    const cle = JSON.stringify(P); if (cacheE.has(cle)) return cacheE.get(cle);
+    const b0 = bbox(P), md = Math.max(b0.w, b0.h), q = [0.25, 0.5, 1, 2, 4, 8].find(z => md / z <= 80) || 8, essais = [];
+    [0, 1].forEach(rt => {
+      const A = rt ? rot90(P) : P, bA = bbox(A), R = tourne180(A, bA.w, bA.h), GA = grille([A], q), GR = grille([R], q);
+      essais.push({ polys: [A], rt, paire: false, G: GA });
+      // paires tête-bêche : les meilleures positions (rectangle englobant le plus petit)
+      const badAR = interdits(GA, GR), cand = [];
+      for (let dy = -GR.ny; dy <= GA.ny; dy++) for (let dx = -GR.nx; dx <= GA.nx; dx++) {
+        if (badAR(dx, dy)) continue;
+        const w = Math.max(GA.nx, dx + GR.nx) - Math.min(0, dx), h = Math.max(GA.ny, dy + GR.ny) - Math.min(0, dy);
+        if (w * h < 2 * GA.nx * GA.ny) cand.push({ dx, dy, s: w * h });
+      }
+      cand.sort((x, y) => x.s - y.s).slice(0, 4).forEach(c => {
+        const sx = Math.max(0, -c.dx) * q, sy = Math.max(0, -c.dy) * q;
+        const polys = [decale(A, sx, sy), decale(R, sx + c.dx * q, sy + c.dy * q)];
+        essais.push({ polys, rt, paire: true, G: grille(polys, q) });
+      });
+    });
+    const res = [];
+    essais.forEach(e => {
+      const r = reseauU(e.G); if (!r) return;
+      res.push({ e, r, k: e.polys.length, aireP: r.a * r.c * q * q / e.polys.length });
+    });
+    res.sort((x, y) => x.aireP - y.aireP);
+    const fait = (best) => {
+      const { e, r } = best, decal = r.b > 0 || r.c * q < bbox(e.polys.flat()).h - 1e-6;
+      const o = { unit: e.polys, v1: [r.a * q, 0], v2: [r.b * q, r.c * q], k: best.k, aireP: best.aireP, paire: e.paire, rt: e.rt,
+        txt: (e.paire ? 'par paires tête-bêche (une sur deux retournée)' : 'à la suite') + (decal ? (e.paire ? ', rangées imbriquées' : ', emboîtées en escalier (rangées décalées)') : '') + (e.rt ? ', tournées d’un quart de tour' : '') };
+      const bu = bbox(o.unit.flat()); o.uw = bu.w; o.uh = bu.h; return o;
+    };
+    const rectO = { unit: [P], v1: [b0.w, 0], v2: [0, b0.h], k: 1, aireP: b0.w * b0.h, txt: 'à la suite', paire: false, rt: 0, uw: b0.w, uh: b0.h };
+    // jamais pire que le simple rectangle englobant
+    // les meilleurs réseaux de la grille sont affinés au plus juste sur le vrai contour
+    const fins = res.slice(0, 5).map(x => affiner(fait(x), q)).filter(x => x.aireP < b0.w * b0.h - 1e-6).sort((x, y) => x.aireP - y.aireP);
+    const out = fins.length ? fins[0] : rectO;
+    // autres bons réseaux : le plan de coupe réel choisit celui qui perd le moins sur les bords du rouleau
+    out.alts = fins.slice(1, 4).concat(out === rectO ? [] : [rectO]);
+    cacheE.set(cle, out); return out;
+  }
+  /* place occupée par une pièce : { w, h, mode, txt, lat } (w × h = surface réellement consommée par pièce) */
   function empreinte(g) {
     const f = forme(g), l = num(g.l), h = num(g.h);
     if (f === 'rect') return { w: l, h, mode: 'rect', txt: '' };
     if (f === 'carre') return { w: l, h: l, mode: 'rect', txt: '' };
-    if (f === 'rond') return { w: l, h: l * Math.sqrt(3) / 2, mode: 'quinconce', txt: 'en quinconce (rangées décalées)' };
+    if (f === 'rond') { const c = l * Math.sqrt(3) / 2; return { w: l, h: c, mode: 'quinconce', txt: 'en quinconce (rangées décalées)', lat: { unit: [cercle(l, 36)], v1: [l, 0], v2: [l / 2, c], k: 1, aireP: l * c, uw: l, uh: l } }; }
     const P = contour(g); if (P.length < 3) return { w: l, h, mode: 'rect', txt: '' };
-    const cle = JSON.stringify(P); if (cacheE.has(cle)) return cacheE.get(cle);
-    const b = bbox(P), opts = [{ w: b.w, h: b.h, mode: 'rect', txt: '', axe: 'x', pas: b.w }];
-    [false, true].forEach(tr => {
-      const Q = tr ? transpose(P) : P, bb = tr ? { w: b.h, h: b.w } : b;
-      const same = decalage(Q, Q, bb.h), R = tourne180(Q, bb.w, bb.h), tb = Math.max(decalage(Q, R, bb.h), same / 2);
-      const mk = (pas, mode, txt) => tr ? { w: bb.h, h: pas, mode, txt, axe: 'y', pas } : { w: pas, h: bb.h, mode, txt, axe: 'x', pas };
-      if (same > 0) opts.push(mk(same, 'suite', 'à la suite, emboîtées'));
-      if (tb > 0) opts.push(mk(tb, 'tetebeche', 'tête-bêche (une sur deux retournée)'));
+    const R = reseau(P), pas = R.v1[0] / R.k, haut = R.aireP / pas;
+    return { w: pas, h: haut, mode: R.paire ? 'tetebeche' : 'suite', txt: R.txt, lat: R };
+  }
+
+  /* ---------- PLACEMENT RÉEL dans le rouleau (largeur W, x en travers, y dans la longueur) ----------
+     n pièces → la plus petite longueur ; ou, avec Lmax, toutes les pièces qui tiennent dans Lmax. */
+  function placer(g, W, n, Lmax) {
+    const e = empreinte(g), R0 = e.lat; if (!R0) return null;
+    const ors = [];
+    [R0].concat(R0.alts || []).forEach(R => {
+      ors.push({ U: R.unit, v1: R.v1, v2: R.v2, uw: R.uw, uh: R.uh, R });
+      const U = R.unit.map(P => P.map(p => [R.uh - p[1], p[0]])), r = v => [-v[1], v[0]]; ors.push({ U, v1: r(R.v1), v2: r(R.v2), uw: R.uh, uh: R.uw, R });
     });
-    const best = opts.reduce((m, o) => (o.w * o.h < m.w * m.h - 1e-6 ? o : m));
-    cacheE.set(cle, best); return best;
+    let best = null;
+    ors.forEach(o => {
+      const pb = o.U.map(P => { const xs = P.map(p => p[0]), ys = P.map(p => p[1]); return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]; });
+      if (pb.every(b => b[1] - b[0] > W + 1e-6)) return;
+      const det = o.v1[0] * o.v2[1] - o.v2[0] * o.v1[1]; if (Math.abs(det) < 1e-9) return;
+      const inv = (x, y) => [(x * o.v2[1] - y * o.v2[0]) / det, (o.v1[0] * y - o.v1[1] * x) / det];
+      [0, .125, .25, .375, .5, .625, .75, .875].forEach(s => {
+        const ox = o.v1[0] * s, oy = o.v1[1] * s;
+        let Y = Lmax || Math.max(o.uh * 2, (n * o.R.aireP / W) * 1.4 + o.uh * 2), got = null;
+        for (let it = 0; it < 6 && !got; it++, Y *= 2) {
+          const cs = [[-o.uw, -o.uh], [W + o.uw, -o.uh], [-o.uw, Y + o.uh], [W + o.uw, Y + o.uh]].map(p => inv(p[0] - ox, p[1] - oy));
+          const m0 = Math.floor(Math.min(...cs.map(c => c[0]))) - 1, m1 = Math.ceil(Math.max(...cs.map(c => c[0]))) + 1, k0 = Math.floor(Math.min(...cs.map(c => c[1]))) - 1, k1 = Math.ceil(Math.max(...cs.map(c => c[1]))) + 1;
+          const L = [];
+          for (let k = k0; k <= k1; k++) for (let m = m0; m <= m1; m++) {
+            const px = ox + m * o.v1[0] + k * o.v2[0], py = oy + m * o.v1[1] + k * o.v2[1];
+            pb.forEach((b, j) => { if (px + b[0] >= -1e-6 && px + b[1] <= W + 1e-6 && py + b[2] >= -1e-6 && py + b[3] <= Y + 1e-6) L.push({ t: py + b[3], x: px, y: py, j }); });
+          }
+          L.sort((a, b) => a.t - b.t || a.x - b.x);
+          if (Lmax) got = L;
+          else if (L.length >= n) got = L.slice(0, n);
+        }
+        if (!got) return;
+        const len = got.length ? got[got.length - 1].t : 0;
+        const sc = Lmax ? -got.length : len;
+        if (!best || sc < best.sc - 1e-6) best = { sc, L: len, pieces: got.map(p => o.U[p.j].map(q => [q[0] + p.x, q[1] + p.y])), n: got.length };
+      });
+    });
+    return best;
   }
 
   /* ---------- dessins SVG ---------- */
@@ -86,22 +263,15 @@
     const body = forme(g) === 'rond' ? '<circle cx="' + (d.l * k / 2 + 2) + '" cy="' + (d.l * k / 2 + 2) + '" r="' + (d.l * k / 2) + '"/>' : '<path d="' + chemin(P, k, 2 / k, 2 / k, d.h) + '"/>';
     return '<svg class="fm-ap" width="' + taille + '" height="' + taille + '" viewBox="0 0 ' + taille + ' ' + taille + '"><g fill="' + (coul || '#e8a6b4') + '" stroke="#333" stroke-width="1">' + body + '</g></svg>';
   }
-  /* motif : quelques pièces placées comme dans la coupe (quinconce, tête-bêche…) */
+  /* motif : quelques pièces placées exactement comme dans la coupe (aucun chevauchement) */
   function motif(g, coul, larg) {
-    const f = forme(g), e = empreinte(g), d = dims(g); larg = larg || 300;
-    let pieces = [];
-    if (f === 'rond') { const D = d.l; for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) pieces.push({ c: [c * D + (r % 2 ? D / 2 : 0) + D / 2, r * e.h + D / 2], D }); }
-    else {
-      const P = contour(g), b = bbox(P), axe = e.axe || 'x', pas = e.pas || (axe === 'x' ? b.w : b.h);
-      for (let i = 0; i < 6; i++) {
-        const Q = e.mode === 'tetebeche' && i % 2 === 1 ? tourne180(P, b.w, b.h) : P;
-        pieces.push({ P: Q.map(p => axe === 'x' ? [p[0] + i * pas, p[1]] : [p[0], p[1] + i * pas]) });
-      }
-    }
-    const all = pieces.flatMap(p => p.P ? p.P : [[p.c[0] - p.D / 2, p.c[1] - p.D / 2], [p.c[0] + p.D / 2, p.c[1] + p.D / 2]]);
-    const W = Math.max(...all.map(p => p[0])), H = Math.max(...all.map(p => p[1]));
-    const k = Math.min(larg / W, 140 / H);
-    const body = pieces.map(p => p.P ? '<path d="' + chemin(p.P, k, 0, 0, H) + '"/>' : '<circle cx="' + (p.c[0] * k) + '" cy="' + ((H - p.c[1]) * k) + '" r="' + (p.D / 2 * k) + '"/>').join('');
+    const e = empreinte(g); larg = larg || 300;
+    const R = e.lat; if (!R) return '';
+    const zw = Math.max(R.uw * 2.2, R.v1[0] * 3), zh = Math.max(R.uh * 2.2, R.v2[1] * 3), pl = placer(g, zw, null, zh);
+    if (!pl || !pl.pieces.length) return '';
+    const all = pl.pieces.flat(), W = Math.max(...all.map(p => p[0])), H = Math.max(...all.map(p => p[1]));
+    const k = Math.min(larg / W, 150 / H);
+    const body = pl.pieces.map(P => '<path d="' + chemin(P, k, 0, 0, H) + '"' + '/>').join('');
     return '<svg class="fm-motif" viewBox="-2 -2 ' + (W * k + 4) + ' ' + (H * k + 4) + '" width="' + (W * k + 4) + '" height="' + (H * k + 4) + '"><g fill="' + (coul || '#e8a6b4') + '" stroke="#444" stroke-width=".8">' + body + '</g></svg>';
   }
 
@@ -207,5 +377,5 @@
     });
   }
 
-  window.Formes = { FORMES, forme, contour, aire, perimetre, dims, empreinte, apercu, motif, editer };
+  window.Formes = { FORMES, forme, contour, aire, perimetre, dims, empreinte, placer, apercu, motif, editer };
 })();
