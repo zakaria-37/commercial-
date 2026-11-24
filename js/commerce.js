@@ -388,7 +388,7 @@
     const besoin = {}; ops.filter(o => o.delta > 0).forEach(o => { besoin[o.produitId] = (besoin[o.produitId] || 0) + o.delta; });
     const nom = pid => { const p = PFAPI.produits().find(x => String(x.id) === String(pid)); return p ? p.nom : 'Produit'; };
     const manques = Object.keys(besoin).filter(pid => PFAPI.qty(pid) < besoin[pid]);
-    if (manques.length && !confirm('Stock insuffisant pour : ' + manques.map(pid => nom(pid) + ' (stock ' + nf(PFAPI.qty(pid), 0) + ', demandé ' + nf(besoin[pid], 0) + ')').join(', ') + '.\n\nSortir quand même du stock (il deviendra négatif) ?\nAnnuler = la facture est enregistrée sans toucher au stock.')) return { passe: true };
+    if (manques.length && !confirm('Stock insuffisant pour : ' + manques.map(pid => nom(pid) + ' (stock ' + nf(PFAPI.qty(pid), 0) + ', demandé ' + nf(besoin[pid], 0) + ')').join(', ') + '.\n\nOK = sortir du stock (il deviendra négatif : pensez à entrer la production).\nAnnuler = la facture reste enregistrée mais SANS sortie de stock : elle ne comptera pas dans le relevé ni le bénéfice tant que le stock n’est pas sorti (bouton « Sortir du stock »).')) return { passe: true };
     let sorti = 0, rendu = 0; const echecs = [];
     for (const o of ops) {
       const r = await PFAPI.saisir({ type: o.delta > 0 ? 'livraison' : 'retour', produitId: o.produitId, quantite: Math.abs(o.delta), clientId: d.contact_id, commandeId: d.commande_id || null, prix: o.l ? num(o.l.prix_unitaire) : 0, reference: d.numero, date: today(), note: 'Facture ' + d.numero + (o.delta < 0 ? ' : correction' : '') });
@@ -427,6 +427,16 @@
   }
 
   /* Bon de livraison / réception : on annule les mouvements de stock déjà créés par ce bon, puis on recrée ceux des lignes actuelles */
+  /* Bon de livraison : produits dont le stock ne suffit pas (message prêt à afficher, ou '') */
+  function manqueStockBl(ancienNumero) {
+    const d = ed.doc; if (d.type !== 'bon_livraison' || !window.PFAPI) return '';
+    const ancienne = marqueBon(d.type, ancienNumero), besoin = {}, deja = {};
+    ed.lignes.forEach(l => { if (l.produit_id && num(l.quantite) > 0) besoin[l.produit_id] = (besoin[l.produit_id] || 0) + Math.round(num(l.quantite)); });
+    PFAPI.mouvements().filter(m => m.note === ancienne).forEach(m => { deja[m.produit_id] = (deja[m.produit_id] || 0) - (Number(m.quantite) || 0); });
+    const nom = pid => { const p = PFAPI.produits().find(x => String(x.id) === String(pid)); return p ? p.nom : 'Produit'; };
+    const manques = Object.keys(besoin).filter(pid => PFAPI.qty(pid) + (deja[pid] || 0) < besoin[pid]);
+    return manques.length ? 'Stock insuffisant pour : ' + manques.map(pid => nom(pid) + ' (stock ' + nf(PFAPI.qty(pid) + (deja[pid] || 0), 0) + ', livré ' + nf(besoin[pid], 0) + ')').join(', ') + '.' : '';
+  }
   async function synchroniserBon(ancienNumero) {
     const d = ed.doc, bl = d.type === 'bon_livraison', ancienne = marqueBon(d.type, ancienNumero), marque = marqueBon(d.type, d.numero), echecs = [];
     if (bl) {
@@ -434,7 +444,7 @@
       const deja = {}; (window.PFAPI ? PFAPI.mouvements() : []).filter(m => m.note === ancienne).forEach(m => { deja[m.produit_id] = (deja[m.produit_id] || 0) - (Number(m.quantite) || 0); });
       const nom = pid => { const p = PFAPI.produits().find(x => String(x.id) === String(pid)); return p ? p.nom : 'Produit'; };
       const manques = Object.keys(besoin).filter(pid => PFAPI.qty(pid) + (deja[pid] || 0) < besoin[pid]);
-      if (manques.length && !confirm('Stock insuffisant pour : ' + manques.map(pid => nom(pid) + ' (stock ' + nf(PFAPI.qty(pid) + (deja[pid] || 0), 0) + ', livré ' + nf(besoin[pid], 0) + ')').join(', ') + '.\n\nSortir quand même du stock (il deviendra négatif) ?\nAnnuler = le bon est enregistré sans toucher au stock.')) return { n: 0, echecs, passe: true };
+      // (le stock insuffisant est demandé AVANT l'enregistrement, dans enregistrer() : un bon enregistré sort toujours du stock)
     }
     if (window.PFAPI && PFAPI.mouvements().some(m => m.note === ancienne)) { const r = await PFAPI.annulerPar(m => m.note === ancienne); if (r.error) echecs.push(r.error.message); }
     if (window.StockAPI && StockAPI.mouvements().some(m => m.note === ancienne)) { const r = await StockAPI.annulerPar(m => m.note === ancienne); if (r.error) echecs.push(r.error.message); }
@@ -468,6 +478,11 @@
     const ls = ed.lignes.filter(l => String(l.designation || '').trim() || l.produit_id || l.article_id || (!isBon(d.type) && num(l.quantite) > 0));
     if (!ls.length) { say('Ajoutez au moins une ligne.'); return false; }
     if (ls.some(l => !String(l.designation).trim())) { say('Chaque ligne doit avoir une désignation.'); return false; }
+    // bon de livraison : il est TOUJOURS une vente (relevé du client, bénéfice, solde). Stock insuffisant → on demande AVANT d'enregistrer.
+    if (d.type === 'bon_livraison' && (!avant || sigBon(d, ls) !== sig0)) {
+      const sav = ed.lignes; ed.lignes = ls; const mq = manqueStockBl(avant ? avant.numero : d.numero); ed.lignes = sav;
+      if (mq && !confirm(mq + '\n\nOK = enregistrer le bon et sortir du stock (il deviendra négatif : pensez à entrer la production).\nAnnuler = revenir au bon sans rien enregistrer.')) { say('Bon non enregistré : corrigez les quantités ou entrez d’abord la production.'); return false; }
+    }
     const row = { type: d.type, numero: d.numero, date_doc: d.date_doc, echeance: d.echeance, paiement: d.paiement || 'terme', contact_id: d.contact_id, contact_nom: d.contact_nom, statut: d.statut, source_id: d.source_id, commande_id: d.commande_id, tva_taux: d.tva_taux, remise: r2(d.remise), notes: d.notes, ref_externe: d.ref_externe || '', mode_paiement: d.mode_paiement || 'especes' };
     let id = d.id;
     if (id) { const u = await sb.from('documents').update(row).eq('id', id); if (u.error) { say('Erreur : ' + u.error.message); return false; } }
