@@ -67,6 +67,8 @@
     return { c, ventes, achats, pays, sc, sf, docs, cred, ben, client: /client/i.test(c.type || '') || ventes.length > 0, four: /fournisseur/i.test(c.type || '') || achats.length > 0 };
   }
 
+  // les crédits vont dans le compte client (ou fournisseur si ce n'est pas un client)
+  const avecCredits = sens => CR.length > 0 && (sens === 'client' ? P.client : !P.client);
   /* Relevé : opérations datées ; « débit » augmente ce que la personne nous doit (client) ou ce que nous lui devons (fournisseur) */
   function releve(sens) {
     const cl = sens === 'client', L = [];
@@ -75,6 +77,9 @@
       L.push({ d: o.date, op: String(o.libelle).replace(/ \((BR|BL)-[^)]*\)$/, ''), qte: o.qte || '', pu: o.pu != null ? o.pu : n ? Math.abs(o.montant) / n : null, ref: o.ref || '', debit: o.montant > 0 ? o.montant : 0, credit: o.montant < 0 ? -o.montant : 0 }); });
     P.pays.filter(p => p.sens === (cl ? 'report_client' : 'report_fournisseur')).forEach(p => L.push({ d: p.date_paiement, op: 'Solde de départ', ref: p.reference || '', debit: Number(p.montant), credit: 0 }));
     P.pays.filter(p => p.sens === (cl ? 'encaissement' : 'reglement')).forEach(p => L.push({ d: p.date_paiement, op: (cl ? 'Versement reçu' : 'Versement fait') + ' (' + (MODES[p.mode] || p.mode || '') + ')' + (p.note ? ' · ' + p.note : ''), ref: p.reference || '', debit: 0, credit: Number(p.montant) }));
+    // crédits (prêts) dans le compte principal : le solde = position globale après chaque opération
+    if (avecCredits(sens)) CR.forEach(o => { const k = NAT[o.nature] || [o.nature, 0], m = Number(o.montant || 0), plus = cl ? k[1] > 0 : k[1] < 0;   // plus = augmente le solde de ce compte
+      L.push({ d: o.date_op, op: '💳 ' + k[0] + (o.note ? ' · ' + o.note : ''), ref: o.reference || '', cred: true, debit: plus ? m : 0, credit: plus ? 0 : m }); });
     L.sort((a, b) => String(a.d).localeCompare(String(b.d)) || (b.debit - a.debit));
     let s = 0; L.forEach(x => { s = r2(s + x.debit - x.credit); x.solde = s; });
     return L;
@@ -158,8 +163,8 @@
     if (onglet === 'releve') {
       [P.client ? 'client' : null, P.four ? 'fournisseur' : null].filter(Boolean).forEach(s => {
         const L = releve(s), cl = s === 'client';
-        h += '<h3>' + (cl ? 'Compte client' : 'Compte fournisseur') + '</h3>' + table(['Date', (cl ? 'Modèle' : 'Produit') + ' / opération', 'n:Quantité', 'n:Prix unité', 'n:Prix total', 'n:' + (cl ? 'Versé' : 'Payé'), 'n:Solde'],
-          L.map(x => '<tr><td>' + fd(x.d) + '</td><td>' + (x.qte ? '<b>' + esc(x.op) + '</b>' : esc(x.op)) + '</td><td class="n">' + esc(x.qte || '') + '</td><td class="n">' + (x.pu != null ? money(x.pu) : '') + '</td><td class="n">' + (x.debit ? money(x.debit) : x.qte && x.credit ? '− ' + money(x.credit) : '') + '</td><td class="n">' + (x.credit && !x.qte ? '<span class="py-av">' + money(x.credit) + '</span>' : '') + '</td><td class="n"><b class="' + (x.solde > 0.004 ? 'py-due' : '') + '">' + money(x.solde) + '</b></td></tr>'), 'Aucune opération.');
+        h += '<h3>' + (cl ? 'Compte client' : 'Compte fournisseur') + (avecCredits(s) ? ' <small class="pr-cr-n">— crédits (prêts) inclus : le solde est la position globale</small>' : '') + '</h3>' + table(['Date', (cl ? 'Modèle' : 'Produit') + ' / opération', 'n:Quantité', 'n:Prix unité', 'n:Prix total', 'n:' + (cl ? 'Versé' : 'Payé'), 'n:Solde'],
+          L.map(x => '<tr><td>' + fd(x.d) + '</td><td>' + (x.qte ? '<b>' + esc(x.op) + '</b>' : esc(x.op)) + '</td><td class="n">' + esc(x.qte || '') + '</td><td class="n">' + (x.pu != null ? money(x.pu) : '') + '</td><td class="n">' + (x.debit ? money(x.debit) : x.qte && x.credit ? '− ' + money(x.credit) : '') + '</td><td class="n">' + (x.credit && !x.qte ? '<span class="' + (x.cred ? 'pr-moins' : 'py-av') + '">' + money(x.credit) + '</span>' : '') + '</td><td class="n"><b class="' + (x.solde > 0.004 ? 'py-due' : '') + '">' + money(x.solde) + '</b></td></tr>'), 'Aucune opération.');
       });
       if (!P.client && !P.four) h += '<div class="iv-empty">Aucune vente ni achat pour ce contact.</div>';
     }
@@ -262,9 +267,9 @@
     // 2. relevé du compte client / fournisseur
     [P.client ? 'client' : null, P.four ? 'fournisseur' : null].filter(Boolean).forEach(s => {
       const L = releve(s), cl = s === 'client';
-      titre(cl ? 'Compte client - detail' : 'Compte fournisseur - detail');
+      titre((cl ? 'Compte client - detail' : 'Compte fournisseur - detail') + (avecCredits(s) ? ' (credits inclus)' : ''));
       doc.autoTable({ startY: y + 1, margin: { left: M, right: M }, head: [['Date', 'Modele / operation', 'Qte', 'Prix unite', 'Prix total', cl ? 'Verse' : 'Paye', 'Solde'].map(pdfT)],
-        body: (L.length ? L.map(x => [fd(x.d), x.op + (x.ref && !/Versement/.test(x.op) ? ' (' + x.ref + ')' : ''), x.qte || '', x.pu != null ? money(x.pu) : '', x.debit ? money(x.debit) : x.qte && x.credit ? '- ' + money(x.credit) : '', x.credit && !x.qte ? money(x.credit) : '', money(x.solde)]) : [['', 'Aucune operation', '', '', '', '', '']]).map(r => r.map(pdfT)), theme: 'grid',
+        body: (L.length ? L.map(x => [fd(x.d), x.op.replace('💳 ', '') + (x.ref && !/Versement/.test(x.op) ? ' (' + x.ref + ')' : ''), x.qte || '', x.pu != null ? money(x.pu) : '', x.debit ? money(x.debit) : x.qte && x.credit ? '- ' + money(x.credit) : '', x.credit && !x.qte ? money(x.credit) : '', money(x.solde)]) : [['', 'Aucune operation', '', '', '', '', '']]).map(r => r.map(pdfT)), theme: 'grid',
         styles: { fontSize: 8.5, cellPadding: 2 }, headStyles: tete, columnStyles: { 0: { cellWidth: 19 }, 2: { halign: 'right', cellWidth: 16 }, 3: { halign: 'right', cellWidth: 22 }, 4: { halign: 'right', cellWidth: 25 }, 5: { halign: 'right', cellWidth: 24 }, 6: { halign: 'right', cellWidth: 25 } } });
       suite();
       const fin = L.length ? L[L.length - 1].solde : 0;
